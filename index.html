@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1e3a8a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="دفتر الديون" />
+  <title>دفتر الديون - مركز الدمشقي للصيانة</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- ==================== شاشة تسجيل الدخول (Supabase) ==================== -->
+  <div id="loginScreen" class="hidden">
+    <div class="lock-card">
+      <div class="lock-badge">
+        <svg class="ic" style="width:28px;height:28px" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <h2>دفتر الديون السحابي</h2>
+      <p>سجّل الدخول بحساب الورشة أو الجهاز الفرعي</p>
+      <div id="loginErr" class="lock-err"></div>
+      <form id="loginForm" class="login-form-box" onsubmit="handleLogin(event)">
+        <div class="field">
+          <label>البريد الإلكتروني</label>
+          <input type="email" id="loginEmail" class="input" dir="ltr" placeholder="admin@dimashqi.com" required autocomplete="username" />
+        </div>
+        <div class="field">
+          <label>كلمة المرور</label>
+          <input type="password" id="loginPassword" class="input" dir="ltr" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <button type="submit" id="loginBtn" class="btn btn-primary">تسجيل الدخول</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== شاشة القفل (اختيارية) ==================== -->
+  <div id="lockScreen" class="hidden">
+    <div class="lock-card">
+      <img id="lockLogoImg" class="lock-logo hidden" alt="شعار المحل" />
+      <div id="lockDefaultBadge" class="lock-badge">
+        <svg class="ic" style="width:28px;height:28px" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h2 id="lockShopName">مركز الدمشقي للصيانة</h2>
+      <p>أدخل الرمز السري أو استخدم البصمة للمتابعة</p>
+      <button id="unlockBioBtn" class="btn btn-bio hidden" onclick="unlockWithBiometrics()">الدخول بالبصمة</button>
+      <input type="password" id="pinInput" class="pin-input" inputmode="numeric" maxlength="6" placeholder="••••" />
+      <div id="lockErr" class="lock-err"></div>
+      <button class="btn btn-primary" onclick="unlockWithPin()">دخول</button>
+    </div>
+  </div>
+
+  <!-- ==================== الشاشة الرئيسية ==================== -->
+  <div id="mainView" class="hidden">
+    <header class="top-header">
+      <div class="header-row">
+        <div class="brand-box">
+          <img id="headerLogo" class="brand-logo hidden" alt="شعار" />
+          <div style="min-width:0;">
+            <div class="brand-title" id="headerShopName">مركز الدمشقي للصيانة</div>
+            <div class="brand-sub" id="headerShopSub">دفتر الديون</div>
+          </div>
+        </div>
+        <div class="header-btns">
+          <button class="icon-btn hidden" id="headerAccountsBtn" title="إدارة الحسابات والأجهزة" onclick="openAccountsView()">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </button>
+          <button class="icon-btn" id="syncBtn" title="مزامنة الآن" onclick="syncData(false)">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+          </button>
+          <button class="icon-btn" title="الضبط" onclick="openSettingsView()">
+            <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <button class="icon-btn hidden" id="headerLockBtn" title="قفل التطبيق" onclick="lockApp()">
+            <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="sync-bar" id="syncStatus">
+        <span class="sync-dot"></span><span>جاري التحميل...</span>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="summary-card">
+        <div>
+          <div class="sum-lbl">إجمالي الديون المستحقة (<span id="activeCurrName">دولار</span>)</div>
+          <div class="sum-val" id="totalDebtVal">0 $</div>
+        </div>
+        <div class="sum-pill">
+          <strong id="indebtedCount">0</strong>
+          <span>عليهم دين</span>
+        </div>
+      </div>
+
+      <div class="search-wrap">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" id="searchInput" class="search-input" placeholder="ابحث باسم الزبون أو رقم الهاتف..." oninput="renderCustomers()" />
+      </div>
+
+      <div class="segmented">
+        <button class="seg-btn active" onclick="setFilter('all', this)">الكل</button>
+        <button class="seg-btn" onclick="setFilter('debt', this)">عليهم دين</button>
+        <button class="seg-btn" onclick="setFilter('zero', this)">خالصين</button>
+      </div>
+
+      <div id="customerList"></div>
+    </main>
+
+    <button class="fab" onclick="openAddModal()">
+      <svg class="ic" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>عملية جديدة</span>
+    </button>
+  </div>
+
+  <!-- ==================== صفحة تفاصيل ملف الزبون ==================== -->
+  <section id="detailView" class="full-view">
+    <div class="view-bar">
+      <div class="view-bar-inner">
+        <div class="view-bar-right">
+          <button class="back-btn" onclick="closeDetailView()" title="رجوع">
+            <svg class="ic" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <div style="min-width:0;">
+            <div class="view-title" id="detailName"></div>
+            <div class="view-sub" id="detailPhone"></div>
+          </div>
+        </div>
+        <div class="view-bar-actions">
+          <button class="bar-icon-btn" title="تعديل ملف الزبون" onclick="openEditCustomerModal()">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </button>
+          <button class="bar-icon-btn danger" id="detailDeleteCustomerBtn" title="حذف ملف الزبون" onclick="askDeleteCustomer()">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="view-body">
+      <div class="stats-3">
+        <div class="stat-box">
+          <span>إجمالي الدين</span>
+          <strong id="detailTotalDebt" style="color:var(--danger);"></strong>
+        </div>
+        <div class="stat-box">
+          <span>المدفوع</span>
+          <strong id="detailTotalPay" style="color:var(--success);"></strong>
+        </div>
+        <div class="stat-box">
+          <span>المتبقي</span>
+          <strong id="detailBalance"></strong>
+        </div>
+      </div>
+
+      <div class="action-grid">
+        <button class="btn btn-debt" onclick="quickAddForCurrent('debt')">
+          <svg class="ic ic-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>تسجيل دين</span>
+        </button>
+        <button class="btn btn-pay" onclick="quickAddForCurrent('pay')">
+          <svg class="ic ic-sm" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>تسجيل دفعة</span>
+        </button>
+      </div>
+
+      <div class="action-grid">
+        <button class="btn btn-wa" onclick="sendWhatsApp()">
+          <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <span>رسالة واتساب</span>
+        </button>
+        <button class="btn btn-pdf" id="pdfBtn" onclick="exportCustomerPDF()">
+          <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>كشف حساب PDF</span>
+        </button>
+      </div>
+
+      <div class="section-head">
+        <span id="activeSectionTitle">الحركات الحالية</span>
+        <span id="detailTxCount"></span>
+      </div>
+      <div id="detailTxList"></div>
+
+      <!-- درج العمليات القديمة المسدّدة -->
+      <div id="archiveDrawer" class="archive-drawer hidden">
+        <button type="button" class="archive-toggle" onclick="toggleArchiveDrawer()">
+          <span class="archive-left">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            <span>أرشيف الحركات المسدّدة السابقة</span>
+            <span class="archive-badge" id="archiveCountBadge">0</span>
+          </span>
+          <svg class="ic ic-sm archive-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="archive-body" id="archiveBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== صفحة إدارة الحسابات والأجهزة ==================== -->
+  <section id="accountsView" class="full-view">
+    <div class="view-bar">
+      <div class="view-bar-inner">
+        <div class="view-bar-right">
+          <button class="back-btn" onclick="closeAccountsView()" title="رجوع">
+            <svg class="ic" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <div style="min-width:0;">
+            <div class="view-title">إدارة الحسابات والأجهزة</div>
+            <div class="view-sub" id="accWorkshopSub"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="view-body">
+      <div id="accTabsWrap" class="segmented cols-2 hidden">
+        <button class="seg-btn active" id="accTabStaffBtn" onclick="switchAccTab('staff')">موظفو وأجهزة الورشة</button>
+        <button class="seg-btn" id="accTabWorkshopsBtn" onclick="switchAccTab('workshops')">الورشات المعزولة</button>
+      </div>
+
+      <div id="accAlert" class="alert-banner hidden"></div>
+
+      <!-- تبويب موظفي وأجهزة الورشة -->
+      <div id="accStaffPanel">
+        <div class="set-card">
+          <h4 class="set-title">إضافة حساب موظف أو جهاز جديد</h4>
+          <form id="addMemberForm" onsubmit="createWorkshopMember(event)">
+            <div class="field">
+              <label>الاسم أو اسم الجهاز</label>
+              <input type="text" id="memNameInput" class="input" placeholder="مثال: أحمد / كمبيوتر الصالة" required />
+            </div>
+            <div class="field">
+              <label>الصلاحية</label>
+              <select id="memRoleSelect" class="input" onchange="onMemberRoleChange()">
+                <option value="staff">موظف / جهاز فرعي</option>
+                <option value="admin">مدير</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>بريد الدخول (يمكن ابتكار أي بريد بصيغة إيميل)</label>
+              <input type="email" id="memEmailInput" class="input" dir="ltr" placeholder="pc1@dimashqi.com" required />
+            </div>
+            <div class="field">
+              <label>كلمة المرور (6 أحرف أو أرقام على الأقل)</label>
+              <input type="text" id="memPassInput" class="input" dir="ltr" minlength="6" placeholder="123456" required />
+            </div>
+            <div class="switch-row" style="margin-bottom:14px;">
+              <div>
+                <div style="font-size:13.5px;font-weight:700;">السماح بحذف الحركات والزبائن</div>
+                <div style="font-size:11.5px;color:var(--muted);">المدير يملك صلاحية الحذف تلقائياً</div>
+              </div>
+              <input type="checkbox" id="memCanDeleteInput" />
+            </div>
+            <button type="submit" id="addMemberSubmitBtn" class="btn btn-primary">إنشاء الحساب وربطه فوراً</button>
+          </form>
+        </div>
+
+        <div class="section-head">
+          <span>الحسابات والأجهزة المرتبطة بالورشة</span>
+          <span id="membersCountLbl"></span>
+        </div>
+        <div id="membersListBox"></div>
+      </div>
+
+      <!-- تبويب الورشات المعزولة (للمدير العام فقط) -->
+      <div id="accWorkshopsPanel" class="hidden">
+        <div class="set-card">
+          <h4 class="set-title">إنشاء ورشة جديدة معزولة تماماً</h4>
+          <form id="addWorkshopForm" onsubmit="createIsolatedWorkshop(event)">
+            <div class="field">
+              <label>اسم الورشة الجديدة</label>
+              <input type="text" id="wsNewName" class="input" placeholder="مثال: ورشة النور للصيانة" required />
+            </div>
+            <div class="field">
+              <label>اسم مدير الورشة</label>
+              <input type="text" id="wsAdminName" class="input" placeholder="المدير" required />
+            </div>
+            <div class="field">
+              <label>بريد مدير الورشة</label>
+              <input type="email" id="wsAdminEmail" class="input" dir="ltr" placeholder="owner@shop.com" required />
+            </div>
+            <div class="field">
+              <label>كلمة المرور (6 أحرف فأكثر)</label>
+              <input type="text" id="wsAdminPass" class="input" dir="ltr" minlength="6" placeholder="123456" required />
+            </div>
+            <button type="submit" id="addWorkshopSubmitBtn" class="btn btn-primary">إنشاء الورشة وحساب مديرها</button>
+          </form>
+        </div>
+
+        <div class="section-head">
+          <span>الورشات المسجلة</span>
+          <span id="workshopsCountLbl"></span>
+        </div>
+        <div id="workshopsListBox"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== صفحة الضبط ==================== -->
+  <section id="settingsView" class="full-view">
+    <div class="view-bar">
+      <div class="view-bar-inner">
+        <div class="view-bar-right">
+          <button class="back-btn" onclick="closeSettingsView()" title="رجوع">
+            <svg class="ic" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <div class="view-title">إعدادات التطبيق والمحل</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="view-body">
+      <!-- إعدادات المحل (تُزامن سحابياً — قابلة للتعديل للمدير فقط) -->
+      <div id="workshopAdminSettingsWrap">
+        <div class="set-card">
+          <h4 class="set-title">بيانات المحل واللوغو (تتزامن مع جميع الأجهزة)</h4>
+          <div class="logo-row">
+            <img id="setLogoPreview" class="logo-prev hidden" alt="معاينة الشعار" />
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:700;margin-bottom:6px;">لوغو المحل (يظهر بالتطبيق وكشف PDF)</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <label class="btn btn-light" style="width:auto;padding:8px 14px;font-size:13px;">
+                  اختيار صورة
+                  <input type="file" id="setLogoFile" accept="image/*" style="display:none;" onchange="handleLogoUpload(event)" />
+                </label>
+                <button type="button" id="removeLogoBtn" class="btn btn-danger hidden" style="width:auto;padding:8px 14px;font-size:13px;" onclick="removeTempLogo()">حذف الشعار</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>اسم المحل</label>
+            <input type="text" id="setShopName" class="input" placeholder="مركز الدمشقي للصيانة" />
+          </div>
+          <div class="field">
+            <label>العنوان</label>
+            <input type="text" id="setShopAddress" class="input" placeholder="مثال: دمشق - ..." />
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label>رقم هاتف المحل</label>
+            <input type="tel" id="setShopPhone" class="input" placeholder="09xxxxxxxx" />
+          </div>
+        </div>
+
+        <!-- ملاحظات تقرير PDF (عامة + شام كاش) -->
+        <div class="set-card">
+          <h4 class="set-title">ملاحظات كشف PDF</h4>
+          <div class="field">
+            <label>1. الملاحظة العامة (تظهر أسفل كشف PDF)</label>
+            <textarea id="setGeneralNote" class="input" placeholder="مثال: شكراً لتعاملكم معنا..."></textarea>
+          </div>
+
+          <div style="padding-top:10px;border-top:1px solid var(--border);">
+            <div class="switch-row" style="margin-bottom:10px;">
+              <div>
+                <div style="font-size:14px;font-weight:800;color:var(--text);">2. تفعيل ملاحظة شام كاش في PDF</div>
+                <div style="font-size:11.5px;color:var(--muted);">إظهار عبارة "شام كاش" مع كود قابل للنسخ من الوصل</div>
+              </div>
+              <input type="checkbox" id="setShamCashToggle" onchange="toggleShamCashFields()" />
+            </div>
+            <div id="shamCashFields" class="hidden">
+              <div class="field" style="margin-bottom:0;">
+                <label>كود / رقم حساب شام كاش</label>
+                <input type="text" id="setShamCashCode" class="input" dir="ltr" placeholder="أدخل كود شام كاش هنا" />
+                <div class="field-hint">يظهر الكود بجانب عبارة "شام كاش" كنص حقيقي قابل للتحديد والنسخ مباشرة من داخل ملف PDF.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- العملة والواتساب -->
+      <div class="set-card">
+        <h4 class="set-title">العملة وتطبيق واتساب</h4>
+        <div class="field" id="currencySettingField">
+          <label>العملة المعتمدة</label>
+          <div class="toggle-2">
+            <button type="button" id="setCurrUsd" class="tog-btn" onclick="selectSettingCurrency('USD')">دولار ($)</button>
+            <button type="button" id="setCurrSyp" class="tog-btn" onclick="selectSettingCurrency('SYP')">ليرة سورية (ل.س)</button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>تطبيق واتساب الافتراضي (خاص بهذا الجهاز)</label>
+          <div class="toggle-2">
+            <button type="button" id="setWaNormal" class="tog-btn" onclick="selectSettingWa('normal')">واتساب عادي</button>
+            <button type="button" id="setWaBusiness" class="tog-btn" onclick="selectSettingWa('business')">واتساب أعمال</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- القفل الاختياري -->
+      <div class="set-card">
+        <div class="switch-row">
+          <div>
+            <div style="font-size:14.5px;font-weight:800;color:var(--primary);">قفل التطبيق على هذا الجهاز (اختياري)</div>
+            <div style="font-size:12px;color:var(--muted);">حماية الدخول بالرمز السري أو البصمة</div>
+          </div>
+          <input type="checkbox" id="setLockToggle" onchange="toggleLockFields()" />
+        </div>
+        <div id="lockSettingsFields" class="hidden" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+          <div class="field">
+            <label>الرمز السري (PIN)</label>
+            <input type="tel" id="setPinInput" class="input" maxlength="6" placeholder="1234" />
+          </div>
+          <div class="switch-row">
+            <div>
+              <div style="font-size:13.5px;font-weight:700;">الدخول بالبصمة</div>
+              <div id="bioStatusText" style="font-size:11.5px;color:var(--muted);">غير مفعّلة</div>
+            </div>
+            <button type="button" id="toggleBioBtn" class="btn btn-light" style="width:auto;padding:8px 14px;font-size:13px;" onclick="setupOrDisableBio()">تفعيل البصمة</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="saveSettingsBtn" style="padding:14px;font-size:15.5px;margin-bottom:14px;" onclick="saveSettings()">حفظ الإعدادات</button>
+
+      <!-- الحساب السحابي (Supabase) -->
+      <div class="set-card">
+        <h4 class="set-title">الحساب والمزامنة السحابية (Supabase)</h4>
+        <div style="font-size:13px;color:var(--text);margin-bottom:10px;line-height:1.7;">
+          <div><strong>المستخدم:</strong> <span id="setAccountName">—</span></div>
+          <div><strong>البريد:</strong> <span id="setAccountEmail" dir="ltr">—</span></div>
+          <div><strong>الصلاحية:</strong> <span id="setAccountRole">—</span></div>
+        </div>
+
+        <div class="field">
+          <label>تغيير كلمة مرور حسابك</label>
+          <div style="display:flex;gap:8px;">
+            <input type="password" id="setNewPassInput" class="input" dir="ltr" minlength="6" placeholder="كلمة مرور جديدة (6 أحرف فأكثر)" />
+            <button type="button" class="btn btn-light btn-sm" style="white-space:nowrap;" onclick="changeMyPassword()">تحديث</button>
+          </div>
+        </div>
+
+        <div class="toggle-2" style="margin-top:8px;">
+          <button type="button" id="settingsAccountsShortcut" class="btn btn-primary hidden" onclick="closeSettingsView(); openAccountsView();">إدارة الحسابات</button>
+          <button type="button" class="btn btn-danger" onclick="handleLogout()">تسجيل الخروج</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== نافذة إضافة / تعديل حركة ==================== -->
+  <div class="modal-backdrop" id="addModal">
+    <div class="modal-sheet">
+      <div class="sheet-head">
+        <h3 id="txModalTitle">تسجيل عملية جديدة</h3>
+        <button class="close-btn" onclick="closeModal('addModal')">✕</button>
+      </div>
+
+      <div class="field">
+        <label>اسم الزبون</label>
+        <input type="text" id="txName" class="input" list="customersDatalist" placeholder="اكتب اسم الزبون أو اختره" oninput="autoFillPhone()" />
+        <datalist id="customersDatalist"></datalist>
+      </div>
+
+      <div class="field">
+        <label>رقم الهاتف (اختياري)</label>
+        <input type="tel" id="txPhone" class="input" placeholder="09xxxxxxxx" />
+      </div>
+
+      <div class="field">
+        <label>نوع العملية</label>
+        <div class="toggle-2">
+          <button type="button" id="btnKindDebt" class="tog-btn on-debt" onclick="setTxKind('debt')">دين (+)</button>
+          <button type="button" id="btnKindPay" class="tog-btn" onclick="setTxKind('pay')">دفعة (−)</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>المبلغ (<span id="txCurrLabel">$</span>)</label>
+        <input type="number" id="txAmount" class="input" inputmode="decimal" step="any" placeholder="أدخل المبلغ" />
+      </div>
+
+      <div class="field">
+        <label>التاريخ</label>
+        <input type="date" id="txDate" class="input" />
+      </div>
+
+      <div class="field">
+        <label>ملاحظة (اختياري)</label>
+        <input type="text" id="txNote" class="input" placeholder="مثال: صيانة / قطع غيار / دفعة" />
+      </div>
+
+      <button class="btn btn-primary" id="saveTxBtn" onclick="saveTransaction()">حفظ العملية</button>
+    </div>
+  </div>
+
+  <!-- ==================== نافذة تعديل ملف الزبون ==================== -->
+  <div class="modal-backdrop" id="editCustomerModal">
+    <div class="modal-sheet" style="max-width:420px;">
+      <div class="sheet-head">
+        <h3>تعديل ملف الزبون</h3>
+        <button class="close-btn" onclick="closeModal('editCustomerModal')">✕</button>
+      </div>
+      <div class="field">
+        <label>اسم الزبون</label>
+        <input type="text" id="editCustNameInput" class="input" />
+      </div>
+      <div class="field">
+        <label>رقم الهاتف</label>
+        <input type="tel" id="editCustPhoneInput" class="input" placeholder="09xxxxxxxx" />
+      </div>
+      <button class="btn btn-primary" onclick="saveCustomerEdit()">حفظ التعديل</button>
+    </div>
+  </div>
+
+  <!-- ==================== نافذة تأكيد الحذف ==================== -->
+  <div class="modal-backdrop" id="confirmModal">
+    <div class="modal-sheet" style="max-width:390px;">
+      <div class="sheet-head">
+        <h3 id="confirmTitle">تأكيد الحذف</h3>
+        <button class="close-btn" onclick="closeModal('confirmModal')">✕</button>
+      </div>
+      <p id="confirmMsg" style="margin:0 0 18px;color:var(--muted);font-size:14.5px;line-height:1.6;"></p>
+      <div class="toggle-2">
+        <button class="btn btn-danger" onclick="executeConfirmedDelete()">نعم، احذف</button>
+        <button class="btn btn-light" onclick="closeModal('confirmModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== نافذة تأكيد الخروج ==================== -->
+  <div class="modal-backdrop" id="exitModal">
+    <div class="modal-sheet" style="max-width:380px;">
+      <div class="sheet-head">
+        <h3>تأكيد الخروج</h3>
+        <button class="close-btn" onclick="cancelExit()">✕</button>
+      </div>
+      <p id="exitConfirmMsg" style="margin:0 0 18px;color:var(--muted);font-size:14.5px;line-height:1.6;">
+        هل أنت متأكد من رغبتك بالخروج من التطبيق؟
+      </p>
+      <div class="toggle-2">
+        <button class="btn btn-danger" onclick="confirmExit()">نعم، خروج</button>
+        <button class="btn btn-light" onclick="cancelExit()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pdfBusyOverlay">
+    <div class="pdf-spinner"></div>
+    <div>جاري تجهيز كشف الحساب PDF...</div>
+  </div>
+  <div id="toast"></div>
+
+  <script src="sync.js"></script>
+  <script src="reports.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
