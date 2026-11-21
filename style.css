@@ -1,26 +1,26 @@
 :root {
-  --primary: #1e3a8a;
-  --primary-2: #2563eb;
-  --primary-soft: #eff6ff;
-  --bg: #f4f6fa;
+  --primary: #2a4570;
+  --primary-2: #3b63a0;
+  --primary-soft: #f1f5fb;
+  --bg: #eef2f6;
   --card: #ffffff;
-  --text: #0f172a;
+  --text: #1e293b;
   --muted: #64748b;
-  --border: #e2e8f0;
-  --danger: #dc2626;
-  --danger-soft: #fef2f2;
-  --danger-border: #fecaca;
-  --success: #15803d;
-  --success-soft: #f0fdf4;
-  --success-border: #bbf7d0;
-  --wa-bg: #e7f6ee;
-  --wa-text: #166534;
-  --wa-border: #a7dfc0;
-  --pdf-bg: #f9ecee;
-  --pdf-text: #9f1239;
-  --pdf-border: #e9bcc6;
-  --radius: 16px;
-  --shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  --border: #d8e1ec;
+  --danger: #b84242;
+  --danger-soft: #fbf4f4;
+  --danger-border: #ebd0d0;
+  --success: #2a734f;
+  --success-soft: #f2f8f5;
+  --success-border: #cbe2d5;
+  --wa-bg: #eef6f1;
+  --wa-text: #276747;
+  --wa-border: #c5dfd0;
+  --pdf-bg: #f8f1f3;
+  --pdf-text: #8c354b;
+  --pdf-border: #e2c8cf;
+  --radius: 15px;
+  --shadow: 0 2px 8px rgba(15, 23, 42, 0.045);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -44,7 +44,7 @@ button, input, textarea, select { font-family: inherit; }
 /* ==================== شاشة تسجيل الدخول وشاشة القفل ==================== */
 #loginScreen, #lockScreen {
   position: fixed; inset: 0;
-  background: linear-gradient(155deg, #1e3a8a 0%, #1d4ed8 100%);
+  background: linear-gradient(155deg, #2a4570 0%, #3a5d93 100%);
   display: flex; align-items: center; justify-content: center; padding: 20px;
 }
 #loginScreen { z-index: 520; }
@@ -99,7 +99,7 @@ button, input, textarea, select { font-family: inherit; }
   transform: translateX(0);
 }
 .side-menu-head {
-  background: linear-gradient(145deg, #1e3a8a 0%, #2563eb 100%);
+  background: linear-gradient(145deg, #2a4570 0%, #3a5d93 100%);
   color: #fff; padding: 20px 16px;
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
 }
@@ -150,10 +150,10 @@ button, input, textarea, select { font-family: inherit; }
 
 /* ==================== الهيدر ==================== */
 .top-header {
-  background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
+  background: linear-gradient(135deg, #2a4570, #3a5d93);
   color: #fff; padding: 14px 16px 28px;
   position: sticky; top: 0; z-index: 40;
-  box-shadow: 0 3px 14px rgba(30, 58, 138, 0.2);
+  box-shadow: 0 3px 14px rgba(42, 69, 112, 0.16);
 }
 .header-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; max-width: 680px; margin: 0 auto; }
 .brand-box { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -274,7 +274,7 @@ button, input, textarea, select { font-family: inherit; }
   position: fixed; bottom: 20px; left: 20px; z-index: 60;
   background: var(--primary-2); color: #fff; border: none;
   padding: 13px 20px; border-radius: 50px; font-size: 15px; font-weight: 700;
-  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.38); cursor: pointer;
+  box-shadow: 0 8px 22px rgba(42, 69, 112, 0.30); cursor: pointer;
   display: flex; align-items: center; gap: 8px;
 }
 .fab:active { transform: scale(0.95); }
@@ -565,7 +565,7 @@ textarea.input { resize: vertical; min-height: 68px; }
 /* ==================== شاشة نسخ رمز شام كاش ومربع الخروج ==================== */
 #quickCopyScreen {
   position: fixed; inset: 0; z-index: 650;
-  background: linear-gradient(155deg, #1e3a8a 0%, #1d4ed8 100%);
+  background: linear-gradient(155deg, #2a4570 0%, #3a5d93 100%);
   display: flex; align-items: center; justify-content: center; padding: 20px;
 }
 .qc-code-box {
@@ -661,14 +661,14 @@ textarea.input { resize: vertical; min-height: 68px; }
   flex-shrink: 0;
 }
 .curr-usd {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
+  background: #f0f4fa;
+  color: #35588c;
+  border: 1px solid #cfdced;
 }
 .curr-syp {
-  background: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fde68a;
+  background: #fbf7ed;
+  color: #966524;
+  border: 1px solid #e9d9b4;
 }
 
 /* أرصدة الزبون المزدوجة في القائمة الرئيسية */
@@ -771,12 +771,12 @@ textarea.input { resize: vertical; min-height: 68px; }
   transition: all 0.15s ease;
 }
 .tx-curr-btn.on-usd {
-  background: #2563eb;
+  background: #3b63a0;
   color: #ffffff;
   box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
 }
 .tx-curr-btn.on-syp {
-  background: #d97706;
+  background: #b57a29;
   color: #ffffff;
   box-shadow: 0 1px 4px rgba(217, 119, 6, 0.25);
 }
@@ -907,14 +907,14 @@ textarea.input { resize: vertical; min-height: 68px; }
   white-space: nowrap;
 }
 .unified-curr-pill.usd {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
+  background: #f0f4fa;
+  color: #35588c;
+  border: 1px solid #cfdced;
 }
 .unified-curr-pill.syp {
-  background: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fde68a;
+  background: #fbf7ed;
+  color: #966524;
+  border: 1px solid #e9d9b4;
 }
 .unified-num {
   font-size: 14px;
@@ -1209,3 +1209,118 @@ textarea.input { resize: vertical; min-height: 68px; }
   flex-shrink: 0;
 }
 .ws-cred-mini-btn:active { background: #f1f5f9; }
+
+/* ==================== مربعات معزولة أنيقة لصفحة العميل والبطاقات ==================== */
+.detail-box {
+  background: #ffffff;
+  border: 1.5px solid var(--border);
+  border-radius: 15px;
+  box-shadow: var(--shadow);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.detail-actions-box {
+  padding: 11px;
+}
+.detail-box-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 13px;
+  background: #f6f8fb;
+  border-bottom: 1.5px solid var(--border);
+  font-size: 13px;
+  font-weight: 800;
+  color: #334155;
+}
+.detail-count-pill {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.detail-box-body {
+  padding: 10px;
+  background: #fbfcfe;
+}
+.detail-box-body .tx-card:last-child {
+  margin-bottom: 0;
+}
+
+/* تجميل وعزل خلايا بطاقة الملخص الموحّد بحدود داخلية مربعة ناعمة */
+.unified-stats-card {
+  border: 1.5px solid var(--border);
+  border-radius: 15px;
+  box-shadow: var(--shadow);
+}
+.unified-stats-head {
+  background: #f5f7fa;
+  border-bottom: 1.5px solid var(--border);
+  padding: 0;
+  gap: 0;
+}
+.unified-stats-head span {
+  padding: 9px 6px;
+}
+.unified-stats-head span + span {
+  border-right: 1px solid #e4eaf2;
+}
+.unified-stats-head span:first-child {
+  padding-right: 10px;
+}
+.unified-stats-row {
+  padding: 0;
+  gap: 0;
+}
+.unified-stats-row + .unified-stats-row {
+  border-top: 1px solid #e4eaf2;
+}
+.unified-stats-row > div {
+  padding: 11px 6px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.unified-stats-row > div:first-child {
+  justify-content: flex-start;
+  padding-right: 9px;
+}
+.unified-stats-row > div + div {
+  border-right: 1px solid #edf1f6;
+}
+
+/* بطاقات الحركات كـ مربعات معزولة واضحة وألوان أهدأ */
+.tx-card {
+  border: 1.2px solid var(--border);
+  border-right: 3.5px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03);
+}
+.tx-card.debt { border-right-color: #c96464; }
+.tx-card.pay { border-right-color: #4b946e; }
+.tx-card.archived {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+/* عزل بطاقات الزبائن وبطاقة الإجمالي بوضوح أنيق */
+.summary-card {
+  border: 1.5px solid var(--border);
+}
+.cust-card {
+  border: 1.3px solid var(--border);
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.035);
+}
+.archive-drawer {
+  border: 1.5px solid var(--border);
+  border-radius: 15px;
+  margin-top: 12px;
+}

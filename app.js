@@ -1291,12 +1291,6 @@ async function saveSettings() {
     settings.shamCashEnabled = document.getElementById('setShamCashToggle').checked;
     settings.shamCashCode = document.getElementById('setShamCashCode').value.trim();
     settings.waConfig = readWaConfigFromForm();
-    settings.backupConfig = {
-      ...(settings.backupConfig || DEFAULT_BACKUP_CONFIG),
-      driveEmail: document.getElementById('setDriveEmail').value.trim(),
-      driveScriptUrl: document.getElementById('setDriveScriptUrl').value.trim(),
-      manualOnly: true
-    };
     settings.currency = tempSettingsCurrency;
 
     const wsSettingsObj = {
@@ -1309,7 +1303,6 @@ async function saveSettings() {
       shamCashEnabled: settings.shamCashEnabled,
       shamCashCode: settings.shamCashCode,
       waConfig: settings.waConfig,
-      backupConfig: settings.backupConfig,
       currency: settings.currency,
       frozen: Boolean(currentWorkshop && currentWorkshop.settings && currentWorkshop.settings.frozen)
     };
@@ -1456,9 +1449,7 @@ function updateWaLivePreview() {
   el.textContent = previewText || '(الرسالة فارغة — يرجى تفعيل خيار واحد على الأقل)';
 }
 
-// ==================== النسخ الاحتياطي (Google Drive + النسخ اليومي على الجوال) ====================
-let isDriveBackingUp = false;
-
+// ==================== النسخ الاحتياطي (حفظ واستعادة على الجهاز) ====================
 function getLocalSnapshotsKey() {
   return wsKey('daily_snaps_v1');
 }
@@ -1484,7 +1475,6 @@ function buildBackupPayloadObject() {
     backupDate: todayString(),
     workshopId: currentProfile ? currentProfile.workshop_id : '',
     shopName: settings.shopName || 'دفتر الديون',
-    driveEmail: (settings.backupConfig && settings.backupConfig.driveEmail) || '',
     totalRecords: allRecords.length,
     totalCustomers: groupedCustomers.length,
     records: allRecords.map(r => ({
@@ -1527,7 +1517,7 @@ function triggerFileDownload(blob, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-function downloadLocalJsonBackup(customRecords = null, customDate = null) {
+function buildJsonBackupFile(customRecords = null, customDate = null) {
   const payload = buildBackupPayloadObject();
   if (customRecords) {
     payload.records = customRecords;
@@ -1537,8 +1527,35 @@ function downloadLocalJsonBackup(customRecords = null, customDate = null) {
   const safeShop = (settings.shopName || 'دفتر_الديون').replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '').trim() || 'دفتر_الديون';
   const fileName = `نسخة_احتياطية_${safeShop}_${datePart}.json`;
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+  return { blob, fileName };
+}
+
+function downloadLocalJsonBackup(customRecords = null, customDate = null) {
+  const { blob, fileName } = buildJsonBackupFile(customRecords, customDate);
   triggerFileDownload(blob, fileName);
-  showToast('تم حفظ النسخة الاحتياطية على الجوال ✓');
+  saveDailyLocalSnapshot(true);
+  updateBackupStatusUI();
+  renderLocalSnapshotsUI();
+  showToast('تم حفظ النسخة الاحتياطية على الجهاز ✓');
+}
+
+async function shareLocalJsonBackup() {
+  const { blob, fileName } = buildJsonBackupFile();
+  const file = new File([blob], fileName, { type: 'application/json' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: `نسخة احتياطية - ${settings.shopName}`,
+        text: `نسخة احتياطية لدفتر الديون بتاريخ ${todayString()}`
+      });
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+  }
+  triggerFileDownload(blob, fileName);
+  showToast('تم حفظ النسخة الاحتياطية على الجهاز ✓');
 }
 
 function downloadLocalCsvBackup(customRecords = null, customDate = null) {
@@ -1549,7 +1566,7 @@ function downloadLocalCsvBackup(customRecords = null, customDate = null) {
   const fileName = `دفتر_الديون_${safeShop}_${datePart}.csv`;
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   triggerFileDownload(blob, fileName);
-  showToast('تم تصدير ملف Excel (CSV) على الجوال ✓');
+  showToast('تم تصدير ملف Excel (CSV) على الجهاز ✓');
 }
 
 function saveDailyLocalSnapshot(force = false) {
@@ -1574,11 +1591,6 @@ function saveDailyLocalSnapshot(force = false) {
 }
 
 function populateBackupSettingsDrawer() {
-  const bCfg = { ...DEFAULT_BACKUP_CONFIG, ...(settings.backupConfig || {}) };
-  const emailEl = document.getElementById('setDriveEmail');
-  const urlEl = document.getElementById('setDriveScriptUrl');
-  if (emailEl) emailEl.value = bCfg.driveEmail || '';
-  if (urlEl) urlEl.value = bCfg.driveScriptUrl || '';
   updateBackupStatusUI();
   renderLocalSnapshotsUI();
 }
@@ -1586,17 +1598,11 @@ function populateBackupSettingsDrawer() {
 function updateBackupStatusUI() {
   const box = document.getElementById('backupStatusSummary');
   if (!box) return;
-  const bCfg = { ...DEFAULT_BACKUP_CONFIG, ...(settings.backupConfig || {}) };
-  const lastDriveLocal = localStorage.getItem(wsKey('last_drive_backup_at')) || bCfg.lastDriveBackupAt || '';
   const snaps = getLocalSnapshots();
   const lastSnapTxt = snaps.length > 0 ? `${snaps[0].date} (${snaps[0].savedAt}) — ${snaps[0].count} حركة` : 'لا توجد بعد';
-  const driveTxt = lastDriveLocal ? lastDriveLocal : 'لم يتم الرفع بعد';
-  const emailLine = bCfg.driveEmail ? `<div><strong>حساب Google Drive:</strong> <span dir="ltr">${escapeHtml(bCfg.driveEmail)}</span></div>` : '';
   box.innerHTML = `
-    ${emailLine}
-    <div><strong>وضع الحفظ على Google Drive:</strong> يدوي فقط</div>
-    <div><strong>آخر حفظ يدوي على Google Drive:</strong> ${escapeHtml(driveTxt)}</div>
-    <div><strong>آخر نسخة يومية على الجوال:</strong> ${escapeHtml(lastSnapTxt)}</div>
+    <div><strong>إجمالي السجلات الحالية:</strong> ${allRecords.length} حركة (${groupedCustomers.length} زبون)</div>
+    <div><strong>آخر نسخة يومية على الجهاز:</strong> ${escapeHtml(lastSnapTxt)}</div>
   `;
 }
 
@@ -1607,7 +1613,7 @@ function renderLocalSnapshotsUI() {
   const snaps = getLocalSnapshots();
   countEl.textContent = `${snaps.length} نسخة`;
   if (snaps.length === 0) {
-    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:12px;">سيتم حفظ نسخة يومية تلقائياً على الجوال عند توفر حركات.</div>';
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:12px;">سيتم حفظ نسخة يومية تلقائياً على الجهاز عند توفر حركات.</div>';
     return;
   }
   listEl.innerHTML = snaps.map((s, idx) => `
@@ -1690,81 +1696,13 @@ async function restoreRecordsArray(recs) {
   );
 }
 
-async function backupToGoogleDriveNow() {
-  if (isDriveBackingUp || !currentProfile) return;
-  const inputUrlEl = document.getElementById('setDriveScriptUrl');
-  const inputEmailEl = document.getElementById('setDriveEmail');
-  const settingsOpen = document.getElementById('settingsView').classList.contains('open');
-  const scriptUrl = (inputUrlEl && settingsOpen
-    ? inputUrlEl.value.trim()
-    : ((settings.backupConfig && settings.backupConfig.driveScriptUrl) || '').trim());
-  const driveEmail = (inputEmailEl && settingsOpen
-    ? inputEmailEl.value.trim()
-    : ((settings.backupConfig && settings.backupConfig.driveEmail) || '').trim());
-
-  if (!scriptUrl || !scriptUrl.toLowerCase().startsWith('http')) {
-    showToast('يرجى إدخال رابط سكربت Google Drive أولاً');
-    return;
-  }
-  if (!navigator.onLine) {
-    showToast('يلزم الاتصال بالإنترنت للحفظ اليدوي على Google Drive');
-    return;
-  }
-
-  const btn = document.getElementById('backupDriveNowBtn');
-  isDriveBackingUp = true;
-  if (btn) {
-    btn.disabled = true;
-    btn.querySelector('span').textContent = 'جاري الحفظ اليدوي على Google Drive...';
-  }
-
-  try {
-    const payload = buildBackupPayloadObject();
-    payload.driveEmail = driveEmail;
-    payload.action = 'backup';
-    payload.csvContent = buildBackupCsvText(payload.records);
-
-    const res = await fetch(scriptUrl, {
-      method: 'POST',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
-
-    const txt = await res.text();
-    let json = {};
-    try { json = JSON.parse(txt); } catch (e) {}
-    if (json.status && json.status !== 'ok') {
-      throw new Error(json.message || 'DRIVE_ERR');
-    }
-
-    const stamp = `${todayString()} (${new Date().toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' })})`;
-    localStorage.setItem(wsKey('last_drive_backup_at'), stamp);
-    saveDailyLocalSnapshot(true);
-    updateBackupStatusUI();
-    renderLocalSnapshotsUI();
-    showToast('تم الحفظ اليدوي على Google Drive بنجاح ✓');
-  } catch (err) {
-    console.error('Drive backup error:', err);
-    showToast('تعذّر الحفظ على Google Drive، تأكد من الرابط وصلاحية النشر');
-  } finally {
-    isDriveBackingUp = false;
-    if (btn) {
-      btn.disabled = false;
-      btn.querySelector('span').textContent = 'حفظ يدوي على Google Drive الآن';
-    }
-  }
-}
-
 function checkAndRunDailyBackups() {
   if (!currentProfile || !isUnlocked) return;
-  // حفظ نسخة محلية يومية على الجوال فقط — أما Google Drive فيدوي 100% ولا يرفع تلقائياً
   if (allRecords.length > 0) {
     saveDailyLocalSnapshot(false);
   }
 }
 
-// فحص كل 10 دقائق في حال بقي التطبيق مفتوحاً عند مرور الساعة 12:00 ليلاً
 setInterval(() => {
   if (isUnlocked && currentProfile) checkAndRunDailyBackups();
 }, 10 * 60 * 1000);

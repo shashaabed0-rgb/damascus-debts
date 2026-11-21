@@ -192,25 +192,24 @@ async function exportCustomerPDF() {
       ? `<div style="font-size:12px;color:#374151;margin-top:2px;font-weight:600;">هاتف: <span dir="ltr" style="unicode-bidi:embed;">${shopPhones.map(escapeHtml).join('  •  ')}</span></div>`
       : '';
 
-    // 1. جدول الملخص الموحّد (دولار + ليرة سوري فوق بعض بألوان خفيفة مناسبة للطباعة)
-    const summaryRowsHtml = activeCodes.map((code, idx) => {
+    // 1. جدول الملخص الموحّد (مربعات بحدود شبكية كاملة وخفيفة للطباعة)
+    const summaryRowsHtml = activeCodes.map(code => {
       const info = cust.byCurrency[code];
       const unit = getCurrencyUnitWord(code);
       const balText = Math.abs(info.balance) < 0.001
         ? `0 ${unit} (خالص)`
         : (info.balance > 0 ? `${formatNum(info.balance)} ${unit}` : `له ${formatNum(Math.abs(info.balance))} ${unit}`);
-      const borderTop = idx > 0 ? 'border-top:1px solid #e5e7eb;' : '';
       return `
-        <tr style="${borderTop}">
-          <td style="padding:9px 10px;font-weight:800;color:#111827;text-align:right;width:110px;">${unit}</td>
-          <td style="padding:9px 10px;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(info.totalDebt)} ${unit}</td>
-          <td style="padding:9px 10px;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(info.totalPay)} ${unit}</td>
-          <td style="padding:9px 10px;text-align:center;font-weight:800;color:#111827;direction:ltr;">${balText}</td>
+        <tr>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;font-weight:800;color:#1e293b;text-align:right;background:#f8fafc;width:110px;">${unit}</td>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(info.totalDebt)} ${unit}</td>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(info.totalPay)} ${unit}</td>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:800;color:#0f172a;direction:ltr;background:#fcfdff;">${balText}</td>
         </tr>
       `;
     }).join('');
 
-    // 2. جدول الحركات الموحّد والأنيق (سادة وخفيف الألوان للطباعة)
+    // 2. جدول الحركات المربع بالكامل (كل عملية وعمود داخل خانة بحدود أفقية وعمودية)
     const unifiedRecords = cust.activeRecords || [];
     const txRowsHtml = unifiedRecords.map((r, i) => {
       const code = r.currency || getRecordCurrency(r);
@@ -218,71 +217,79 @@ async function exportCustomerPDF() {
       const isDebt = r.kind === 'debt';
       return `
         <tr style="background:${i % 2 === 1 ? '#fafafa' : '#ffffff'};">
-          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;text-align:center;color:#6b7280;">${i + 1}</td>
-          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;white-space:nowrap;color:#374151;">${escapeHtml(formatDate(r.date))}</td>
-          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${isDebt ? '#374151' : '#4b5563'};white-space:nowrap;">${isDebt ? 'دين (+)' : 'دفعة (−)'}</td>
-          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;direction:ltr;text-align:right;font-weight:800;color:#111827;white-space:nowrap;">${formatNum(r.amount)} ${unit}</td>
-          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;color:#374151;">${escapeHtml(r.note || '—')}</td>
+          <td style="padding:8px 7px;border:1px solid #cbd5e1;text-align:center;color:#475569;font-weight:700;">${i + 1}</td>
+          <td style="padding:8px 7px;border:1px solid #cbd5e1;white-space:nowrap;color:#334155;text-align:center;">${escapeHtml(formatDate(r.date))}</td>
+          <td style="padding:8px 7px;border:1px solid #cbd5e1;font-weight:700;color:${isDebt ? '#334155' : '#475569'};white-space:nowrap;text-align:center;">${isDebt ? 'دين (+)' : 'دفعة (−)'}</td>
+          <td style="padding:8px 7px;border:1px solid #cbd5e1;direction:ltr;text-align:center;font-weight:800;color:#0f172a;white-space:nowrap;">${formatNum(r.amount)} ${unit}</td>
+          <td style="padding:8px 8px;border:1px solid #cbd5e1;color:#334155;">${escapeHtml(r.note || '—')}</td>
         </tr>
       `;
     }).join('');
 
     const mainBlock = document.createElement('div');
-    mainBlock.style.cssText = 'width:740px;padding:24px 26px 14px;background:#ffffff;';
+    mainBlock.style.cssText = 'width:740px;padding:18px 20px 14px;background:#ffffff;';
     mainBlock.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #374151;padding-bottom:12px;margin-bottom:14px;gap:14px;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          ${logoHtml}
-          <div>
-            <div style="font-size:21px;font-weight:800;color:#111827;">${escapeHtml(settings.shopName || 'دفتر الديون')}</div>
-            ${shopAddressHtml}
-            ${shopPhonesHtml}
+      <div style="border:1.5px solid #94a3b8;border-radius:10px;padding:18px;background:#ffffff;">
+        <!-- مربع الترويسة المعزول -->
+        <div style="border:1px solid #cbd5e1;border-radius:8px;padding:12px 14px;margin-bottom:12px;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;gap:14px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            ${logoHtml}
+            <div>
+              <div style="font-size:20px;font-weight:800;color:#1e293b;">${escapeHtml(settings.shopName || 'دفتر الديون')}</div>
+              ${shopAddressHtml}
+              ${shopPhonesHtml}
+            </div>
+          </div>
+          <div style="text-align:left;font-size:12px;color:#475569;line-height:1.65;border-right:1px solid #cbd5e1;padding-right:14px;">
+            <div style="font-size:14.5px;font-weight:800;color:#1e293b;">كشف حساب زبون</div>
+            <div>التاريخ: ${todayString()}</div>
+            <div>العملة: ${headerCurrencyText}</div>
           </div>
         </div>
-        <div style="text-align:left;font-size:12px;color:#4b5563;line-height:1.6;">
-          <div style="font-size:15px;font-weight:800;color:#111827;">كشف حساب زبون</div>
-          <div>التاريخ: ${todayString()}</div>
-          <div>العملة: ${headerCurrencyText}</div>
-        </div>
-      </div>
 
-      <div style="border:1px solid #d1d5db;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;background:#ffffff;">
-        <div>
-          <span style="font-size:11.5px;color:#6b7280;margin-left:6px;">اسم الزبون:</span>
-          <span style="font-size:16.5px;font-weight:800;color:#111827;">${escapeHtml(cust.name)}</span>
+        <!-- مربع بيانات الزبون المعزول -->
+        <div style="border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;background:#ffffff;">
+          <div>
+            <span style="font-size:11.5px;color:#64748b;margin-left:6px;">اسم الزبون:</span>
+            <span style="font-size:16px;font-weight:800;color:#0f172a;">${escapeHtml(cust.name)}</span>
+          </div>
+          <div style="text-align:left;">
+            <span style="font-size:11.5px;color:#64748b;margin-left:6px;">الهاتف:</span>
+            <span style="font-size:13.5px;font-weight:700;direction:ltr;unicode-bidi:embed;color:#0f172a;">${escapeHtml(cust.phone || '—')}</span>
+          </div>
         </div>
-        <div style="text-align:left;">
-          <span style="font-size:11.5px;color:#6b7280;margin-left:6px;">الهاتف:</span>
-          <span style="font-size:13.5px;font-weight:700;direction:ltr;unicode-bidi:embed;color:#111827;">${escapeHtml(cust.phone || '—')}</span>
-        </div>
-      </div>
 
-      <div style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;margin-bottom:16px;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <!-- جدول الملخص المربع -->
+        <table style="width:100%;border-collapse:collapse;font-size:12.8px;margin-bottom:14px;border:1.2px solid #94a3b8;">
           <thead>
-            <tr style="background:#f3f4f6;color:#111827;border-bottom:1px solid #cbd5e1;">
-              <th style="padding:8px 10px;text-align:right;font-weight:800;">العملة</th>
-              <th style="padding:8px 10px;text-align:center;font-weight:800;">إجمالي الديون</th>
-              <th style="padding:8px 10px;text-align:center;font-weight:800;">إجمالي الدفعات</th>
-              <th style="padding:8px 10px;text-align:center;font-weight:800;">الرصيد المتبقي</th>
+            <tr style="background:#f1f5f9;color:#1e293b;">
+              <th style="padding:8px 10px;border:1px solid #cbd5e1;text-align:right;font-weight:800;">العملة</th>
+              <th style="padding:8px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:800;">إجمالي الديون</th>
+              <th style="padding:8px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:800;">إجمالي الدفعات</th>
+              <th style="padding:8px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:800;">الرصيد المتبقي</th>
             </tr>
           </thead>
           <tbody>${summaryRowsHtml}</tbody>
         </table>
-      </div>
 
-      <table style="width:100%;border-collapse:collapse;font-size:12.8px;border:1px solid #d1d5db;">
-        <thead>
-          <tr style="background:#f3f4f6;color:#111827;border-bottom:1.5px solid #9ca3af;">
-            <th style="padding:9px 7px;width:36px;text-align:center;font-weight:800;">#</th>
-            <th style="padding:9px 7px;width:102px;text-align:right;font-weight:800;">التاريخ</th>
-            <th style="padding:9px 7px;width:82px;text-align:right;font-weight:800;">النوع</th>
-            <th style="padding:9px 7px;width:155px;text-align:right;font-weight:800;">المبلغ</th>
-            <th style="padding:9px 7px;text-align:right;font-weight:800;">الملاحظات</th>
-          </tr>
-        </thead>
-        <tbody>${txRowsHtml || `<tr><td colspan="5" style="padding:12px;text-align:center;color:#6b7280;">لا توجد حركات</td></tr>`}</tbody>
-      </table>
+        <!-- عنوان وجدول الحركات المربع بالكامل -->
+        <div style="font-size:12.5px;font-weight:800;color:#334155;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+          <span>جدول العمليات والحركات</span>
+          <span style="font-size:11.5px;color:#64748b;font-weight:700;">عدد الحركات: ${unifiedRecords.length}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12.6px;border:1.2px solid #94a3b8;">
+          <thead>
+            <tr style="background:#f1f5f9;color:#1e293b;">
+              <th style="padding:9px 6px;border:1px solid #cbd5e1;width:34px;text-align:center;font-weight:800;">#</th>
+              <th style="padding:9px 6px;border:1px solid #cbd5e1;width:96px;text-align:center;font-weight:800;">التاريخ</th>
+              <th style="padding:9px 6px;border:1px solid #cbd5e1;width:74px;text-align:center;font-weight:800;">النوع</th>
+              <th style="padding:9px 6px;border:1px solid #cbd5e1;width:150px;text-align:center;font-weight:800;">المبلغ</th>
+              <th style="padding:9px 8px;border:1px solid #cbd5e1;text-align:right;font-weight:800;">الملاحظات</th>
+            </tr>
+          </thead>
+          <tbody>${txRowsHtml || `<tr><td colspan="5" style="padding:12px;border:1px solid #cbd5e1;text-align:center;color:#64748b;">لا توجد حركات</td></tr>`}</tbody>
+        </table>
+      </div>
     `;
     stage.appendChild(mainBlock);
 
@@ -290,7 +297,7 @@ async function exportCustomerPDF() {
     let generalNoteEl = null;
     if (generalNote) {
       generalNoteEl = document.createElement('div');
-      generalNoteEl.style.cssText = 'width:740px;padding:0 26px;background:#ffffff;';
+      generalNoteEl.style.cssText = 'width:740px;padding:0 20px;background:#ffffff;';
       generalNoteEl.innerHTML = `
         <div style="background:#ffffff;border:1px solid #d1d5db;border-right:3px solid #4b5563;border-radius:8px;padding:10px 14px;color:#374151;font-size:12.5px;line-height:1.6;">
           <div style="font-size:12px;font-weight:800;color:#111827;margin-bottom:2px;">ملاحظة عامة:</div>
@@ -394,7 +401,7 @@ async function exportCustomerPDF() {
       const codeToWrite = shamAscii || shamRaw;
       doc.setFont('courier', 'bold');
       doc.setFontSize(12);
-      const innerMargin = 7;
+      const innerMargin = 5;
       const boxX = marginX + innerMargin;
       const boxW = usableW - innerMargin * 2;
 

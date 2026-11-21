@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#1e3a8a" />
+  <meta name="theme-color" content="#2a4570" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="دفتر الديون" />
@@ -222,22 +222,26 @@
     <div class="view-body detail-view-body">
       <div id="detailStatsWrap"></div>
 
-      <div class="action-grid">
-        <button class="btn btn-debt" onclick="quickAddForCurrent('debt')">
-          <svg class="ic ic-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>تسجيل دين</span>
-        </button>
-        <button class="btn btn-pay" onclick="quickAddForCurrent('pay')">
-          <svg class="ic ic-sm" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>تسجيل دفعة</span>
-        </button>
+      <div class="detail-box detail-actions-box">
+        <div class="action-grid" style="margin-bottom:0;">
+          <button class="btn btn-debt" onclick="quickAddForCurrent('debt')">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>تسجيل دين</span>
+          </button>
+          <button class="btn btn-pay" onclick="quickAddForCurrent('pay')">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>تسجيل دفعة</span>
+          </button>
+        </div>
       </div>
 
-      <div class="section-head">
-        <span id="activeSectionTitle">الحركات الحالية</span>
-        <span id="detailTxCount"></span>
+      <div class="detail-box detail-tx-box">
+        <div class="detail-box-head">
+          <span id="activeSectionTitle">الحركات الحالية</span>
+          <span class="detail-count-pill" id="detailTxCount"></span>
+        </div>
+        <div class="detail-box-body" id="detailTxList"></div>
       </div>
-      <div id="detailTxList"></div>
 
       <!-- درج العمليات القديمة المسدّدة -->
       <div id="archiveDrawer" class="archive-drawer hidden">
@@ -589,51 +593,33 @@
         </div>
       </div>
 
-      <!-- درج النسخ الاحتياطي (Google Drive يدوي + الجوال) -->
+      <!-- درج النسخ الاحتياطي (حفظ على الجهاز) -->
       <div id="backupSettingsDrawer" class="settings-drawer">
         <button type="button" class="settings-drawer-toggle" onclick="toggleSettingsDrawer('backupSettingsDrawer')">
           <span class="settings-drawer-left">
             <span class="settings-drawer-ic drive">
-              <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+              <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             </span>
             <div>
-              <div class="settings-drawer-title">النسخ الاحتياطي (Google Drive والجوال)</div>
-              <div class="settings-drawer-sub">الحفظ يدوي على Google Drive + حفظ نسخة على الجوال</div>
+              <div class="settings-drawer-title">النسخ الاحتياطي (على الجهاز)</div>
+              <div class="settings-drawer-sub">حفظ نسخة احتياطية على الجهاز أو تصدير Excel واستعادتها</div>
             </div>
           </span>
           <svg class="ic ic-sm settings-drawer-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
 
         <div class="settings-drawer-body">
-          <div id="driveAdminConfigWrap">
-            <div class="manual-drive-badge">
-              <span class="manual-drive-pill">حفظ يدوي</span>
-              <span>الحفظ على Google Drive يدوي فقط — يتم الرفع عند ضغط الزر بالأسفل ولا يُحفظ تلقائياً</span>
-            </div>
-
-            <div class="field">
-              <label>بريد حساب Google Drive (اختياري للتوثيق)</label>
-              <input type="text" id="setDriveEmail" class="input" dir="ltr" inputmode="email" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="drive_target_mail" placeholder="yourname@gmail.com" />
-            </div>
-
-            <div class="field">
-              <label>رابط ربط Google Drive (سكربت الحفظ اليدوي)</label>
-              <input type="url" id="setDriveScriptUrl" class="input" dir="ltr" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="drive_script_endpoint" placeholder="https://script.google.com/macros/s/.../exec" />
-              <div class="field-hint">يحفظ نسخة كاملة (JSON + ملف Excel) يدوياً داخل مجلد «نسخ احتياطي - دفتر الديون» على الإيميل المرتبط بالرابط.</div>
-            </div>
-
-            <button type="button" id="backupDriveNowBtn" class="btn btn-primary" style="margin-bottom:9px;" onclick="backupToGoogleDriveNow()">
-              <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span>حفظ يدوي على Google Drive الآن</span>
-            </button>
-          </div>
-
           <div id="backupStatusSummary" class="backup-status-box">لم يتم أخذ نسخة احتياطية بعد</div>
 
           <div class="action-grid" style="margin-top:10px;margin-bottom:8px;">
-            <button type="button" class="btn btn-light" onclick="downloadLocalJsonBackup()">حفظ نسخة على الجوال</button>
+            <button type="button" class="btn btn-primary" onclick="downloadLocalJsonBackup()">حفظ نسخة على الجهاز</button>
             <button type="button" class="btn btn-light" onclick="downloadLocalCsvBackup()">تصدير Excel (CSV)</button>
           </div>
+
+          <button type="button" class="btn btn-light" style="margin-bottom:8px;" onclick="shareLocalJsonBackup()">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            <span>مشاركة النسخة الاحتياطية (واتساب / درايف / ملفات)</span>
+          </button>
 
           <div id="restoreBackupWrap" style="margin-bottom:12px;">
             <label class="btn btn-wa" style="width:100%;">
@@ -643,7 +629,7 @@
           </div>
 
           <div class="section-head" style="margin-top:10px;">
-            <span>النسخ اليومية المحفوظة تلقائياً على هذا الجوال</span>
+            <span>النسخ اليومية المحفوظة تلقائياً على هذا الجهاز</span>
             <span id="localSnapsCount">0</span>
           </div>
           <div id="localSnapsList"></div>

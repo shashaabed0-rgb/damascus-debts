@@ -46,13 +46,6 @@ const DEFAULT_WA_CONFIG = {
   customNoteText: ''
 };
 
-const DEFAULT_BACKUP_CONFIG = {
-  driveEmail: '',
-  driveScriptUrl: '',
-  manualOnly: true,
-  lastDriveBackupAt: ''
-};
-
 let settings = {
   shopName: 'مركز الدمشقي للصيانة',
   shopAddress: '',
@@ -63,7 +56,6 @@ let settings = {
   shamCashEnabled: false,
   shamCashCode: '',
   waConfig: { ...DEFAULT_WA_CONFIG },
-  backupConfig: { ...DEFAULT_BACKUP_CONFIG },
   currency: 'BOTH',
   whatsappApp: 'normal',
   lockEnabled: false,
@@ -176,7 +168,6 @@ function applyWorkshopSettingsToState(ws) {
   settings.shamCashEnabled = !!s.shamCashEnabled;
   settings.shamCashCode = s.shamCashCode || '';
   settings.waConfig = { ...DEFAULT_WA_CONFIG, ...(s.waConfig && typeof s.waConfig === 'object' ? s.waConfig : {}) };
-  settings.backupConfig = { ...DEFAULT_BACKUP_CONFIG, ...(s.backupConfig && typeof s.backupConfig === 'object' ? s.backupConfig : {}) };
   settings.currency = (s.currency === 'USD' || s.currency === 'SYP' || s.currency === 'BOTH') ? s.currency : 'BOTH';
 }
 
@@ -365,7 +356,6 @@ function applyPermissionsUI() {
   document.getElementById('detailDeleteCustomerBtn').classList.toggle('hidden', !canDeleteRecords());
   document.getElementById('workshopAdminSettingsWrap').classList.toggle('hidden', !isAdmin());
   document.getElementById('currencySettingField').classList.toggle('hidden', !isAdmin());
-  document.getElementById('driveAdminConfigWrap')?.classList.toggle('hidden', !isAdmin());
   document.getElementById('restoreBackupWrap')?.classList.toggle('hidden', !isAdmin());
 }
 
