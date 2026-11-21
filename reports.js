@@ -1,4 +1,4 @@
-// ==================== واتساب (عادي أو أعمال) مع إعلام العميل بالدين الجديد وما هو ====================
+// ==================== واتساب (عادي أو أعمال) مع دعم العملتين وإعلام العميل بالدين الجديد ====================
 function formatPhoneForWa(rawPhone) {
   let p = String(rawPhone || '').replace(/[^\d]/g, '');
   if (p.startsWith('00')) p = p.slice(2);
@@ -6,13 +6,28 @@ function formatPhoneForWa(rawPhone) {
   return p;
 }
 
+function formatBalanceWaLine(balance, symbol) {
+  if (Math.abs(balance) < 0.001) return `خالص (0 ${symbol})`;
+  if (balance > 0) return `المتبقي عليك: ${formatNum(balance)} ${symbol}`;
+  return `لك رصيد متبقي: ${formatNum(Math.abs(balance))} ${symbol}`;
+}
+
+function getActiveCurrenciesForReport(cust) {
+  const enabled = getEnabledCurrencyCodes();
+  const list = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].activeRecords.length > 0);
+  if (list.length > 0) return list;
+  const withAny = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].allRecords.length > 0);
+  return withAny.length > 0 ? [withAny[0]] : [enabled[0]];
+}
+
 function sendWhatsApp(specificTx = null, customerNameOverride = null) {
   const targetName = customerNameOverride || currentCustomerName;
   const cust = groupedCustomers.find(c => c.name === targetName);
   if (!cust) return;
-  const curr = getCurr();
 
-  // تحديد أحدث عملية (أو العملية المسجلة للتو) لإعلام العميل بالدين الجديد وما هو
+  const activeCodes = getActiveCurrenciesForReport(cust);
+
+  // تحديد أحدث عملية (أو العملية المحددة) لإعلام العميل بالدين الجديد وما هو وبأي عملة
   let latestTx = specificTx;
   if (!latestTx && cust.activeRecords && cust.activeRecords.length > 0) {
     latestTx = cust.activeRecords[cust.activeRecords.length - 1];
@@ -26,14 +41,15 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
 
   if (latestTx) {
     const txIsPay = latestTx.kind ? (latestTx.kind === 'pay') : isPayType(latestTx.type);
+    const txCurr = getCurr(latestTx.currency || getRecordCurrency(latestTx));
     const txNote = String(latestTx.note || '').trim();
     const txDate = formatDate(latestTx.date || todayString());
     if (txIsPay) {
       lines.push(`تم تسجيل *دفعة جديدة* في حسابك:`);
-      lines.push(`• مبلغ الدفعة: ${formatNum(latestTx.amount)} ${curr.symbol}`);
+      lines.push(`• مبلغ الدفعة: ${formatNum(latestTx.amount)} ${txCurr.symbol}`);
     } else {
       lines.push(`تم تسجيل *دين جديد* على حسابك:`);
-      lines.push(`• مبلغ الدين: ${formatNum(latestTx.amount)} ${curr.symbol}`);
+      lines.push(`• مبلغ الدين: ${formatNum(latestTx.amount)} ${txCurr.symbol}`);
     }
     if (txNote) {
       lines.push(`• البيان: ${txNote}`);
@@ -43,15 +59,24 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
   }
 
   lines.push(`ملخص حسابك حتى تاريخ ${todayString()}:`);
-  lines.push(`• إجمالي الدين: ${formatNum(cust.totalDebt)} ${curr.symbol}`);
-  lines.push(`• المدفوع: ${formatNum(cust.totalPay)} ${curr.symbol}`);
 
-  if (Math.abs(cust.balance) < 0.001) {
-    lines.push(`• الرصيد الحالي: خالص (0 ${curr.symbol})`);
-  } else if (cust.balance > 0) {
-    lines.push(`• المتبقي عليك: ${formatNum(cust.balance)} ${curr.symbol}`);
+  if (activeCodes.length === 1) {
+    const code = activeCodes[0];
+    const info = cust.byCurrency[code];
+    const curr = getCurr(code);
+    lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${curr.symbol}`);
+    lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${curr.symbol}`);
+    lines.push(`• ${formatBalanceWaLine(info.balance, curr.symbol)}`);
   } else {
-    lines.push(`• لك رصيد متبقي: ${formatNum(Math.abs(cust.balance))} ${curr.symbol}`);
+    activeCodes.forEach(code => {
+      const info = cust.byCurrency[code];
+      const curr = getCurr(code);
+      lines.push('');
+      lines.push(`*حساب ${curr.name} (${curr.symbol}):*`);
+      lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${curr.symbol}`);
+      lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${curr.symbol}`);
+      lines.push(`• ${formatBalanceWaLine(info.balance, curr.symbol)}`);
+    });
   }
 
   if (settings.shamCashEnabled && (settings.shamCashCode || '').trim()) {
@@ -84,7 +109,7 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
   }
 }
 
-// ==================== تصدير كشف PDF (دعم أكثر من رقم هاتف + شام كاش القابل للنسخ) ====================
+// ==================== تصدير كشف PDF (دعم العملتين بشكل منفصل + تعدد الهواتف + نسخ شام كاش) ====================
 async function waitImagesAndPaint(rootEl) {
   const imgs = Array.from(rootEl.querySelectorAll('img'));
   await Promise.all(imgs.map(img => {
@@ -103,6 +128,65 @@ function extractCopyableAscii(rawText) {
   return m ? m.join(' ') : '';
 }
 
+function buildPdfCurrencySectionHtml(code, info, showSectionHeader) {
+  const curr = getCurr(code);
+  const accent = code === 'USD' ? '#1e3a8a' : '#b45309';
+  const softBg = code === 'USD' ? '#eff6ff' : '#fffbeb';
+  const softBorder = code === 'USD' ? '#bfdbfe' : '#fde68a';
+
+  const balText = Math.abs(info.balance) < 0.001
+    ? `0 ${curr.symbol} (خالص)`
+    : (info.balance > 0 ? `${formatNum(info.balance)} ${curr.symbol}` : `له ${formatNum(Math.abs(info.balance))} ${curr.symbol}`);
+
+  const rowsHtml = info.activeRecords.map((r, i) => `
+    <tr style="background:${i % 2 === 1 ? '#f8fafc' : '#ffffff'};">
+      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;text-align:center;color:#64748b;">${i + 1}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;white-space:nowrap;">${escapeHtml(formatDate(r.date))}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;font-weight:700;color:${r.kind === 'debt' ? '#dc2626' : '#15803d'};">${r.kind === 'debt' ? 'دين (+)' : 'دفعة (−)'}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;direction:ltr;text-align:right;font-weight:800;white-space:nowrap;">${formatNum(r.amount)} ${curr.symbol}</td>
+      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;color:#334155;">${escapeHtml(r.note || '—')}</td>
+    </tr>
+  `).join('');
+
+  const sectionBanner = showSectionHeader
+    ? `<div style="background:${softBg};border:1px solid ${softBorder};border-right:4px solid ${accent};border-radius:9px;padding:8px 13px;margin:18px 0 11px;display:flex;justify-content:space-between;align-items:center;">
+         <div style="font-size:15px;font-weight:800;color:${accent};">حساب ${curr.name} (${curr.symbol})</div>
+         <div style="font-size:12px;color:#475569;font-weight:700;">${info.activeRecords.length} حركة</div>
+       </div>`
+    : '';
+
+  return `
+    ${sectionBanner}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
+      <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:11.5px;color:#64748b;">إجمالي الديون</div>
+        <div style="font-size:16px;font-weight:800;color:#dc2626;direction:ltr;margin-top:3px;">${formatNum(info.totalDebt)} ${curr.symbol}</div>
+      </div>
+      <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:11.5px;color:#64748b;">إجمالي الدفعات</div>
+        <div style="font-size:16px;font-weight:800;color:#15803d;direction:ltr;margin-top:3px;">${formatNum(info.totalPay)} ${curr.symbol}</div>
+      </div>
+      <div style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:9px;padding:10px;text-align:center;">
+        <div style="font-size:11.5px;color:#64748b;">الرصيد المتبقي</div>
+        <div style="font-size:16px;font-weight:800;color:#0f172a;direction:ltr;margin-top:3px;">${balText}</div>
+      </div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px;">
+      <thead>
+        <tr style="background:${accent};color:#ffffff;">
+          <th style="padding:10px 8px;width:40px;text-align:center;">#</th>
+          <th style="padding:10px 8px;width:110px;text-align:right;">التاريخ</th>
+          <th style="padding:10px 8px;width:90px;text-align:right;">النوع</th>
+          <th style="padding:10px 8px;width:130px;text-align:right;">المبلغ</th>
+          <th style="padding:10px 8px;text-align:right;">الملاحظات</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml || `<tr><td colspan="5" style="padding:12px;text-align:center;color:#64748b;">لا توجد حركات</td></tr>`}</tbody>
+    </table>
+  `;
+}
+
 async function exportCustomerPDF() {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
@@ -110,7 +194,12 @@ async function exportCustomerPDF() {
     return showToast('يرجى الاتصال بالإنترنت أول مرة لتحميل محرك PDF');
   }
 
-  const curr = getCurr();
+  const activeCodes = getActiveCurrenciesForReport(cust);
+  const isDualPdf = activeCodes.length > 1;
+  const headerCurrencyText = isDualPdf
+    ? 'دولار ($) وليرة سورية (ل.س)'
+    : `${getCurr(activeCodes[0]).name} (${getCurr(activeCodes[0]).symbol})`;
+
   const overlay = document.getElementById('pdfBusyOverlay');
   overlay.classList.add('open');
 
@@ -119,21 +208,6 @@ async function exportCustomerPDF() {
   stage.style.cssText = 'position:absolute;top:0;left:0;width:740px;background:#ffffff;color:#0f172a;z-index:99990;direction:rtl;font-family:"Segoe UI",Tahoma,Arial,sans-serif;padding:0;margin:0;';
 
   try {
-    const reportRecords = cust.activeRecords;
-    const balText = Math.abs(cust.balance) < 0.001
-      ? `0 ${curr.symbol} (خالص)`
-      : (cust.balance > 0 ? `${formatNum(cust.balance)} ${curr.symbol}` : `له ${formatNum(Math.abs(cust.balance))} ${curr.symbol}`);
-
-    const rowsHtml = reportRecords.map((r, i) => `
-      <tr style="background:${i % 2 === 1 ? '#f8fafc' : '#ffffff'};">
-        <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;text-align:center;color:#64748b;">${i + 1}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;white-space:nowrap;">${escapeHtml(formatDate(r.date))}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;font-weight:700;color:${r.kind === 'debt' ? '#dc2626' : '#15803d'};">${r.kind === 'debt' ? 'دين (+)' : 'دفعة (−)'}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;direction:ltr;text-align:right;font-weight:800;white-space:nowrap;">${formatNum(r.amount)} ${curr.symbol}</td>
-        <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;color:#334155;">${escapeHtml(r.note || '—')}</td>
-      </tr>
-    `).join('');
-
     const logoHtml = settings.shopLogo
       ? `<img src="${settings.shopLogo}" style="width:62px;height:62px;object-fit:contain;border-radius:10px;border:1px solid #e2e8f0;padding:3px;background:#fff;" />`
       : '';
@@ -145,6 +219,10 @@ async function exportCustomerPDF() {
     const shopPhonesHtml = shopPhones.length > 0
       ? `<div style="font-size:12.5px;color:#334155;margin-top:3px;font-weight:600;">هاتف: <span dir="ltr" style="unicode-bidi:embed;">${shopPhones.map(escapeHtml).join('  •  ')}</span></div>`
       : '';
+
+    const sectionsHtml = activeCodes
+      .map(code => buildPdfCurrencySectionHtml(code, cust.byCurrency[code], isDualPdf))
+      .join('');
 
     const mainBlock = document.createElement('div');
     mainBlock.style.cssText = 'width:740px;padding:26px 26px 14px;background:#ffffff;';
@@ -161,7 +239,7 @@ async function exportCustomerPDF() {
         <div style="text-align:left;font-size:12.5px;color:#475569;line-height:1.6;">
           <div style="font-size:15px;font-weight:800;color:#1e3a8a;">كشف حساب زبون</div>
           <div>التاريخ: ${todayString()}</div>
-          <div>العملة: ${curr.name} (${curr.symbol})</div>
+          <div>العملة: ${headerCurrencyText}</div>
         </div>
       </div>
 
@@ -176,33 +254,7 @@ async function exportCustomerPDF() {
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">
-        <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:9px;padding:10px;text-align:center;">
-          <div style="font-size:11.5px;color:#64748b;">إجمالي الديون</div>
-          <div style="font-size:16px;font-weight:800;color:#dc2626;direction:ltr;margin-top:3px;">${formatNum(cust.totalDebt)} ${curr.symbol}</div>
-        </div>
-        <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:9px;padding:10px;text-align:center;">
-          <div style="font-size:11.5px;color:#64748b;">إجمالي الدفعات</div>
-          <div style="font-size:16px;font-weight:800;color:#15803d;direction:ltr;margin-top:3px;">${formatNum(cust.totalPay)} ${curr.symbol}</div>
-        </div>
-        <div style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:9px;padding:10px;text-align:center;">
-          <div style="font-size:11.5px;color:#64748b;">الرصيد المتبقي</div>
-          <div style="font-size:16px;font-weight:800;color:#0f172a;direction:ltr;margin-top:3px;">${balText}</div>
-        </div>
-      </div>
-
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead>
-          <tr style="background:#1e3a8a;color:#ffffff;">
-            <th style="padding:10px 8px;width:40px;text-align:center;">#</th>
-            <th style="padding:10px 8px;width:110px;text-align:right;">التاريخ</th>
-            <th style="padding:10px 8px;width:90px;text-align:right;">النوع</th>
-            <th style="padding:10px 8px;width:130px;text-align:right;">المبلغ</th>
-            <th style="padding:10px 8px;text-align:right;">الملاحظات</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
+      ${sectionsHtml}
     `;
     stage.appendChild(mainBlock);
 
@@ -343,13 +395,11 @@ async function exportCustomerPDF() {
       doc.setLineWidth(0.5);
       doc.roundedRect(boxX, curY, boxW, boxH, 3, 3, 'FD');
 
-      // 1. عبارة شام كاش + يمكنك نسخ الرمز للدفع (يمين الصندوق)
       if (shamLabelCanvas) {
         const lblY = curY + (boxH - lblH) / 2;
         doc.addImage(shamLabelCanvas.toDataURL('image/png'), 'PNG', lblX, lblY, lblW, lblH);
       }
 
-      // 2. مربع صغير "نسخ" بجانب الكتابة مع تفعيل رابط النسخ السريع
       const copyBtnY = curY + (boxH - copyBtnH) / 2;
       if (shamCopyBtnCanvas) {
         doc.addImage(shamCopyBtnCanvas.toDataURL('image/png'), 'PNG', copyBtnX, copyBtnY, copyBtnW, copyBtnH);
@@ -363,7 +413,6 @@ async function exportCustomerPDF() {
         doc.link(copyBtnX, copyBtnY, copyBtnW, copyBtnH, { url: copyUrl });
       }
 
-      // 3. مربع الكود (نص حقيقي قابل للتحديد والنسخ المباشر من داخل PDF)
       const codeBoxH = boxH - 5;
       doc.setFillColor(255, 255, 255);
       doc.setDrawColor(217, 119, 6);

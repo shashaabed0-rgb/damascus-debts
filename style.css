@@ -616,3 +616,167 @@ textarea.input { resize: vertical; min-height: 68px; }
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ==================== دعم العملتين (دولار + ليرة سورية) ==================== */
+.toggle-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+.toggle-3 .tog-btn {
+  padding: 10px 4px;
+  font-size: 13px;
+}
+
+/* بطاقة الإجمالي المزدوجة في الصفحة الرئيسية */
+.sum-dual {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.sum-dual-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sum-dual-num {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--danger);
+  direction: ltr;
+  line-height: 1.15;
+}
+
+/* شارات العملة الأنيقة */
+.curr-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.curr-usd {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+.curr-syp {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+/* أرصدة الزبون المزدوجة في القائمة الرئيسية */
+.bal-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.bal-stack .bal-pill {
+  font-size: 12.5px;
+  padding: 4px 9px;
+}
+
+/* بطاقات ملخص العملتين في صفحة العميل */
+.curr-summary-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+.curr-summary-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 11px 11px;
+  box-shadow: var(--shadow);
+}
+.curr-summary-card.usd-card {
+  border-top: 3px solid #2563eb;
+}
+.curr-summary-card.syp-card {
+  border-top: 3px solid #d97706;
+}
+.curr-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.curr-summary-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.curr-summary-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.curr-mini-box {
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 10px;
+  padding: 7px 5px;
+  text-align: center;
+}
+.curr-mini-box span {
+  display: block;
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.curr-mini-box strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  direction: ltr;
+}
+
+/* زر اختيار العملة داخل نافذة تسجيل العملية */
+.amount-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.tx-curr-switch {
+  display: inline-flex;
+  background: #eef2f7;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid #dbe4f0;
+  gap: 3px;
+}
+.tx-curr-btn {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tx-curr-btn.on-usd {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
+}
+.tx-curr-btn.on-syp {
+  background: #d97706;
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(217, 119, 6, 0.25);
+}

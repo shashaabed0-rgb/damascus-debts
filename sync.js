@@ -18,8 +18,8 @@ function createIsolatedAuthClient() {
 }
 
 const CURRENCIES = {
-  USD: { symbol: '$', name: 'دولار' },
-  SYP: { symbol: 'ل.س', name: 'ليرة سورية' }
+  USD: { code: 'USD', symbol: '$', name: 'دولار', short: 'دولار' },
+  SYP: { code: 'SYP', symbol: 'ل.س', name: 'ليرة سورية', short: 'سوري' }
 };
 
 const DEVICE_SETTINGS_KEY = 'debt_device_settings_sb_v1';
@@ -33,7 +33,7 @@ let settings = {
   generalNote: '',
   shamCashEnabled: false,
   shamCashCode: '',
-  currency: 'USD',
+  currency: 'BOTH',
   whatsappApp: 'normal',
   lockEnabled: false,
   pin: '',
@@ -55,11 +55,13 @@ let currentCustomerName = null;
 let editingTxId = null;
 let confirmAction = null;
 let txKind = 'debt';
+let txCurrency = 'USD';
+let lastUsedTxCurrency = 'USD';
 let isUnlocked = false;
 let isSyncing = false;
 let allowAppExit = false;
 let rootGuardArmed = false;
-let tempSettingsCurrency = 'USD';
+let tempSettingsCurrency = 'BOTH';
 let tempSettingsWa = 'normal';
 let tempLogoData = '';
 
@@ -131,7 +133,7 @@ function applyWorkshopSettingsToState(ws) {
   settings.generalNote = s.generalNote || '';
   settings.shamCashEnabled = !!s.shamCashEnabled;
   settings.shamCashCode = s.shamCashCode || '';
-  settings.currency = s.currency === 'SYP' ? 'SYP' : 'USD';
+  settings.currency = (s.currency === 'USD' || s.currency === 'SYP' || s.currency === 'BOTH') ? s.currency : 'BOTH';
 }
 
 function loadWorkshopLocalData() {
@@ -150,7 +152,27 @@ function persistData() {
   localStorage.setItem(wsKey('queue'), JSON.stringify(pendingQueue));
 }
 
-function getCurr() { return CURRENCIES[settings.currency] || CURRENCIES.USD; }
+function isDualCurrencyMode() {
+  return settings.currency === 'BOTH';
+}
+
+function getCurr(code = null) {
+  const c = code || (settings.currency === 'SYP' ? 'SYP' : 'USD');
+  return CURRENCIES[c] || CURRENCIES.USD;
+}
+
+function getRecordCurrency(rec) {
+  const t = String((rec && rec.type) || rec || '');
+  if (t.includes('ل.س') || t.toUpperCase().includes('SYP') || t.includes('سوري')) return 'SYP';
+  if (t.includes('$') || t.toUpperCase().includes('USD') || t.includes('دولار')) return 'USD';
+  return settings.currency === 'SYP' ? 'SYP' : 'USD';
+}
+
+function getEnabledCurrencyCodes() {
+  if (settings.currency === 'USD') return ['USD'];
+  if (settings.currency === 'SYP') return ['SYP'];
+  return ['USD', 'SYP'];
+}
 function genId(salt = 0) { return String(Date.now()) + '_' + salt + '_' + Math.floor(Math.random() * 10000); }
 
 function toDbRecord(rec) {

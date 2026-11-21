@@ -447,9 +447,14 @@ function updateSyncStatusUI(text, state = 'ok') {
   document.getElementById('syncStatus').innerHTML = `<span class="${dotCls}"></span><span>${text}</span>${pend}${userChip}`;
 }
 
-// ==================== تقسيم الدورات (طي العمليات المسدّدة القديمة) ====================
-function buildCustomerCycles(rawRecords) {
-  const ordered = rawRecords.map((r, i) => ({ ...r, _ord: i, _normDate: formatDate(r.date) }));
+// ==================== تقسيم الدورات بشكل مستقل لكل عملة (دولار / ليرة سورية) ====================
+function buildCurrencyCycles(rawRecords, currencyCode) {
+  const ordered = rawRecords.map((r, i) => ({
+    ...r,
+    currency: currencyCode,
+    _ord: i,
+    _normDate: formatDate(r.date)
+  }));
   ordered.sort((a, b) => {
     if (a._normDate !== b._normDate) return a._normDate.localeCompare(b._normDate);
     return a._ord - b._ord;
@@ -468,6 +473,7 @@ function buildCustomerCycles(rawRecords) {
 
     if (Math.abs(running) < 0.001) {
       settledCycles.push({
+        currency: currencyCode,
         records: curRecords,
         totalDebt: curDebt,
         totalPay: curPay,
@@ -482,28 +488,114 @@ function buildCustomerCycles(rawRecords) {
     }
   });
 
-  let activeCycle;
-  let archivedCycles;
+  return {
+    currency: currencyCode,
+    allRecords: ordered,
+    openRecords: curRecords,
+    openDebt: curDebt,
+    openPay: curPay,
+    openBalance: running,
+    settledCycles
+  };
+}
 
-  if (curRecords.length > 0) {
-    activeCycle = { records: curRecords, totalDebt: curDebt, totalPay: curPay, balance: running };
-    archivedCycles = settledCycles;
-  } else if (settledCycles.length > 0) {
-    activeCycle = settledCycles[settledCycles.length - 1];
-    archivedCycles = settledCycles.slice(0, -1);
-  } else {
-    activeCycle = { records: [], totalDebt: 0, totalPay: 0, balance: 0 };
-    archivedCycles = [];
-  }
+function finalizeCustomerCurrencies(rawRecords) {
+  const enabledCodes = getEnabledCurrencyCodes();
+  const split = { USD: [], SYP: [] };
+  rawRecords.forEach(r => {
+    const code = r.currency === 'SYP' ? 'SYP' : 'USD';
+    split[code].push(r);
+  });
 
-  return { activeCycle, archivedCycles };
+  const rawByCurr = {
+    USD: buildCurrencyCycles(split.USD, 'USD'),
+    SYP: buildCurrencyCycles(split.SYP, 'SYP')
+  };
+
+  // هل يوجد رصيد مفتوح في أي عملة مفعّلة؟
+  const anyOpenBalance = enabledCodes.some(c => rawByCurr[c].openRecords.length > 0);
+
+  const byCurrency = {};
+  const mergedActiveRecords = [];
+  const mergedArchivedCycles = [];
+
+  ['USD', 'SYP'].forEach(code => {
+    const cData = rawByCurr[code];
+    let activeRecords = [];
+    let archivedCycles = [];
+    let totalDebt = 0;
+    let totalPay = 0;
+    let balance = 0;
+
+    if (cData.openRecords.length > 0) {
+      activeRecords = cData.openRecords;
+      archivedCycles = cData.settledCycles;
+      totalDebt = cData.openDebt;
+      totalPay = cData.openPay;
+      balance = cData.openBalance;
+    } else if (cData.settledCycles.length > 0) {
+      if (anyOpenBalance) {
+        // العملة الأخرى مفتوحة، لذلك تُطوى كل الدورات المسددة لهذه العملة في الأرشيف
+        activeRecords = [];
+        archivedCycles = cData.settledCycles;
+      } else {
+        // العميل خالص بالكامل: نعرض آخر دورة مسددة كحركات حالية ونطوي الأقدم
+        const lastCyc = cData.settledCycles[cData.settledCycles.length - 1];
+        activeRecords = lastCyc.records;
+        archivedCycles = cData.settledCycles.slice(0, -1);
+        totalDebt = lastCyc.totalDebt;
+        totalPay = lastCyc.totalPay;
+        balance = 0;
+      }
+    }
+
+    const archivedCount = archivedCycles.reduce((acc, cyc) => acc + cyc.records.length, 0);
+    byCurrency[code] = {
+      currency: code,
+      allRecords: cData.allRecords,
+      activeRecords,
+      archivedCycles,
+      archivedCount,
+      totalDebt,
+      totalPay,
+      balance
+    };
+
+    if (enabledCodes.includes(code)) {
+      activeRecords.forEach(r => mergedActiveRecords.push(r));
+      archivedCycles.forEach(cyc => mergedArchivedCycles.push(cyc));
+    }
+  });
+
+  // ترتيب الحركات النشطة المدمجة زمنياً (الأقدم أولاً، وعند العرض نعكسها للأحدث أولاً)
+  mergedActiveRecords.sort((a, b) => {
+    if (a._normDate !== b._normDate) return a._normDate.localeCompare(b._normDate);
+    return String(a.id).localeCompare(String(b.id));
+  });
+
+  // ترتيب الدورات المؤرشفة زمنياً حسب تاريخ الإغلاق
+  mergedArchivedCycles.sort((a, b) => a.endDate.localeCompare(b.endDate));
+
+  const archivedCount = mergedArchivedCycles.reduce((acc, c) => acc + c.records.length, 0);
+  const hasDebt = enabledCodes.some(c => byCurrency[c].balance > 0.001);
+  const hasCredit = enabledCodes.some(c => byCurrency[c].balance < -0.001);
+  const isAllZero = enabledCodes.every(c => Math.abs(byCurrency[c].balance) < 0.001);
+
+  return {
+    byCurrency,
+    activeRecords: mergedActiveRecords,
+    archivedCycles: mergedArchivedCycles,
+    archivedCount,
+    hasDebt,
+    hasCredit,
+    isAllZero
+  };
 }
 
 // ==================== معالجة وعرض الزبائن ====================
 function processAndRender() {
-  const curr = getCurr();
-  document.getElementById('activeCurrName').textContent = curr.name;
-  document.getElementById('txCurrLabel').textContent = curr.symbol;
+  const dual = isDualCurrencyMode();
+  const singleCurr = getCurr();
 
   const pendingAddIds = new Set(
     pendingQueue.filter(q => q.action === 'upsert' || q.action === 'add').map(q => String(q.payload.id))
@@ -518,37 +610,62 @@ function processAndRender() {
       map[name].phone = String(r.phone).replace(/^'/, '').trim();
     }
     const kind = isPayType(r.type) ? 'pay' : 'debt';
+    const currency = getRecordCurrency(r);
     const amt = Number(r.amount) || 0;
-    map[name].rawRecords.push({ ...r, kind, amount: amt, pending: pendingAddIds.has(String(r.id)) });
+    map[name].rawRecords.push({
+      ...r,
+      kind,
+      currency,
+      amount: amt,
+      pending: pendingAddIds.has(String(r.id))
+    });
   });
 
+  const enabledCodes = getEnabledCurrencyCodes();
+
   groupedCustomers = Object.values(map).map(entry => {
-    const { activeCycle, archivedCycles } = buildCustomerCycles(entry.rawRecords);
-    const archivedCount = archivedCycles.reduce((acc, c) => acc + c.records.length, 0);
+    const summary = finalizeCustomerCurrencies(entry.rawRecords);
     return {
       name: entry.name,
       phone: entry.phone,
       records: entry.rawRecords,
-      activeRecords: activeCycle.records,
-      archivedCycles,
-      archivedCount,
-      totalDebt: activeCycle.totalDebt,
-      totalPay: activeCycle.totalPay,
-      balance: activeCycle.balance
+      ...summary
     };
+  }).filter(c => {
+    // في وضع العملة الواحدة نظهر فقط من لديه سجل في تلك العملة (أو لو الكل لديه سجلات)
+    if (dual) return true;
+    return c.byCurrency[enabledCodes[0]].allRecords.length > 0;
   }).sort((a, b) => {
-    const aHas = a.balance > 0.001 ? 1 : 0;
-    const bHas = b.balance > 0.001 ? 1 : 0;
+    const aHas = a.hasDebt ? 1 : 0;
+    const bHas = b.hasDebt ? 1 : 0;
     if (bHas !== aHas) return bHas - aHas;
     return a.name.localeCompare(b.name, 'ar');
   });
 
-  let grandTotal = 0, indebtedCount = 0;
+  let grandUsd = 0;
+  let grandSyp = 0;
+  let indebtedCount = 0;
+
   groupedCustomers.forEach(c => {
-    if (c.balance > 0.001) { grandTotal += c.balance; indebtedCount++; }
+    if (c.byCurrency.USD.balance > 0.001) grandUsd += c.byCurrency.USD.balance;
+    if (c.byCurrency.SYP.balance > 0.001) grandSyp += c.byCurrency.SYP.balance;
+    if (c.hasDebt) indebtedCount++;
   });
 
-  document.getElementById('totalDebtVal').textContent = `${formatNum(grandTotal)} ${curr.symbol}`;
+  if (dual) {
+    document.getElementById('activeCurrName').textContent = 'العملتين';
+    document.getElementById('totalDebtVal').classList.add('hidden');
+    document.getElementById('totalDebtDual').classList.remove('hidden');
+    document.getElementById('totalDebtUsd').textContent = `${formatNum(grandUsd)} $`;
+    document.getElementById('totalDebtSyp').textContent = `${formatNum(grandSyp)} ل.س`;
+  } else {
+    document.getElementById('activeCurrName').textContent = singleCurr.name;
+    document.getElementById('totalDebtVal').classList.remove('hidden');
+    document.getElementById('totalDebtDual').classList.add('hidden');
+    const grandVal = settings.currency === 'SYP' ? grandSyp : grandUsd;
+    document.getElementById('totalDebtVal').textContent = `${formatNum(grandVal)} ${singleCurr.symbol}`;
+  }
+
   document.getElementById('indebtedCount').textContent = indebtedCount;
   document.getElementById('customersDatalist').innerHTML =
     groupedCustomers.map(c => `<option value="${escapeHtml(c.name)}"></option>`).join('');
@@ -563,15 +680,35 @@ function setFilter(f, btn) {
   renderCustomers();
 }
 
+function buildCustomerBalancePillsHtml(c) {
+  const enabled = getEnabledCurrencyCodes();
+  const pills = [];
+
+  enabled.forEach(code => {
+    const bal = c.byCurrency[code].balance;
+    const sym = getCurr(code).symbol;
+    if (bal > 0.001) {
+      pills.push(`<span class="bal-pill bal-debt">${formatNum(bal)} ${sym}</span>`);
+    } else if (bal < -0.001) {
+      pills.push(`<span class="bal-pill bal-credit">له ${formatNum(Math.abs(bal))} ${sym}</span>`);
+    }
+  });
+
+  if (pills.length === 0) {
+    return `<span class="bal-pill bal-zero">خالص</span>`;
+  }
+  if (pills.length === 1) return pills[0];
+  return `<div class="bal-stack">${pills.join('')}</div>`;
+}
+
 function renderCustomers() {
-  const curr = getCurr();
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
 
   visibleCustomers = groupedCustomers.filter(c => {
     const matches = !q || c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q);
     if (!matches) return false;
-    if (currentFilter === 'debt') return c.balance > 0.001;
-    if (currentFilter === 'zero') return Math.abs(c.balance) < 0.001;
+    if (currentFilter === 'debt') return c.hasDebt;
+    if (currentFilter === 'zero') return c.isAllZero;
     return true;
   });
 
@@ -582,10 +719,6 @@ function renderCustomers() {
   }
 
   listEl.innerHTML = visibleCustomers.map((c, idx) => {
-    let pill = `<span class="bal-pill bal-zero">خالص</span>`;
-    if (c.balance > 0.001) pill = `<span class="bal-pill bal-debt">${formatNum(c.balance)} ${curr.symbol}</span>`;
-    else if (c.balance < -0.001) pill = `<span class="bal-pill bal-credit">له ${formatNum(Math.abs(c.balance))} ${curr.symbol}</span>`;
-
     const initial = c.name.charAt(0);
     const pendMark = c.records.some(r => r.pending) ? ' • محلي' : '';
     const metaParts = [c.phone, `${c.activeRecords.length} حركة حالية`];
@@ -601,7 +734,7 @@ function renderCustomers() {
             <div class="cust-meta">${escapeHtml(meta)}</div>
           </div>
         </div>
-        ${pill}
+        ${buildCustomerBalancePillsHtml(c)}
       </div>
     `;
   }).join('');
@@ -630,11 +763,87 @@ function toggleArchiveDrawer() {
   document.getElementById('archiveDrawer').classList.toggle('open');
 }
 
-function renderTxCardHtml(r, curr, isArchived = false) {
+function formatDetailBalanceHtml(balance, symbol) {
+  if (Math.abs(balance) < 0.001) return `<span style="color:var(--muted)">0 ${symbol}</span>`;
+  if (balance > 0) return `<span style="color:var(--danger)">${formatNum(balance)} ${symbol}</span>`;
+  return `<span style="color:var(--success)">له ${formatNum(Math.abs(balance))} ${symbol}</span>`;
+}
+
+function renderDetailSummaryCards(cust) {
+  const wrap = document.getElementById('detailStatsWrap');
+  const enabled = getEnabledCurrencyCodes();
+  const displayCodes = enabled.filter(code => cust.byCurrency[code].activeRecords.length > 0);
+  const codesToShow = displayCodes.length > 0 ? displayCodes : [enabled[0]];
+
+  if (codesToShow.length === 1) {
+    const code = codesToShow[0];
+    const info = cust.byCurrency[code];
+    const curr = getCurr(code);
+    wrap.innerHTML = `
+      <div class="stats-3">
+        <div class="stat-box">
+          <span>إجمالي الدين</span>
+          <strong style="color:var(--danger);">${formatNum(info.totalDebt)} ${curr.symbol}</strong>
+        </div>
+        <div class="stat-box">
+          <span>المدفوع</span>
+          <strong style="color:var(--success);">${formatNum(info.totalPay)} ${curr.symbol}</strong>
+        </div>
+        <div class="stat-box">
+          <span>المتبقي</span>
+          <strong>${formatDetailBalanceHtml(info.balance, curr.symbol)}</strong>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="curr-summary-grid">
+      ${codesToShow.map(code => {
+        const info = cust.byCurrency[code];
+        const curr = getCurr(code);
+        const cardCls = code === 'USD' ? 'usd-card' : 'syp-card';
+        const chipCls = code === 'USD' ? 'curr-usd' : 'curr-syp';
+        return `
+          <div class="curr-summary-card ${cardCls}">
+            <div class="curr-summary-head">
+              <div class="curr-summary-title">
+                <span class="curr-chip ${chipCls}">${curr.name} (${curr.symbol})</span>
+              </div>
+              <span style="font-size:11.5px;color:var(--muted);font-weight:700;">${info.activeRecords.length} حركة</span>
+            </div>
+            <div class="curr-summary-cols">
+              <div class="curr-mini-box">
+                <span>إجمالي الدين</span>
+                <strong style="color:var(--danger);">${formatNum(info.totalDebt)} ${curr.symbol}</strong>
+              </div>
+              <div class="curr-mini-box">
+                <span>المدفوع</span>
+                <strong style="color:var(--success);">${formatNum(info.totalPay)} ${curr.symbol}</strong>
+              </div>
+              <div class="curr-mini-box">
+                <span>المتبقي</span>
+                <strong>${formatDetailBalanceHtml(info.balance, curr.symbol)}</strong>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderTxCardHtml(r, isArchived = false, showCurrencyChip = false) {
+  const code = r.currency || getRecordCurrency(r);
+  const curr = getCurr(code);
   const sign = r.kind === 'debt' ? '+' : '−';
   const lbl = r.kind === 'debt' ? 'دين' : 'دفعة';
   const safeId = escapeHtml(r.id);
   const byTxt = r.created_by ? ` • ${escapeHtml(r.created_by)}` : '';
+  const currBadgeHtml = showCurrencyChip
+    ? `<span class="curr-chip ${code === 'USD' ? 'curr-usd' : 'curr-syp'}">${curr.short}</span>`
+    : '';
   const delBtnHtml = canDeleteRecords()
     ? `<button class="tx-btn del" title="حذف" onclick="askDeleteTx('${safeId}')">
          <svg class="ic ic-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
@@ -646,6 +855,7 @@ function renderTxCardHtml(r, curr, isArchived = false) {
       <div class="tx-info">
         <div class="tx-top">
           <span class="tx-tag ${r.kind}">${lbl}</span>
+          ${currBadgeHtml}
           <span class="tx-date">${escapeHtml(formatDate(r.date))}${byTxt}${r.pending ? ' • محلي' : ''}</span>
         </div>
         ${r.note ? `<div class="tx-note">${escapeHtml(r.note)}</div>` : ''}
@@ -664,27 +874,20 @@ function renderTxCardHtml(r, curr, isArchived = false) {
 function renderCustomerDetail(name) {
   const cust = groupedCustomers.find(c => c.name === name);
   if (!cust) return closeDetailView();
-  const curr = getCurr();
 
   document.getElementById('detailName').textContent = cust.name;
   document.getElementById('detailPhone').textContent = cust.phone ? cust.phone : 'بدون رقم هاتف';
-  document.getElementById('detailTotalDebt').textContent = `${formatNum(cust.totalDebt)} ${curr.symbol}`;
-  document.getElementById('detailTotalPay').textContent = `${formatNum(cust.totalPay)} ${curr.symbol}`;
   document.getElementById('activeSectionTitle').textContent =
     cust.archivedCount > 0 ? 'الحركات الحالية (تُدرج في كشف PDF)' : 'سجل الحركات';
   document.getElementById('detailTxCount').textContent = `${cust.activeRecords.length} حركة`;
 
-  const balEl = document.getElementById('detailBalance');
-  if (Math.abs(cust.balance) < 0.001) {
-    balEl.innerHTML = `<span style="color:var(--muted)">0 ${curr.symbol}</span>`;
-  } else if (cust.balance > 0) {
-    balEl.innerHTML = `<span style="color:var(--danger)">${formatNum(cust.balance)} ${curr.symbol}</span>`;
-  } else {
-    balEl.innerHTML = `<span style="color:var(--success)">له ${formatNum(Math.abs(cust.balance))} ${curr.symbol}</span>`;
-  }
+  renderDetailSummaryCards(cust);
 
+  const showCurrChips = isDualCurrencyMode();
   const activeList = [...cust.activeRecords].reverse();
-  document.getElementById('detailTxList').innerHTML = activeList.map(r => renderTxCardHtml(r, curr, false)).join('');
+  document.getElementById('detailTxList').innerHTML = activeList.length > 0
+    ? activeList.map(r => renderTxCardHtml(r, false, showCurrChips)).join('')
+    : '<div class="empty-box" style="padding:24px;">لا توجد حركات نشطة حالياً.</div>';
 
   const drawer = document.getElementById('archiveDrawer');
   if (cust.archivedCycles.length > 0) {
@@ -692,12 +895,14 @@ function renderCustomerDetail(name) {
     document.getElementById('archiveCountBadge').textContent = `${cust.archivedCount} حركة`;
     const archHtml = [...cust.archivedCycles].reverse().map((cyc, idx) => {
       const cycleNum = cust.archivedCycles.length - idx;
+      const cycCurr = getCurr(cyc.currency);
       const range = cyc.startDate === cyc.endDate ? cyc.endDate : `${cyc.startDate} ← ${cyc.endDate}`;
-      const rows = [...cyc.records].reverse().map(r => renderTxCardHtml(r, curr, true)).join('');
+      const rows = [...cyc.records].reverse().map(r => renderTxCardHtml(r, true, showCurrChips)).join('');
+      const currTag = showCurrChips ? ` • ${cycCurr.short}` : '';
       return `
         <div class="cycle-divider">
-          <span>حساب سابق #${cycleNum} (${escapeHtml(range)})</span>
-          <span class="cycle-settled-tag">مسدّد (${formatNum(cyc.totalDebt)} ${curr.symbol})</span>
+          <span>حساب سابق #${cycleNum}${currTag} (${escapeHtml(range)})</span>
+          <span class="cycle-settled-tag">مسدّد (${formatNum(cyc.totalDebt)} ${cycCurr.symbol})</span>
         </div>
         ${rows}
       `;
@@ -710,7 +915,20 @@ function renderCustomerDetail(name) {
 }
 
 // ==================== إضافة / تعديل حركة ====================
-function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt') {
+function setTxCurrency(code) {
+  txCurrency = code === 'SYP' ? 'SYP' : 'USD';
+  lastUsedTxCurrency = txCurrency;
+  document.getElementById('txCurrLabel').textContent = getCurr(txCurrency).symbol;
+  document.getElementById('btnCurrUsd').className = 'tx-curr-btn' + (txCurrency === 'USD' ? ' on-usd' : '');
+  document.getElementById('btnCurrSyp').className = 'tx-curr-btn' + (txCurrency === 'SYP' ? ' on-syp' : '');
+}
+
+function updateTxCurrencyPickerVisibility(forceShow = false) {
+  const show = forceShow || isDualCurrencyMode();
+  document.getElementById('txCurrSwitch').classList.toggle('hidden', !show);
+}
+
+function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt', preferredCurrency = null) {
   editingTxId = null;
   document.getElementById('txModalTitle').textContent = 'تسجيل عملية جديدة';
   document.getElementById('saveTxBtn').textContent = 'حفظ العملية';
@@ -720,7 +938,13 @@ function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt')
   document.getElementById('txNote').value = '';
   document.getElementById('txDate').value = toInputDate(todayString());
   document.getElementById('txDateField').classList.add('hidden');
-  document.getElementById('txCurrLabel').textContent = getCurr().symbol;
+
+  const initialCurr = isDualCurrencyMode()
+    ? (preferredCurrency || lastUsedTxCurrency || 'USD')
+    : (settings.currency === 'SYP' ? 'SYP' : 'USD');
+  setTxCurrency(initialCurr);
+  updateTxCurrencyPickerVisibility(false);
+
   setTxKind(defaultKind);
   openModal('addModal');
   setTimeout(() => {
@@ -741,7 +965,11 @@ function openEditTxModal(id) {
   document.getElementById('txNote').value = rec.note || '';
   document.getElementById('txDate').value = toInputDate(rec.date);
   document.getElementById('txDateField').classList.remove('hidden');
-  document.getElementById('txCurrLabel').textContent = getCurr().symbol;
+
+  const recCurr = getRecordCurrency(rec);
+  setTxCurrency(recCurr);
+  updateTxCurrencyPickerVisibility(isDualCurrencyMode() || recCurr !== settings.currency);
+
   setTxKind(isPayType(rec.type) ? 'pay' : 'debt');
   openModal('addModal');
 }
@@ -749,7 +977,14 @@ function openEditTxModal(id) {
 function quickAddForCurrent(kind) {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
-  openAddModal(cust.name, cust.phone, kind);
+  let prefCurr = null;
+  if (isDualCurrencyMode()) {
+    const hasUsd = cust.byCurrency.USD.balance > 0.001;
+    const hasSyp = cust.byCurrency.SYP.balance > 0.001;
+    if (hasSyp && !hasUsd) prefCurr = 'SYP';
+    else if (hasUsd && !hasSyp) prefCurr = 'USD';
+  }
+  openAddModal(cust.name, cust.phone, kind, prefCurr);
 }
 
 function autoFillPhone() {
@@ -773,7 +1008,8 @@ function saveTransaction() {
   if (!name) return showToast('يرجى كتابة اسم الزبون');
   if (!amount || amount <= 0) return showToast('يرجى إدخال مبلغ صحيح');
 
-  const curr = getCurr();
+  const chosenCurrCode = isDualCurrencyMode() ? txCurrency : (editingTxId ? txCurrency : (settings.currency === 'SYP' ? 'SYP' : 'USD'));
+  const curr = getCurr(chosenCurrCode);
   const typeLabel = (txKind === 'debt' ? 'دين' : 'دفعة') + ` (${curr.symbol})`;
 
   if (editingTxId) {
@@ -1013,6 +1249,7 @@ function selectSettingWa(w) { tempSettingsWa = w; updateSettingButtonsUI(); }
 function updateSettingButtonsUI() {
   document.getElementById('setCurrUsd').className = 'tog-btn' + (tempSettingsCurrency === 'USD' ? ' on-opt' : '');
   document.getElementById('setCurrSyp').className = 'tog-btn' + (tempSettingsCurrency === 'SYP' ? ' on-opt' : '');
+  document.getElementById('setCurrBoth').className = 'tog-btn' + (tempSettingsCurrency === 'BOTH' ? ' on-opt' : '');
   document.getElementById('setWaNormal').className = 'tog-btn' + (tempSettingsWa === 'normal' ? ' on-opt' : '');
   document.getElementById('setWaBusiness').className = 'tog-btn' + (tempSettingsWa === 'business' ? ' on-opt' : '');
 }
