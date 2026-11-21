@@ -169,6 +169,12 @@ function toDbRecord(rec) {
 
 // ==================== المصادقة وتسجيل الدخول ====================
 async function initApp() {
+  const params = new URLSearchParams(window.location.search);
+  const copyParam = params.get('copy');
+  if (copyParam) {
+    showQuickCopyScreen(copyParam, params.get('shop') || '');
+    return;
+  }
   loadDeviceSettings();
   const { data: { session } } = await sb.auth.getSession();
   if (!session || !session.user) {
@@ -311,10 +317,7 @@ async function handleLogout() {
   currentWorkshop = null;
   allRecords = [];
   pendingQueue = [];
-  closeSideMenu();
-  closeSettingsView();
-  closeAccountsView();
-  closeDetailView();
+  resetAllOpenLayersForLogout();
   showLoginScreen();
   showToast('تم تسجيل الخروج');
 }
@@ -527,9 +530,9 @@ function openAccountsView() {
   loadWorkshopMembers();
 }
 
-function closeAccountsView() {
+function closeAccountsView(keepHistory = false) {
   document.getElementById('accountsView').classList.remove('open');
-  updateBodyScrollLock();
+  popLayerFromUI('accountsView', keepHistory);
 }
 
 function switchAccTab(tab) {

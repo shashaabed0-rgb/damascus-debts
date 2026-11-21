@@ -1,34 +1,115 @@
-// ==================== إدارة الصفحات والخروج السلس (الرجوع مرتين للخروج) ====================
-let exitArmedTimer = null;
+// ==================== شاشة النسخ السريع لرمز شام كاش (عند الضغط على زر نسخ من PDF) ====================
+let quickCopyCodeValue = '';
+
+function showQuickCopyScreen(code, shopName) {
+  quickCopyCodeValue = String(code || '').trim();
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('lockScreen').classList.add('hidden');
+  document.getElementById('mainView').classList.add('hidden');
+  document.getElementById('quickCopyScreen').classList.remove('hidden');
+
+  document.getElementById('qcShopName').textContent = shopName ? `${shopName} — شام كاش` : 'شام كاش';
+  document.getElementById('qcCodeBox').textContent = quickCopyCodeValue;
+  copyQuickCodeNow(true);
+}
+
+async function copyQuickCodeNow(isAuto = false) {
+  const code = quickCopyCodeValue;
+  const statusEl = document.getElementById('qcStatusMsg');
+  const btnEl = document.getElementById('qcCopyBtn');
+  if (!code) return;
+
+  let copied = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(code);
+      copied = true;
+    } catch (e) {}
+  }
+
+  if (!copied && !isAuto) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;opacity:0;left:-9999px;';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, code.length);
+      copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) {}
+  }
+
+  if (copied) {
+    statusEl.textContent = '✓ تم نسخ رمز شام كاش بنجاح! يمكنك لصقه الآن للدفع.';
+    statusEl.className = 'qc-status-msg ok';
+    btnEl.style.background = '#15803d';
+    btnEl.innerHTML = '<span>✓ تم نسخ الرمز</span>';
+  } else {
+    statusEl.textContent = 'اضغط على زر «نسخ الرمز» بالأسفل لنسخ الكود فوراً';
+    statusEl.className = 'qc-status-msg';
+  }
+}
+
+// ==================== إدارة الصفحات والخروج بالرجوع مرتين (متوافق مع حماية Chrome) ====================
+let layerStack = [];
+let ignoreNextPopstate = 0;
+let exitPromptActive = false;
+let exitPromptTimer = null;
 
 function armRootExitGuard() {
-  if (rootGuardArmed) return;
-  rootGuardArmed = true;
-  try {
-    history.replaceState({ appState: 'exit_ready' }, '');
-    history.pushState({ appState: 'active' }, '');
-  } catch (e) {}
+  if (!rootGuardArmed) {
+    rootGuardArmed = true;
+    try {
+      history.replaceState({ appState: 'exit_ready' }, '');
+    } catch (e) {}
+  }
+  // إذا دخل المستخدم بضغطة زر (تسجيل دخول / قفل)، نفعّل حارس الرجوع فوراً مع وجود User Activation
+  if (navigator.userActivation && navigator.userActivation.isActive) {
+    ensureGestureExitGuard();
+  }
 }
 
-function rearmExitGuardIfNeeded() {
-  clearTimeout(exitArmedTimer);
-  exitArmedTimer = null;
-  try {
-    if (!history.state || history.state.appState !== 'active') {
-      history.pushState({ appState: 'active' }, '');
+function ensureGestureExitGuard() {
+  if (!isUnlocked || exitPromptActive || layerStack.length > 0) return;
+  if (!history.state || history.state.appState !== 'main_guard') {
+    try {
+      history.replaceState({ appState: 'exit_ready' }, '');
+      history.pushState({ appState: 'main_guard' }, '');
+    } catch (e) {}
+  }
+}
+
+// تفعيل حارس الرجوع فور أول لمسة أو تفاعل حقيقي داخل التطبيق (حتى لا يتجاهله متصفح Chrome)
+['touchstart', 'pointerdown', 'keydown'].forEach(evtName => {
+  window.addEventListener(evtName, () => {
+    if (!isUnlocked) return;
+    if (exitPromptActive) {
+      hideExitPrompt();
     }
-  } catch (e) {}
+    ensureGestureExitGuard();
+  }, { capture: true, passive: true });
+});
+
+function showExitPrompt(msg) {
+  const box = document.getElementById('exitPromptBox');
+  if (!box) return;
+  exitPromptActive = true;
+  box.textContent = msg;
+  box.classList.add('show');
+  clearTimeout(exitPromptTimer);
+  exitPromptTimer = setTimeout(() => {
+    hideExitPrompt();
+  }, 3000);
 }
 
-function openSideMenu() {
-  document.getElementById('sideMenuBackdrop').classList.add('open');
-  updateBodyScrollLock();
-  rearmExitGuardIfNeeded();
-}
-
-function closeSideMenu() {
-  document.getElementById('sideMenuBackdrop').classList.remove('open');
-  updateBodyScrollLock();
+function hideExitPrompt() {
+  exitPromptActive = false;
+  clearTimeout(exitPromptTimer);
+  exitPromptTimer = null;
+  const box = document.getElementById('exitPromptBox');
+  if (box) box.classList.remove('show');
 }
 
 function updateBodyScrollLock() {
@@ -43,80 +124,119 @@ function updateBodyScrollLock() {
   document.body.classList.toggle('no-scroll', anyOpen);
 }
 
-function pushLayerHistory() {
-  // الحفاظ على طبقة واحدة فقط في سجل المتصفح حتى لا تتراكم عند فتح وإغلاق الصفحات
-  rearmExitGuardIfNeeded();
+function pushLayerHistory(name) {
+  if (!name) return;
+  if (layerStack.length === 0 && (!history.state || history.state.appState === 'exit_ready')) {
+    try {
+      history.replaceState({ appState: 'exit_ready' }, '');
+      history.pushState({ appState: 'main_guard' }, '');
+    } catch (e) {}
+  }
+  if (!layerStack.includes(name)) {
+    layerStack.push(name);
+    try {
+      if (history.state && history.state.appState === 'layer' && history.state.depth === layerStack.length) {
+        history.replaceState({ appState: 'layer', layer: name, depth: layerStack.length }, '');
+      } else {
+        history.pushState({ appState: 'layer', layer: name, depth: layerStack.length }, '');
+      }
+    } catch (e) {}
+  }
+}
+
+function popLayerFromUI(name, keepHistory = false) {
+  const idx = layerStack.lastIndexOf(name);
+  if (idx !== -1) {
+    layerStack.splice(idx, 1);
+    if (!keepHistory && history.state && history.state.appState === 'layer') {
+      ignoreNextPopstate++;
+      try {
+        history.back();
+      } catch (e) {
+        ignoreNextPopstate = Math.max(0, ignoreNextPopstate - 1);
+      }
+    }
+  }
+  updateBodyScrollLock();
+}
+
+function hideLayerDom(name) {
+  if (name === 'sideMenu') {
+    document.getElementById('sideMenuBackdrop').classList.remove('open');
+  } else if (name === 'detailView') {
+    document.getElementById('detailView').classList.remove('open');
+    currentCustomerName = null;
+  } else {
+    const el = document.getElementById(name);
+    if (el) el.classList.remove('open');
+  }
+}
+
+function resetAllOpenLayersForLogout() {
+  const openCount = layerStack.length;
+  layerStack.forEach(hideLayerDom);
+  layerStack = [];
+  hideExitPrompt();
+  updateBodyScrollLock();
+  if (openCount > 0 && history.state && history.state.appState === 'layer') {
+    ignoreNextPopstate++;
+    try { history.go(-openCount); } catch (e) { ignoreNextPopstate = Math.max(0, ignoreNextPopstate - 1); }
+  }
+}
+
+function openSideMenu() {
+  document.getElementById('sideMenuBackdrop').classList.add('open');
+  pushLayerHistory('sideMenu');
+  updateBodyScrollLock();
+}
+
+function closeSideMenu(keepHistory = false) {
+  document.getElementById('sideMenuBackdrop').classList.remove('open');
+  popLayerFromUI('sideMenu', keepHistory);
 }
 
 window.addEventListener('popstate', () => {
-  if (document.getElementById('sideMenuBackdrop').classList.contains('open')) {
-    document.getElementById('sideMenuBackdrop').classList.remove('open');
-    updateBodyScrollLock();
-    rearmExitGuardIfNeeded();
-    return;
-  }
-  if (document.getElementById('confirmModal').classList.contains('open')) {
-    document.getElementById('confirmModal').classList.remove('open');
-    updateBodyScrollLock();
-    rearmExitGuardIfNeeded();
-    return;
-  }
-  if (document.getElementById('editCustomerModal').classList.contains('open')) {
-    document.getElementById('editCustomerModal').classList.remove('open');
-    updateBodyScrollLock();
-    rearmExitGuardIfNeeded();
-    return;
-  }
-  if (document.getElementById('addModal').classList.contains('open')) {
-    document.getElementById('addModal').classList.remove('open');
-    updateBodyScrollLock();
-    rearmExitGuardIfNeeded();
-    return;
-  }
-  if (document.getElementById('accountsView').classList.contains('open')) {
-    document.getElementById('accountsView').classList.remove('open');
-    updateBodyScrollLock();
-    rearmExitGuardIfNeeded();
-    return;
-  }
-  if (document.getElementById('settingsView').classList.contains('open')) {
-    document.getElementById('settingsView').classList.remove('open');
-    updateBodyScrollLock();
-    rearmExitGuardIfNeeded();
-    return;
-  }
-  if (document.getElementById('detailView').classList.contains('open')) {
-    document.getElementById('detailView').classList.remove('open');
-    currentCustomerName = null;
-    updateBodyScrollLock();
-    rearmExitGuardIfNeeded();
+  if (ignoreNextPopstate > 0) {
+    ignoreNextPopstate--;
     return;
   }
 
-  // على الشاشة الرئيسية: نبقى في بداية السجل ليخرج الهاتف فوراً عند ضغط الرجوع مرة ثانية خلال ثانيتين ونصف
+  if (layerStack.length > 0) {
+    const topLayer = layerStack.pop();
+    hideLayerDom(topLayer);
+    updateBodyScrollLock();
+    return;
+  }
+
+  // تنظيف احتياطي في حال كانت أي طبقة مفتوحة بصرياً
+  const fallbackLayers = ['sideMenu', 'confirmModal', 'editCustomerModal', 'addModal', 'accountsView', 'settingsView', 'detailView'];
+  for (const id of fallbackLayers) {
+    const domId = id === 'sideMenu' ? 'sideMenuBackdrop' : id;
+    if (document.getElementById(domId).classList.contains('open')) {
+      hideLayerDom(id);
+      updateBodyScrollLock();
+      return;
+    }
+  }
+
+  // على الشاشة الرئيسية: أظهر مربع واضح للخروج (وعند الضغط مرة ثانية سيخرج الهاتف تلقائياً)
   if (isUnlocked) {
     const msg = pendingQueue.length > 0
       ? `يوجد ${pendingQueue.length} عملية محلية — اضغط رجوع مرة أخرى للخروج`
       : 'اضغط رجوع مرة أخرى للخروج من التطبيق';
-    showToast(msg);
-    clearTimeout(exitArmedTimer);
-    exitArmedTimer = setTimeout(() => {
-      if (isUnlocked && !document.hidden) {
-        rearmExitGuardIfNeeded();
-      }
-    }, 2500);
+    showExitPrompt(msg);
   }
 });
 
 function openModal(id) {
   document.getElementById(id).classList.add('open');
+  pushLayerHistory(id);
   updateBodyScrollLock();
-  rearmExitGuardIfNeeded();
 }
 
-function closeModal(id) {
+function closeModal(id, keepHistory = false) {
   document.getElementById(id).classList.remove('open');
-  updateBodyScrollLock();
+  popLayerFromUI(id, keepHistory);
 }
 
 // ==================== الهوية وقفل الجهاز (اختياري) ====================
@@ -500,10 +620,10 @@ function openCustomerDetail(idx) {
   pushLayerHistory('detailView');
 }
 
-function closeDetailView() {
+function closeDetailView(keepHistory = false) {
   document.getElementById('detailView').classList.remove('open');
   currentCustomerName = null;
-  updateBodyScrollLock();
+  popLayerFromUI('detailView', keepHistory);
 }
 
 function toggleArchiveDrawer() {
@@ -754,8 +874,13 @@ function executeConfirmedDelete() {
     toDelete.forEach(r => queueDeleteRecord(r.id));
     allRecords = allRecords.filter(r => String(r.name || '').trim() !== act.name);
     persistData();
-    closeModal('confirmModal');
-    closeDetailView();
+    const backSteps = (layerStack.includes('confirmModal') ? 1 : 0) + (layerStack.includes('detailView') ? 1 : 0);
+    closeModal('confirmModal', true);
+    closeDetailView(true);
+    if (backSteps > 0 && history.state && history.state.appState === 'layer') {
+      ignoreNextPopstate++;
+      try { history.go(-backSteps); } catch (e) { ignoreNextPopstate = Math.max(0, ignoreNextPopstate - 1); }
+    }
     processAndRender();
     triggerSyncOrOfflineToast('تم حذف ملف الزبون، جاري المزامنة...', 'تم حذف الملف محلياً (سيُزامن لاحقاً)');
   }
@@ -829,9 +954,9 @@ function openSettingsView() {
   pushLayerHistory('settingsView');
 }
 
-function closeSettingsView() {
+function closeSettingsView(keepHistory = false) {
   document.getElementById('settingsView').classList.remove('open');
-  updateBodyScrollLock();
+  popLayerFromUI('settingsView', keepHistory);
 }
 
 function toggleShamCashFields() {

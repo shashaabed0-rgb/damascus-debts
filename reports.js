@@ -224,14 +224,20 @@ async function exportCustomerPDF() {
     const shamRaw = (settings.shamCashCode || '').trim();
     const shamAscii = extractCopyableAscii(shamRaw);
     let shamLabelEl = null;
+    let shamCopyBtnEl = null;
     if (shamEnabled) {
       shamLabelEl = document.createElement('div');
-      shamLabelEl.style.cssText = 'width:220px;background:#fffbeb;padding:7px 6px;text-align:center;line-height:1.35;';
+      shamLabelEl.style.cssText = 'width:210px;background:#fffbeb;padding:6px 4px;text-align:center;line-height:1.35;';
       shamLabelEl.innerHTML = `
         <div style="color:#92400e;font-size:16px;font-weight:800;">شام كاش</div>
         <div style="color:#b45309;font-size:11.5px;font-weight:700;margin-top:3px;">يمكنك نسخ الرمز للدفع</div>
       `;
       stage.appendChild(shamLabelEl);
+
+      shamCopyBtnEl = document.createElement('div');
+      shamCopyBtnEl.style.cssText = 'width:104px;height:48px;background:#d97706;color:#ffffff;font-size:16px;font-weight:800;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:5px;border:2px solid #b45309;';
+      shamCopyBtnEl.innerHTML = `<span>نسخ</span>`;
+      stage.appendChild(shamCopyBtnEl);
     }
 
     document.body.appendChild(stage);
@@ -252,10 +258,17 @@ async function exportCustomerPDF() {
     }
 
     let shamLabelCanvas = null;
+    let shamCopyBtnCanvas = null;
     if (shamLabelEl) {
       shamLabelCanvas = await html2canvas(shamLabelEl, {
         scale: 2, useCORS: true, backgroundColor: '#fffbeb',
-        width: 220, windowWidth: 220, scrollX: 0, scrollY: 0
+        width: 210, windowWidth: 210, scrollX: 0, scrollY: 0
+      });
+    }
+    if (shamCopyBtnEl) {
+      shamCopyBtnCanvas = await html2canvas(shamCopyBtnEl, {
+        scale: 2, useCORS: true, backgroundColor: '#fffbeb',
+        width: 104, windowWidth: 104, scrollX: 0, scrollY: 0
       });
     }
 
@@ -300,16 +313,23 @@ async function exportCustomerPDF() {
     if (shamEnabled) {
       const codeToWrite = shamAscii || shamRaw;
       doc.setFont('courier', 'bold');
-      doc.setFontSize(12.5);
+      doc.setFontSize(12);
       const innerMargin = 7;
       const boxX = marginX + innerMargin;
       const boxW = usableW - innerMargin * 2;
-      const lblW = 50;
-      const lblH = shamLabelCanvas ? (shamLabelCanvas.height / shamLabelCanvas.width) * lblW : 14;
+
+      const lblW = 46;
+      const lblH = shamLabelCanvas ? (shamLabelCanvas.height / shamLabelCanvas.width) * lblW : 13;
+      const copyBtnW = 22;
+      const copyBtnH = shamCopyBtnCanvas ? (shamCopyBtnCanvas.height / shamCopyBtnCanvas.width) * copyBtnW : 10;
+
+      const lblX = boxX + boxW - lblW - 3;
+      const copyBtnX = lblX - copyBtnW - 2.5;
       const codeBoxX = boxX + 4;
-      const codeBoxW = boxW - lblW - 10;
+      const codeBoxW = copyBtnX - codeBoxX - 3.5;
+
       const codeLines = doc.splitTextToSize(codeToWrite, codeBoxW - 6);
-      const boxH = Math.max(20, lblH + 4, codeLines.length * 6.2 + 8);
+      const boxH = Math.max(20, lblH + 4, copyBtnH + 6, codeLines.length * 6.0 + 8);
 
       if (curY + boxH + 7 > 286) {
         doc.addPage();
@@ -323,12 +343,27 @@ async function exportCustomerPDF() {
       doc.setLineWidth(0.5);
       doc.roundedRect(boxX, curY, boxW, boxH, 3, 3, 'FD');
 
+      // 1. عبارة شام كاش + يمكنك نسخ الرمز للدفع (يمين الصندوق)
       if (shamLabelCanvas) {
-        const lblX = boxX + boxW - lblW - 3;
         const lblY = curY + (boxH - lblH) / 2;
         doc.addImage(shamLabelCanvas.toDataURL('image/png'), 'PNG', lblX, lblY, lblW, lblH);
       }
 
+      // 2. مربع صغير "نسخ" بجانب الكتابة مع تفعيل رابط النسخ السريع
+      const copyBtnY = curY + (boxH - copyBtnH) / 2;
+      if (shamCopyBtnCanvas) {
+        doc.addImage(shamCopyBtnCanvas.toDataURL('image/png'), 'PNG', copyBtnX, copyBtnY, copyBtnW, copyBtnH);
+      }
+
+      const copyUrl = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+        ? `${window.location.origin}${window.location.pathname}?copy=${encodeURIComponent(codeToWrite)}&shop=${encodeURIComponent(settings.shopName || '')}`
+        : '';
+
+      if (copyUrl) {
+        doc.link(copyBtnX, copyBtnY, copyBtnW, copyBtnH, { url: copyUrl });
+      }
+
+      // 3. مربع الكود (نص حقيقي قابل للتحديد والنسخ المباشر من داخل PDF)
       const codeBoxH = boxH - 5;
       doc.setFillColor(255, 255, 255);
       doc.setDrawColor(217, 119, 6);
@@ -336,13 +371,13 @@ async function exportCustomerPDF() {
       doc.roundedRect(codeBoxX, curY + 2.5, codeBoxW, codeBoxH, 2.2, 2.2, 'FD');
 
       doc.setFont('courier', 'bold');
-      doc.setFontSize(12.5);
+      doc.setFontSize(12);
       doc.setTextColor(15, 23, 42);
-      const totalTextH = codeLines.length * 6.2;
-      let textY = curY + (boxH - totalTextH) / 2 + 4.8;
+      const totalTextH = codeLines.length * 6.0;
+      let textY = curY + (boxH - totalTextH) / 2 + 4.6;
       codeLines.forEach(line => {
         doc.text(line, codeBoxX + codeBoxW / 2, textY, { align: 'center' });
-        textY += 6.2;
+        textY += 6.0;
       });
     }
 
