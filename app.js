@@ -1244,6 +1244,7 @@ function updateSettingButtonsUI() {
   document.getElementById('setCurrBoth').className = 'tog-btn' + (tempSettingsCurrency === 'BOTH' ? ' on-opt' : '');
   document.getElementById('setWaNormal').className = 'tog-btn' + (tempSettingsWa === 'normal' ? ' on-opt' : '');
   document.getElementById('setWaBusiness').className = 'tog-btn' + (tempSettingsWa === 'business' ? ' on-opt' : '');
+  updateThemeButtonsUI();
 }
 
 function toggleLockFields() {
@@ -1706,6 +1707,65 @@ function checkAndRunDailyBackups() {
 setInterval(() => {
   if (isUnlocked && currentProfile) checkAndRunDailyBackups();
 }, 10 * 60 * 1000);
+
+
+// ==================== مظهر التطبيق (ليلي / نهاري / تلقائي حسب الجهاز) ====================
+const systemDarkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function resolveEffectiveTheme(mode) {
+  if (mode === 'dark') return 'dark';
+  if (mode === 'light') return 'light';
+  return (systemDarkQuery && systemDarkQuery.matches) ? 'dark' : 'light';
+}
+
+function updateThemeButtonsUI() {
+  const mode = settings.themeMode || 'auto';
+  const setAuto = document.getElementById('setThemeAuto');
+  const setLight = document.getElementById('setThemeLight');
+  const setDark = document.getElementById('setThemeDark');
+  if (setAuto) setAuto.className = 'tog-btn' + (mode === 'auto' ? ' on-opt' : '');
+  if (setLight) setLight.className = 'tog-btn' + (mode === 'light' ? ' on-opt' : '');
+  if (setDark) setDark.className = 'tog-btn' + (mode === 'dark' ? ' on-opt' : '');
+
+  const dAuto = document.getElementById('drawerThemeAuto');
+  const dLight = document.getElementById('drawerThemeLight');
+  const dDark = document.getElementById('drawerThemeDark');
+  if (dAuto) dAuto.className = 'theme-seg-btn' + (mode === 'auto' ? ' active' : '');
+  if (dLight) dLight.className = 'theme-seg-btn' + (mode === 'light' ? ' active' : '');
+  if (dDark) dDark.className = 'theme-seg-btn' + (mode === 'dark' ? ' active' : '');
+}
+
+function applyThemeMode(mode = null) {
+  const chosen = (mode === 'light' || mode === 'dark' || mode === 'auto') ? mode : (settings.themeMode || 'auto');
+  const effective = resolveEffectiveTheme(chosen);
+  document.documentElement.setAttribute('data-theme', effective);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute('content', effective === 'dark' ? '#16243d' : '#2a4570');
+  }
+  updateThemeButtonsUI();
+}
+
+function selectThemeMode(mode) {
+  settings.themeMode = (mode === 'light' || mode === 'dark' || mode === 'auto') ? mode : 'auto';
+  persistDeviceSettings();
+  applyThemeMode(settings.themeMode);
+  const labels = { auto: 'الوضع التلقائي (حسب الجهاز)', light: 'الوضع النهاري', dark: 'الوضع الليلي' };
+  showToast(`تم التبديل إلى ${labels[settings.themeMode]}`);
+}
+
+if (systemDarkQuery) {
+  const onSysThemeChange = () => {
+    if ((settings.themeMode || 'auto') === 'auto') {
+      applyThemeMode('auto');
+    }
+  };
+  if (typeof systemDarkQuery.addEventListener === 'function') {
+    systemDarkQuery.addEventListener('change', onSysThemeChange);
+  } else if (typeof systemDarkQuery.addListener === 'function') {
+    systemDarkQuery.addListener(onSysThemeChange);
+  }
+}
 
 
 // ==================== تثبيت التطبيق (PWA) والتحديث التلقائي ====================

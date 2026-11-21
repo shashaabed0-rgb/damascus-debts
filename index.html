@@ -11,6 +11,18 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" href="icon-192.png" />
   <link rel="apple-touch-icon" href="icon-192.png" />
+    <script>
+    (function () {
+      try {
+        var dev = JSON.parse(localStorage.getItem('debt_device_settings_sb_v1') || '{}');
+        var mode = (dev.themeMode === 'light' || dev.themeMode === 'dark' || dev.themeMode === 'auto') ? dev.themeMode : 'auto';
+        var isDark = mode === 'dark' || (mode === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', isDark ? '#16243d' : '#2a4570');
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -118,6 +130,15 @@
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
+
+      <div class="side-theme-bar">
+        <div class="side-theme-lbl">مظهر التطبيق</div>
+        <div class="theme-seg" role="group" aria-label="مظهر التطبيق">
+          <button type="button" id="drawerThemeAuto" class="theme-seg-btn" onclick="selectThemeMode('auto')">تلقائي</button>
+          <button type="button" id="drawerThemeLight" class="theme-seg-btn" onclick="selectThemeMode('light')">نهاري</button>
+          <button type="button" id="drawerThemeDark" class="theme-seg-btn" onclick="selectThemeMode('dark')">ليلي</button>
+        </div>
+      </div>
 
       <div class="side-menu-footer">
         <button type="button" class="side-menu-item danger" onclick="closeSideMenu(true); handleLogout();">
@@ -546,6 +567,20 @@
               <pre id="waLivePreview" class="wa-preview-text"></pre>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- مظهر التطبيق (ليلي / نهاري / تلقائي) -->
+      <div class="set-card">
+        <h4 class="set-title">مظهر التطبيق (خاص بهذا الجهاز)</h4>
+        <div class="field" style="margin-bottom:0;">
+          <label>وضع العرض</label>
+          <div class="toggle-3">
+            <button type="button" id="setThemeAuto" class="tog-btn" onclick="selectThemeMode('auto')">تلقائي</button>
+            <button type="button" id="setThemeLight" class="tog-btn" onclick="selectThemeMode('light')">نهاري</button>
+            <button type="button" id="setThemeDark" class="tog-btn" onclick="selectThemeMode('dark')">ليلي</button>
+          </div>
+          <div class="field-hint">في الوضع «تلقائي» يتكيّف التطبيق تلقائياً مع الوضع الليلي أو النهاري في جهازك.</div>
         </div>
       </div>
 

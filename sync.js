@@ -58,6 +58,7 @@ let settings = {
   waConfig: { ...DEFAULT_WA_CONFIG },
   currency: 'BOTH',
   whatsappApp: 'normal',
+  themeMode: 'auto',
   lockEnabled: false,
   pin: '',
   bioEnabled: false,
@@ -125,16 +126,19 @@ function loadDeviceSettings() {
   try {
     const dev = JSON.parse(localStorage.getItem(DEVICE_SETTINGS_KEY) || '{}');
     settings.whatsappApp = dev.whatsappApp || 'normal';
+    settings.themeMode = (dev.themeMode === 'light' || dev.themeMode === 'dark' || dev.themeMode === 'auto') ? dev.themeMode : 'auto';
     settings.lockEnabled = !!dev.lockEnabled;
     settings.pin = dev.pin || '';
     settings.bioEnabled = !!dev.bioEnabled;
     settings.bioCredId = dev.bioCredId || '';
   } catch (e) {}
+  if (typeof applyThemeMode === 'function') applyThemeMode(settings.themeMode);
 }
 
 function persistDeviceSettings() {
   localStorage.setItem(DEVICE_SETTINGS_KEY, JSON.stringify({
     whatsappApp: settings.whatsappApp,
+    themeMode: settings.themeMode || 'auto',
     lockEnabled: settings.lockEnabled,
     pin: settings.pin,
     bioEnabled: settings.bioEnabled,
