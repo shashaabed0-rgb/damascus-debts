@@ -28,6 +28,7 @@ let settings = {
   shopName: 'مركز الدمشقي للصيانة',
   shopAddress: '',
   shopPhone: '',
+  shopPhones: [],
   shopLogo: '',
   generalNote: '',
   shamCashEnabled: false,
@@ -105,11 +106,27 @@ function persistDeviceSettings() {
   }));
 }
 
+function getShopPhonesList() {
+  if (Array.isArray(settings.shopPhones) && settings.shopPhones.length > 0) {
+    return settings.shopPhones.map(p => String(p || '').trim()).filter(Boolean);
+  }
+  const single = String(settings.shopPhone || '').trim();
+  if (!single) return [];
+  return single.split(/[،,|/\n]+/).map(p => p.trim()).filter(Boolean);
+}
+
 function applyWorkshopSettingsToState(ws) {
   const s = (ws && ws.settings && typeof ws.settings === 'object') ? ws.settings : {};
   settings.shopName = (ws && ws.name) || s.shopName || 'مركز الدمشقي للصيانة';
   settings.shopAddress = s.shopAddress || '';
-  settings.shopPhone = s.shopPhone || '';
+  if (Array.isArray(s.shopPhones) && s.shopPhones.length > 0) {
+    settings.shopPhones = s.shopPhones.map(p => String(p || '').trim()).filter(Boolean);
+  } else if (s.shopPhone && String(s.shopPhone).trim()) {
+    settings.shopPhones = String(s.shopPhone).split(/[،,|/\n]+/).map(p => p.trim()).filter(Boolean);
+  } else {
+    settings.shopPhones = [];
+  }
+  settings.shopPhone = settings.shopPhones.join(' - ');
   settings.shopLogo = s.shopLogo || '';
   settings.generalNote = s.generalNote || '';
   settings.shamCashEnabled = !!s.shamCashEnabled;
@@ -266,7 +283,7 @@ async function loadUserWorkspace(user) {
 }
 
 function applyPermissionsUI() {
-  document.getElementById('headerAccountsBtn').classList.toggle('hidden', !isAdmin());
+  document.getElementById('drawerAccountsBtn').classList.toggle('hidden', !isAdmin());
   document.getElementById('settingsAccountsShortcut').classList.toggle('hidden', !isAdmin());
   document.getElementById('detailDeleteCustomerBtn').classList.toggle('hidden', !canDeleteRecords());
   document.getElementById('workshopAdminSettingsWrap').classList.toggle('hidden', !isAdmin());
@@ -288,6 +305,7 @@ async function handleLogout() {
   currentWorkshop = null;
   allRecords = [];
   pendingQueue = [];
+  closeSideMenu();
   closeSettingsView();
   closeAccountsView();
   closeDetailView();

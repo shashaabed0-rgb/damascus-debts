@@ -1,4 +1,4 @@
-// ==================== واتساب (عادي أو أعمال) ====================
+// ==================== واتساب (عادي أو أعمال) مع إعلام العميل بالدين الجديد وما هو ====================
 function formatPhoneForWa(rawPhone) {
   let p = String(rawPhone || '').replace(/[^\d]/g, '');
   if (p.startsWith('00')) p = p.slice(2);
@@ -6,15 +6,43 @@ function formatPhoneForWa(rawPhone) {
   return p;
 }
 
-function sendWhatsApp() {
-  const cust = groupedCustomers.find(c => c.name === currentCustomerName);
+function sendWhatsApp(specificTx = null, customerNameOverride = null) {
+  const targetName = customerNameOverride || currentCustomerName;
+  const cust = groupedCustomers.find(c => c.name === targetName);
   if (!cust) return;
   const curr = getCurr();
+
+  // تحديد أحدث عملية (أو العملية المسجلة للتو) لإعلام العميل بالدين الجديد وما هو
+  let latestTx = specificTx;
+  if (!latestTx && cust.activeRecords && cust.activeRecords.length > 0) {
+    latestTx = cust.activeRecords[cust.activeRecords.length - 1];
+  } else if (!latestTx && cust.records && cust.records.length > 0) {
+    latestTx = cust.records[cust.records.length - 1];
+  }
 
   const lines = [];
   if (settings.shopName) lines.push(`*${settings.shopName}*`);
   lines.push(`السلام عليكم ${cust.name}،`);
-  lines.push(`كشف حسابك حتى تاريخ ${todayString()}:`);
+
+  if (latestTx) {
+    const txIsPay = latestTx.kind ? (latestTx.kind === 'pay') : isPayType(latestTx.type);
+    const txNote = String(latestTx.note || '').trim();
+    const txDate = formatDate(latestTx.date || todayString());
+    if (txIsPay) {
+      lines.push(`تم تسجيل *دفعة جديدة* في حسابك:`);
+      lines.push(`• مبلغ الدفعة: ${formatNum(latestTx.amount)} ${curr.symbol}`);
+    } else {
+      lines.push(`تم تسجيل *دين جديد* على حسابك:`);
+      lines.push(`• مبلغ الدين: ${formatNum(latestTx.amount)} ${curr.symbol}`);
+    }
+    if (txNote) {
+      lines.push(`• البيان: ${txNote}`);
+    }
+    lines.push(`• التاريخ: ${txDate}`);
+    lines.push(`----------------`);
+  }
+
+  lines.push(`ملخص حسابك حتى تاريخ ${todayString()}:`);
   lines.push(`• إجمالي الدين: ${formatNum(cust.totalDebt)} ${curr.symbol}`);
   lines.push(`• المدفوع: ${formatNum(cust.totalPay)} ${curr.symbol}`);
 
@@ -34,8 +62,13 @@ function sendWhatsApp() {
     lines.push(`----------------`);
     lines.push(settings.generalNote.trim());
   }
-  if (settings.shopAddress || settings.shopPhone) {
-    lines.push([settings.shopAddress, settings.shopPhone].filter(Boolean).join(' - '));
+
+  const phones = getShopPhonesList();
+  const footerParts = [];
+  if (settings.shopAddress) footerParts.push(settings.shopAddress);
+  if (phones.length > 0) footerParts.push(phones.join(' / '));
+  if (footerParts.length > 0) {
+    lines.push(footerParts.join(' - '));
   }
 
   const msg = encodeURIComponent(lines.join('\n'));
@@ -51,7 +84,7 @@ function sendWhatsApp() {
   }
 }
 
-// ==================== تصدير كشف PDF (التصميم النظيف + شام كاش القابل للنسخ) ====================
+// ==================== تصدير كشف PDF (دعم أكثر من رقم هاتف + شام كاش القابل للنسخ) ====================
 async function waitImagesAndPaint(rootEl) {
   const imgs = Array.from(rootEl.querySelectorAll('img'));
   await Promise.all(imgs.map(img => {
@@ -104,7 +137,14 @@ async function exportCustomerPDF() {
     const logoHtml = settings.shopLogo
       ? `<img src="${settings.shopLogo}" style="width:62px;height:62px;object-fit:contain;border-radius:10px;border:1px solid #e2e8f0;padding:3px;background:#fff;" />`
       : '';
-    const shopLines = [settings.shopAddress, settings.shopPhone].filter(Boolean).map(escapeHtml).join('  |  ');
+
+    const shopPhones = getShopPhonesList();
+    const shopAddressHtml = settings.shopAddress
+      ? `<div style="font-size:12.5px;color:#475569;margin-top:3px;">${escapeHtml(settings.shopAddress)}</div>`
+      : '';
+    const shopPhonesHtml = shopPhones.length > 0
+      ? `<div style="font-size:12.5px;color:#334155;margin-top:3px;font-weight:600;">هاتف: <span dir="ltr" style="unicode-bidi:embed;">${shopPhones.map(escapeHtml).join('  •  ')}</span></div>`
+      : '';
 
     const mainBlock = document.createElement('div');
     mainBlock.style.cssText = 'width:740px;padding:26px 26px 14px;background:#ffffff;';
@@ -114,7 +154,8 @@ async function exportCustomerPDF() {
           ${logoHtml}
           <div>
             <div style="font-size:22px;font-weight:800;color:#1e3a8a;">${escapeHtml(settings.shopName || 'دفتر الديون')}</div>
-            ${shopLines ? `<div style="font-size:12.5px;color:#475569;margin-top:4px;">${shopLines}</div>` : ''}
+            ${shopAddressHtml}
+            ${shopPhonesHtml}
           </div>
         </div>
         <div style="text-align:left;font-size:12.5px;color:#475569;line-height:1.6;">

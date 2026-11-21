@@ -8,8 +8,20 @@ function armRootExitGuard() {
   } catch (e) {}
 }
 
+function openSideMenu() {
+  document.getElementById('sideMenuBackdrop').classList.add('open');
+  updateBodyScrollLock();
+  pushLayerHistory('sideMenu');
+}
+
+function closeSideMenu() {
+  document.getElementById('sideMenuBackdrop').classList.remove('open');
+  updateBodyScrollLock();
+}
+
 function updateBodyScrollLock() {
   const anyOpen =
+    document.getElementById('sideMenuBackdrop').classList.contains('open') ||
     document.getElementById('detailView').classList.contains('open') ||
     document.getElementById('settingsView').classList.contains('open') ||
     document.getElementById('accountsView').classList.contains('open') ||
@@ -29,6 +41,11 @@ window.addEventListener('popstate', () => {
 
   if (document.getElementById('exitModal').classList.contains('open')) {
     cancelExit();
+    return;
+  }
+  if (document.getElementById('sideMenuBackdrop').classList.contains('open')) {
+    document.getElementById('sideMenuBackdrop').classList.remove('open');
+    updateBodyScrollLock();
     return;
   }
   if (document.getElementById('confirmModal').classList.contains('open')) {
@@ -114,21 +131,32 @@ function applyBrandingUI() {
   document.title = `دفتر الديون - ${name}`;
   document.getElementById('headerShopName').textContent = name;
   document.getElementById('lockShopName').textContent = name;
+  document.getElementById('drawerShopName').textContent = name;
 
-  const subParts = [settings.shopPhone, settings.shopAddress].filter(Boolean);
+  if (currentProfile) {
+    const uName = currentProfile.display_name || currentProfile.email || '';
+    document.getElementById('drawerUserMeta').textContent = `${uName} (${getRoleLabel(currentProfile.role)})`;
+  }
+
+  const phones = getShopPhonesList();
+  const subParts = [phones[0] || '', settings.shopAddress].filter(Boolean);
   document.getElementById('headerShopSub').textContent = subParts.length ? subParts.join(' • ') : 'دفتر الديون';
 
   const hLogo = document.getElementById('headerLogo');
+  const dLogo = document.getElementById('drawerLogo');
   const lLogo = document.getElementById('lockLogoImg');
   const lBadge = document.getElementById('lockDefaultBadge');
   if (settings.shopLogo) {
     hLogo.src = settings.shopLogo;
     hLogo.classList.remove('hidden');
+    dLogo.src = settings.shopLogo;
+    dLogo.classList.remove('hidden');
     lLogo.src = settings.shopLogo;
     lLogo.classList.remove('hidden');
     lBadge.classList.add('hidden');
   } else {
     hLogo.classList.add('hidden');
+    dLogo.classList.add('hidden');
     lLogo.classList.add('hidden');
     lBadge.classList.remove('hidden');
   }
@@ -166,7 +194,7 @@ function lockApp() {
 }
 
 function updateHeaderLockButton() {
-  document.getElementById('headerLockBtn').classList.toggle('hidden', !settings.lockEnabled);
+  document.getElementById('drawerLockBtn').classList.toggle('hidden', !settings.lockEnabled);
 }
 
 function bufToBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
@@ -564,10 +592,14 @@ function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt')
   editingTxId = null;
   document.getElementById('txModalTitle').textContent = 'تسجيل عملية جديدة';
   document.getElementById('saveTxBtn').textContent = 'حفظ العملية';
+  document.getElementById('saveTxWaBtn').classList.remove('hidden');
   document.getElementById('txName').value = prefillName;
   document.getElementById('txPhone').value = prefillPhone;
   document.getElementById('txAmount').value = '';
-  document.getElementById('txDate').value = toInputDate(todayString());
+  const dateEl = document.getElementById('txDate');
+  dateEl.value = toInputDate(todayString());
+  dateEl.disabled = true;
+  document.getElementById('txDateLockHint').textContent = '(مثبّت تلقائياً لليوم — يتعدل من زر التعديل)';
   document.getElementById('txNote').value = '';
   document.getElementById('txCurrLabel').textContent = getCurr().symbol;
   setTxKind(defaultKind);
@@ -584,10 +616,14 @@ function openEditTxModal(id) {
   editingTxId = String(rec.id);
   document.getElementById('txModalTitle').textContent = 'تعديل الحركة';
   document.getElementById('saveTxBtn').textContent = 'حفظ التعديل';
+  document.getElementById('saveTxWaBtn').classList.add('hidden');
   document.getElementById('txName').value = rec.name || '';
   document.getElementById('txPhone').value = String(rec.phone || '').replace(/^'/, '');
   document.getElementById('txAmount').value = rec.amount || '';
-  document.getElementById('txDate').value = toInputDate(rec.date);
+  const dateEl = document.getElementById('txDate');
+  dateEl.value = toInputDate(rec.date);
+  dateEl.disabled = false;
+  document.getElementById('txDateLockHint').textContent = '(قابل للتعديل)';
   document.getElementById('txNote').value = rec.note || '';
   document.getElementById('txCurrLabel').textContent = getCurr().symbol;
   setTxKind(isPayType(rec.type) ? 'pay' : 'debt');
@@ -612,11 +648,10 @@ function setTxKind(k) {
   document.getElementById('btnKindPay').className = 'tog-btn' + (k === 'pay' ? ' on-pay' : '');
 }
 
-function saveTransaction() {
+function saveTransaction(alsoSendWa = false) {
   const name = document.getElementById('txName').value.trim();
   const phone = document.getElementById('txPhone').value.trim();
   const amount = parseFloat(document.getElementById('txAmount').value);
-  const dateStr = fromInputDate(document.getElementById('txDate').value);
   const note = document.getElementById('txNote').value.trim();
 
   if (!name) return showToast('يرجى كتابة اسم الزبون');
@@ -626,6 +661,7 @@ function saveTransaction() {
   const typeLabel = (txKind === 'debt' ? 'دين' : 'دفعة') + ` (${curr.symbol})`;
 
   if (editingTxId) {
+    const dateStr = fromInputDate(document.getElementById('txDate').value);
     queueUpdateRecord(editingTxId, { date: dateStr, name, phone, type: typeLabel, amount, note });
     editingTxId = null;
     persistData();
@@ -637,6 +673,7 @@ function saveTransaction() {
     }
     triggerSyncOrOfflineToast('تم تعديل الحركة، جاري المزامنة...', 'تم التعديل محلياً (سيُزامن لاحقاً)');
   } else {
+    const dateStr = todayString();
     const rec = toDbRecord({
       id: genId(),
       date: dateStr,
@@ -656,6 +693,9 @@ function saveTransaction() {
       renderCustomerDetail(name);
     }
     triggerSyncOrOfflineToast('تم الحفظ، جاري المزامنة...', 'تم الحفظ محلياً (سيُزامن عند عودة الإنترنت)');
+    if (alsoSendWa) {
+      sendWhatsApp({ ...rec, kind: txKind }, name);
+    }
   }
 }
 
@@ -728,6 +768,42 @@ function executeConfirmedDelete() {
   }
 }
 
+// ==================== أرقام هواتف المحل المتعددة ====================
+function renderShopPhonesInputs(phonesArr) {
+  const listEl = document.getElementById('shopPhonesList');
+  listEl.innerHTML = '';
+  const items = (phonesArr && phonesArr.length > 0) ? phonesArr : [''];
+  items.forEach(num => addShopPhoneInput(num));
+}
+
+function addShopPhoneInput(val = '') {
+  const listEl = document.getElementById('shopPhonesList');
+  const row = document.createElement('div');
+  row.className = 'phone-row';
+  row.innerHTML = `
+    <input type="tel" class="input shop-phone-input" dir="ltr" style="text-align:right;" placeholder="09xxxxxxxx" value="${escapeHtml(val)}" />
+    <button type="button" class="phone-del-btn" title="حذف الرقم" onclick="removeShopPhoneRow(this)">✕</button>
+  `;
+  listEl.appendChild(row);
+}
+
+function removeShopPhoneRow(btn) {
+  const listEl = document.getElementById('shopPhonesList');
+  const row = btn.closest('.phone-row');
+  if (listEl.children.length <= 1) {
+    const inp = row.querySelector('input');
+    if (inp) inp.value = '';
+  } else {
+    row.remove();
+  }
+}
+
+function collectShopPhonesInputs() {
+  return Array.from(document.querySelectorAll('.shop-phone-input'))
+    .map(inp => inp.value.trim())
+    .filter(Boolean);
+}
+
 // ==================== صفحة الضبط ====================
 function openSettingsView() {
   tempSettingsCurrency = settings.currency;
@@ -736,7 +812,7 @@ function openSettingsView() {
 
   document.getElementById('setShopName').value = settings.shopName || '';
   document.getElementById('setShopAddress').value = settings.shopAddress || '';
-  document.getElementById('setShopPhone').value = settings.shopPhone || '';
+  renderShopPhonesInputs(getShopPhonesList());
   document.getElementById('setGeneralNote').value = settings.generalNote || '';
   document.getElementById('setShamCashToggle').checked = !!settings.shamCashEnabled;
   document.getElementById('setShamCashCode').value = settings.shamCashCode || '';
@@ -858,9 +934,11 @@ async function saveSettings() {
 
   // إذا كان المستخدم مديراً، نحفظ إعدادات المحل سحابياً في Supabase
   if (isAdmin()) {
+    const collectedPhones = collectShopPhonesInputs();
     settings.shopName = document.getElementById('setShopName').value.trim() || 'مركز الدمشقي للصيانة';
     settings.shopAddress = document.getElementById('setShopAddress').value.trim();
-    settings.shopPhone = document.getElementById('setShopPhone').value.trim();
+    settings.shopPhones = collectedPhones;
+    settings.shopPhone = collectedPhones.join(' - ');
     settings.shopLogo = tempLogoData;
     settings.generalNote = document.getElementById('setGeneralNote').value.trim();
     settings.shamCashEnabled = document.getElementById('setShamCashToggle').checked;
@@ -871,6 +949,7 @@ async function saveSettings() {
       shopName: settings.shopName,
       shopAddress: settings.shopAddress,
       shopPhone: settings.shopPhone,
+      shopPhones: settings.shopPhones,
       shopLogo: settings.shopLogo,
       generalNote: settings.generalNote,
       shamCashEnabled: settings.shamCashEnabled,
@@ -931,23 +1010,12 @@ function isRunningStandalone() {
 }
 
 function updatePwaInstallUI() {
-  const hdrBtn = document.getElementById('headerInstallBtn');
-  const setBtn = document.getElementById('settingsInstallBtn');
-  const hint = document.getElementById('pwaStatusHint');
-  if (!hdrBtn || !setBtn || !hint) return;
-
-  if (isRunningStandalone()) {
-    hdrBtn.classList.add('hidden');
-    setBtn.classList.add('hidden');
-    hint.textContent = 'التطبيق مثبّت حالياً على جهازك ✓ — أي تعديل ترفعه على GitHub يظهر تلقائياً عند فتح التطبيق بوجود إنترنت.';
-  } else if (deferredInstallPrompt) {
-    hdrBtn.classList.remove('hidden');
-    setBtn.classList.remove('hidden');
-    hint.textContent = 'التطبيق جاهز للتثبيت على الشاشة الرئيسية بضغطة زر.';
+  const drawerBtn = document.getElementById('drawerInstallBtn');
+  if (!drawerBtn) return;
+  if (isRunningStandalone() || !deferredInstallPrompt) {
+    drawerBtn.classList.add('hidden');
   } else {
-    hdrBtn.classList.add('hidden');
-    setBtn.classList.add('hidden');
-    hint.textContent = 'لتثبيت التطبيق من المتصفح: اضغط قائمة المتصفح (⋮) ثم اختر «تثبيت التطبيق» أو «الإضافة إلى الشاشة الرئيسية».';
+    drawerBtn.classList.remove('hidden');
   }
 }
 
@@ -975,22 +1043,6 @@ async function triggerPwaInstall() {
   }
   deferredInstallPrompt = null;
   updatePwaInstallUI();
-}
-
-async function forceRefreshApp() {
-  if (!navigator.onLine) return showToast('يلزم الاتصال بالإنترنت لجلب آخر تحديث');
-  showToast('جاري جلب أحدث نسخة من الكود...');
-  try {
-    if ('caches' in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => caches.delete(k)));
-    }
-    if ('serviceWorker' in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map((r) => r.update()));
-    }
-  } catch (e) {}
-  window.location.reload();
 }
 
 function registerPwaServiceWorker() {
