@@ -1,17 +1,29 @@
-// ==================== إدارة الصفحات وتأكيد الخروج ====================
+// ==================== إدارة الصفحات والخروج السلس (الرجوع مرتين للخروج) ====================
+let exitArmedTimer = null;
+
 function armRootExitGuard() {
   if (rootGuardArmed) return;
   rootGuardArmed = true;
   try {
-    history.replaceState({ appRootGuard: true }, '');
-    history.pushState({ appMain: true }, '');
+    history.replaceState({ appState: 'exit_ready' }, '');
+    history.pushState({ appState: 'active' }, '');
+  } catch (e) {}
+}
+
+function rearmExitGuardIfNeeded() {
+  clearTimeout(exitArmedTimer);
+  exitArmedTimer = null;
+  try {
+    if (!history.state || history.state.appState !== 'active') {
+      history.pushState({ appState: 'active' }, '');
+    }
   } catch (e) {}
 }
 
 function openSideMenu() {
   document.getElementById('sideMenuBackdrop').classList.add('open');
   updateBodyScrollLock();
-  pushLayerHistory('sideMenu');
+  rearmExitGuardIfNeeded();
 }
 
 function closeSideMenu() {
@@ -27,97 +39,79 @@ function updateBodyScrollLock() {
     document.getElementById('accountsView').classList.contains('open') ||
     document.getElementById('addModal').classList.contains('open') ||
     document.getElementById('editCustomerModal').classList.contains('open') ||
-    document.getElementById('confirmModal').classList.contains('open') ||
-    document.getElementById('exitModal').classList.contains('open');
+    document.getElementById('confirmModal').classList.contains('open');
   document.body.classList.toggle('no-scroll', anyOpen);
 }
 
-function pushLayerHistory(name) {
-  try { history.pushState({ layer: name }, ''); } catch (e) {}
+function pushLayerHistory() {
+  // الحفاظ على طبقة واحدة فقط في سجل المتصفح حتى لا تتراكم عند فتح وإغلاق الصفحات
+  rearmExitGuardIfNeeded();
 }
 
 window.addEventListener('popstate', () => {
-  if (allowAppExit) return;
-
-  if (document.getElementById('exitModal').classList.contains('open')) {
-    cancelExit();
-    return;
-  }
   if (document.getElementById('sideMenuBackdrop').classList.contains('open')) {
     document.getElementById('sideMenuBackdrop').classList.remove('open');
     updateBodyScrollLock();
+    rearmExitGuardIfNeeded();
     return;
   }
   if (document.getElementById('confirmModal').classList.contains('open')) {
     document.getElementById('confirmModal').classList.remove('open');
     updateBodyScrollLock();
+    rearmExitGuardIfNeeded();
     return;
   }
   if (document.getElementById('editCustomerModal').classList.contains('open')) {
     document.getElementById('editCustomerModal').classList.remove('open');
     updateBodyScrollLock();
+    rearmExitGuardIfNeeded();
     return;
   }
   if (document.getElementById('addModal').classList.contains('open')) {
     document.getElementById('addModal').classList.remove('open');
     updateBodyScrollLock();
+    rearmExitGuardIfNeeded();
     return;
   }
   if (document.getElementById('accountsView').classList.contains('open')) {
     document.getElementById('accountsView').classList.remove('open');
     updateBodyScrollLock();
+    rearmExitGuardIfNeeded();
     return;
   }
   if (document.getElementById('settingsView').classList.contains('open')) {
     document.getElementById('settingsView').classList.remove('open');
     updateBodyScrollLock();
+    rearmExitGuardIfNeeded();
     return;
   }
   if (document.getElementById('detailView').classList.contains('open')) {
     document.getElementById('detailView').classList.remove('open');
     currentCustomerName = null;
     updateBodyScrollLock();
+    rearmExitGuardIfNeeded();
     return;
   }
 
-  if (isUnlocked) openExitModal();
-});
-
-window.addEventListener('beforeunload', (e) => {
-  if (!allowAppExit && isUnlocked) {
-    e.preventDefault();
-    e.returnValue = '';
+  // على الشاشة الرئيسية: نبقى في بداية السجل ليخرج الهاتف فوراً عند ضغط الرجوع مرة ثانية خلال ثانيتين ونصف
+  if (isUnlocked) {
+    const msg = pendingQueue.length > 0
+      ? `يوجد ${pendingQueue.length} عملية محلية — اضغط رجوع مرة أخرى للخروج`
+      : 'اضغط رجوع مرة أخرى للخروج من التطبيق';
+    showToast(msg);
+    clearTimeout(exitArmedTimer);
+    exitArmedTimer = setTimeout(() => {
+      if (isUnlocked && !document.hidden) {
+        rearmExitGuardIfNeeded();
+      }
+    }, 2500);
   }
 });
-
-function openExitModal() {
-  const msg = pendingQueue.length > 0
-    ? `يوجد ${pendingQueue.length} عملية بانتظار المزامنة (محفوظة على جهازك). هل تريد الخروج من التطبيق؟`
-    : 'هل أنت متأكد من رغبتك بالخروج من التطبيق؟';
-  document.getElementById('exitConfirmMsg').textContent = msg;
-  document.getElementById('exitModal').classList.add('open');
-  updateBodyScrollLock();
-}
-
-function cancelExit() {
-  document.getElementById('exitModal').classList.remove('open');
-  updateBodyScrollLock();
-  try { history.pushState({ appMain: true }, ''); } catch (e) {}
-}
-
-function confirmExit() {
-  allowAppExit = true;
-  document.getElementById('exitModal').classList.remove('open');
-  updateBodyScrollLock();
-  window.close();
-  try { history.go(-2); } catch (e) {}
-  setTimeout(() => { allowAppExit = false; }, 800);
-}
 
 function openModal(id) {
   document.getElementById(id).classList.add('open');
   updateBodyScrollLock();
-  pushLayerHistory(id);
+  rearmExitGuardIfNeeded();
 }
 
 function closeModal(id) {
@@ -992,10 +986,7 @@ async function saveSettings() {
 // إغلاق النوافذ المنبثقة عند الضغط خارجها
 document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) {
-      if (el.id === 'exitModal') cancelExit();
-      else closeModal(el.id);
-    }
+    if (e.target === el) closeModal(el.id);
   });
 });
 

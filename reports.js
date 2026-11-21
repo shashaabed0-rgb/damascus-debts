@@ -226,8 +226,11 @@ async function exportCustomerPDF() {
     let shamLabelEl = null;
     if (shamEnabled) {
       shamLabelEl = document.createElement('div');
-      shamLabelEl.style.cssText = 'width:180px;background:#fffbeb;color:#92400e;font-size:16px;font-weight:800;padding:8px 6px;text-align:center;line-height:1.3;';
-      shamLabelEl.textContent = 'شام كاش :';
+      shamLabelEl.style.cssText = 'width:220px;background:#fffbeb;padding:7px 6px;text-align:center;line-height:1.35;';
+      shamLabelEl.innerHTML = `
+        <div style="color:#92400e;font-size:16px;font-weight:800;">شام كاش</div>
+        <div style="color:#b45309;font-size:11.5px;font-weight:700;margin-top:3px;">يمكنك نسخ الرمز للدفع</div>
+      `;
       stage.appendChild(shamLabelEl);
     }
 
@@ -252,7 +255,7 @@ async function exportCustomerPDF() {
     if (shamLabelEl) {
       shamLabelCanvas = await html2canvas(shamLabelEl, {
         scale: 2, useCORS: true, backgroundColor: '#fffbeb',
-        width: 180, windowWidth: 180, scrollX: 0, scrollY: 0
+        width: 220, windowWidth: 220, scrollX: 0, scrollY: 0
       });
     }
 
@@ -301,8 +304,12 @@ async function exportCustomerPDF() {
       const innerMargin = 7;
       const boxX = marginX + innerMargin;
       const boxW = usableW - innerMargin * 2;
-      const codeLines = doc.splitTextToSize(codeToWrite, boxW - 56);
-      const boxH = Math.max(16, codeLines.length * 6.2 + 8);
+      const lblW = 50;
+      const lblH = shamLabelCanvas ? (shamLabelCanvas.height / shamLabelCanvas.width) * lblW : 14;
+      const codeBoxX = boxX + 4;
+      const codeBoxW = boxW - lblW - 10;
+      const codeLines = doc.splitTextToSize(codeToWrite, codeBoxW - 6);
+      const boxH = Math.max(20, lblH + 4, codeLines.length * 6.2 + 8);
 
       if (curY + boxH + 7 > 286) {
         doc.addPage();
@@ -317,20 +324,16 @@ async function exportCustomerPDF() {
       doc.roundedRect(boxX, curY, boxW, boxH, 3, 3, 'FD');
 
       if (shamLabelCanvas) {
-        const lblW = 40;
-        const lblH = (shamLabelCanvas.height / shamLabelCanvas.width) * lblW;
         const lblX = boxX + boxW - lblW - 3;
         const lblY = curY + (boxH - lblH) / 2;
         doc.addImage(shamLabelCanvas.toDataURL('image/png'), 'PNG', lblX, lblY, lblW, lblH);
       }
 
-      const codeBoxX = boxX + 4;
-      const codeBoxW = boxW - 50;
-      const codeBoxH = boxH - 4.5;
+      const codeBoxH = boxH - 5;
       doc.setFillColor(255, 255, 255);
       doc.setDrawColor(217, 119, 6);
       doc.setLineWidth(0.35);
-      doc.roundedRect(codeBoxX, curY + 2.25, codeBoxW, codeBoxH, 2.2, 2.2, 'FD');
+      doc.roundedRect(codeBoxX, curY + 2.5, codeBoxW, codeBoxH, 2.2, 2.2, 'FD');
 
       doc.setFont('courier', 'bold');
       doc.setFontSize(12.5);

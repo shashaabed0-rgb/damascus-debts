@@ -294,11 +294,17 @@ async function handleLogout() {
   if (pendingQueue.length > 0) {
     if (!confirm(`يوجد ${pendingQueue.length} عملية لم تُرفع بعد للسحابة. هل تريد تسجيل الخروج رغم ذلك؟`)) return;
   }
-  if (realtimeChannel) {
-    sb.removeChannel(realtimeChannel);
-    realtimeChannel = null;
+  try {
+    if (realtimeChannel) {
+      sb.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+  } catch (e) {}
+  try {
+    await sb.auth.signOut({ scope: 'local' });
+  } catch (e) {
+    console.warn('SignOut warning:', e);
   }
-  await sb.auth.signOut();
   sessionStorage.removeItem('debt_unlocked_v3');
   currentUser = null;
   currentProfile = null;
