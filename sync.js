@@ -49,7 +49,7 @@ const DEFAULT_WA_CONFIG = {
 const DEFAULT_BACKUP_CONFIG = {
   driveEmail: '',
   driveScriptUrl: '',
-  autoDailyEnabled: true,
+  manualOnly: true,
   lastDriveBackupAt: ''
 };
 
@@ -84,6 +84,9 @@ let cachedMembersList = [];
 let cachedWorkshopsList = [];
 let cachedAllMembersByWs = new Map();
 let editingWorkshopId = null;
+let editingWorkshopAdminId = null;
+let editingWorkshopOldEmail = '';
+let editingWorkshopOldPass = '';
 
 let allRecords = [];
 let pendingQueue = [];
@@ -394,13 +397,37 @@ async function handleLogout() {
 }
 
 async function changeMyPassword() {
-  const newPass = document.getElementById('setNewPassInput').value;
+  const inputEl = document.getElementById('setNewPassInput');
+  const newPass = (inputEl.value || '').trim();
   if (newPass.length < 6) return showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
   if (!navigator.onLine) return showToast('يلزم الاتصال بالإنترنت لتغيير كلمة المرور');
+
   const { error } = await sb.auth.updateUser({ password: newPass });
   if (error) return showToast(error.message);
-  document.getElementById('setNewPassInput').value = '';
-  showToast('تم تحديث كلمة المرور بنجاح');
+
+  // حفظ كلمة المرور الجديدة لتبقى ظاهرة عند المدير العام عند الحاجة
+  try {
+    await sb.rpc('sync_my_saved_password', { new_password: newPass });
+  } catch (e) {}
+
+  // حفظ نسخة احتياطية إضافية داخل إعدادات الورشة إذا كان المستخدم مدير ورشة
+  if (isAdmin() && !isSuperAdmin() && currentWorkshop) {
+    try {
+      const nextWsSettings = {
+        ...(currentWorkshop.settings || {}),
+        managerEmail: currentProfile?.email || currentUser?.email || '',
+        managerPassword: newPass
+      };
+      await sb.from('workshops').update({ settings: nextWsSettings }).eq('id', currentProfile.workshop_id);
+      currentWorkshop.settings = nextWsSettings;
+    } catch (e) {}
+  }
+
+  inputEl.value = '';
+  inputEl.classList.remove('revealed');
+  const eyeBtn = document.getElementById('toggleMyPassVisBtn');
+  if (eyeBtn) eyeBtn.textContent = 'إظهار';
+  showToast('تم تحديث كلمة المرور بنجاح ✓');
 }
 
 // ==================== المزامنة مع Supabase والعمل أوفلاين ====================
@@ -841,15 +868,22 @@ async function createWorkshopMember(ev) {
       throw new Error('لم يتم إنشاء الحساب، تأكد أن البريد غير مستخدم مسبقاً.');
     }
 
-    const { error: memErr } = await sb.from('workshop_members').insert({
+    const memPayload = {
       user_id: signUpData.user.id,
       workshop_id: currentProfile.workshop_id,
       role,
       display_name,
       email,
+      login_password: password,
       can_delete,
       active: true
-    });
+    };
+    let { error: memErr } = await sb.from('workshop_members').insert(memPayload);
+    if (memErr && String(memErr.message || '').includes('login_password')) {
+      delete memPayload.login_password;
+      const retry = await sb.from('workshop_members').insert(memPayload);
+      memErr = retry.error;
+    }
     if (memErr) throw memErr;
 
     document.getElementById('addMemberForm').reset();
@@ -889,6 +923,60 @@ async function removeWorkshopMember(uid, name) {
   loadWorkshopMembers();
 }
 
+function copyCredentialValue(val, label) {
+  if (!val) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(val).then(() => showToast(`تم نسخ ${label}`)).catch(() => fallbackCopyText(val, label));
+  } else {
+    fallbackCopyText(val, label);
+  }
+}
+
+function fallbackCopyText(val, label) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = val;
+    ta.style.cssText = 'position:fixed;opacity:0;left:-9999px;';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast(`تم نسخ ${label}`);
+  } catch (e) {}
+}
+
+function toggleWsCardPass(btn, wsId) {
+  const el = document.getElementById('wsPassVal_' + wsId);
+  if (!el) return;
+  const realPass = el.getAttribute('data-pass') || '';
+  if (!realPass) return;
+  const shown = el.getAttribute('data-shown') === '1';
+  if (shown) {
+    el.textContent = '••••••••';
+    el.setAttribute('data-shown', '0');
+    btn.textContent = 'إظهار';
+  } else {
+    el.textContent = realPass;
+    el.setAttribute('data-shown', '1');
+    btn.textContent = 'إخفاء';
+  }
+}
+
+function getWorkshopManagerInfo(w) {
+  const wsMembers = cachedAllMembersByWs.get(w.id) || [];
+  const adminMember = wsMembers.find(m => m.role === 'admin')
+    || wsMembers.find(m => m.role === 'super_admin')
+    || wsMembers[0]
+    || null;
+  const email = (adminMember && adminMember.email)
+    || (w.settings && w.settings.managerEmail)
+    || '';
+  const password = (adminMember && adminMember.login_password)
+    || (w.settings && w.settings.managerPassword)
+    || '';
+  return { adminMember, wsMembers, email, password };
+}
+
 function renderIsolatedWorkshopsList(list) {
   const box = document.getElementById('workshopsListBox');
   const banner = document.getElementById('onlineWorkshopsBanner');
@@ -912,8 +1000,7 @@ function renderIsolatedWorkshopsList(list) {
     const isFrozen = Boolean(w.settings && w.settings.frozen === true);
     const onlineArr = onlineWorkshopsMap.get(w.id) || [];
     const isOnline = (isOwnWs && navigator.onLine) || onlineArr.length > 0;
-    const wsMembers = cachedAllMembersByWs.get(w.id) || [];
-    const adminMember = wsMembers.find(m => m.role === 'admin' || m.role === 'super_admin') || wsMembers[0];
+    const { adminMember, wsMembers, email: mgrEmail, password: mgrPass } = getWorkshopManagerInfo(w);
 
     const onlineBadge = isOnline
       ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصلة (${Math.max(1, onlineArr.length)})</span>`
@@ -929,19 +1016,38 @@ function renderIsolatedWorkshopsList(list) {
       : '';
 
     const adminInfoHtml = adminMember
-      ? `<div class="member-email" style="direction:rtl;">المدير: ${escapeHtml(adminMember.display_name || adminMember.email)} • ${wsMembers.length} حساب</div>`
+      ? `<div class="member-email" style="direction:rtl;">المدير: ${escapeHtml(adminMember.display_name || mgrEmail)} • ${wsMembers.length} حساب</div>`
       : '';
+
+    const safeWsId = escapeHtml(w.id);
+    const credsBoxHtml = !isOwnWs ? `
+      <div class="ws-creds-box">
+        <div class="ws-cred-row">
+          <span class="ws-cred-lbl">الإيميل:</span>
+          <span class="ws-cred-val">${escapeHtml(mgrEmail || '—')}</span>
+          ${mgrEmail ? `<button type="button" class="ws-cred-mini-btn" onclick="copyCredentialValue('${escapeHtml(mgrEmail)}', 'الإيميل')">نسخ</button>` : ''}
+        </div>
+        <div class="ws-cred-row">
+          <span class="ws-cred-lbl">كلمة السر:</span>
+          ${mgrPass
+            ? `<span class="ws-cred-val" id="wsPassVal_${safeWsId}" data-pass="${escapeHtml(mgrPass)}" data-shown="0">••••••••</span>
+               <button type="button" class="ws-cred-mini-btn" onclick="toggleWsCardPass(this, '${safeWsId}')">إظهار</button>
+               <button type="button" class="ws-cred-mini-btn" onclick="copyCredentialValue('${escapeHtml(mgrPass)}', 'كلمة السر')">نسخ</button>`
+            : `<span class="ws-cred-val unset">غير محفوظة بعد — اضغط تعديل لتعيينها</span>`
+          }
+        </div>
+      </div>` : '';
 
     const actionsHtml = isOwnWs
       ? `<div class="member-actions">
-           <button class="btn btn-light btn-sm" onclick="openEditWorkshopModal('${escapeHtml(w.id)}')">تعديل الاسم</button>
+           <button class="btn btn-light btn-sm" onclick="openEditWorkshopModal('${safeWsId}')">تعديل الاسم</button>
          </div>`
       : `<div class="member-actions">
-           <button class="btn btn-light btn-sm" onclick="openEditWorkshopModal('${escapeHtml(w.id)}')">تعديل</button>
-           <button class="btn btn-light btn-sm" onclick="toggleWorkshopFreeze('${escapeHtml(w.id)}')">
+           <button class="btn btn-primary btn-sm" onclick="openEditWorkshopModal('${safeWsId}')">تعديل الورشة / كلمة السر</button>
+           <button class="btn btn-light btn-sm" onclick="toggleWorkshopFreeze('${safeWsId}')">
              ${isFrozen ? 'فك التجميد' : 'تجميد الورشة'}
            </button>
-           <button class="btn btn-danger btn-sm" onclick="deleteIsolatedWorkshop('${escapeHtml(w.id)}')">إزالة</button>
+           <button class="btn btn-danger btn-sm" onclick="deleteIsolatedWorkshop('${safeWsId}')">إزالة</button>
          </div>`;
 
     return `
@@ -958,6 +1064,7 @@ function renderIsolatedWorkshopsList(list) {
             <span class="m-badge ${isOwnWs ? 'm-role' : 'm-neutral'}">${isOwnWs ? 'ورشتك' : 'معزولة'}</span>
           </div>
         </div>
+        ${credsBoxHtml}
         ${onlineNoteHtml}
         ${actionsHtml}
       </div>
@@ -999,7 +1106,18 @@ function openEditWorkshopModal(wsId) {
   const ws = cachedWorkshopsList.find(w => w.id === wsId);
   if (!ws) return;
   editingWorkshopId = wsId;
+  const isOwnWs = wsId === currentProfile.workshop_id;
+  const { adminMember, email, password } = getWorkshopManagerInfo(ws);
+
+  editingWorkshopAdminId = (!isOwnWs && adminMember) ? adminMember.user_id : null;
+  editingWorkshopOldEmail = email || '';
+  editingWorkshopOldPass = password || '';
+
   document.getElementById('editWsNameInput').value = ws.name || '';
+  document.getElementById('editWsCredsWrap').classList.toggle('hidden', isOwnWs || !editingWorkshopAdminId);
+  document.getElementById('editWsEmailInput').value = email || '';
+  document.getElementById('editWsPassInput').value = password || '';
+
   openModal('editWorkshopModal');
 }
 
@@ -1008,33 +1126,78 @@ async function saveWorkshopEdit() {
   const newName = document.getElementById('editWsNameInput').value.trim();
   if (!newName) return showToast('يرجى كتابة اسم الورشة');
 
+  const isOwnWs = editingWorkshopId === currentProfile.workshop_id;
+  const newEmail = isOwnWs ? '' : document.getElementById('editWsEmailInput').value.trim().toLowerCase();
+  const newPass = isOwnWs ? '' : document.getElementById('editWsPassInput').value.trim();
+
+  if (!isOwnWs && editingWorkshopAdminId) {
+    if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      return showToast('يرجى كتابة بريد إلكتروني صحيح');
+    }
+    if (newPass && newPass.length < 6) {
+      return showToast('كلمة المرور يجب أن تكون 6 أحرف أو أرقام على الأقل');
+    }
+  }
+
   const ws = cachedWorkshopsList.find(w => w.id === editingWorkshopId);
-  const nextSettings = { ...(ws && ws.settings ? ws.settings : {}), shopName: newName };
   const btn = document.getElementById('saveWsEditBtn');
   btn.disabled = true;
   btn.textContent = 'جاري الحفظ...';
 
-  const { error } = await sb
-    .from('workshops')
-    .update({ name: newName, settings: nextSettings })
-    .eq('id', editingWorkshopId);
+  try {
+    // 1. إذا تغير إيميل أو كلمة مرور مدير الورشة الجانبية، ننفّذ التحديث عبر دالة Supabase الآمنة
+    const emailChanged = Boolean(!isOwnWs && editingWorkshopAdminId && newEmail && newEmail !== editingWorkshopOldEmail.toLowerCase());
+    const passChanged = Boolean(!isOwnWs && editingWorkshopAdminId && newPass && newPass !== editingWorkshopOldPass);
 
-  btn.disabled = false;
-  btn.textContent = 'حفظ التعديل';
+    if (emailChanged || passChanged) {
+      const { error: rpcErr } = await sb.rpc('super_admin_update_member_credentials', {
+        target_user_id: editingWorkshopAdminId,
+        new_email: emailChanged ? newEmail : null,
+        new_password: passChanged ? newPass : null
+      });
+      if (rpcErr) {
+        const msg = String(rpcErr.message || '');
+        if (msg.includes('super_admin_update_member_credentials') || msg.includes('does not exist')) {
+          throw new Error('يرجى تشغيل كود SQL الخاص بتحديث الإيميل وكلمة المرور في Supabase أولاً.');
+        }
+        throw rpcErr;
+      }
+    }
 
-  if (error) {
-    showAccAlert('تعذّر تعديل الورشة: ' + error.message);
-    return;
+    // 2. تحديث اسم الورشة وحفظ نسخة من الإيميل/كلمة السر ضمن إعدادات الورشة
+    const nextSettings = {
+      ...(ws && ws.settings ? ws.settings : {}),
+      shopName: newName
+    };
+    if (!isOwnWs) {
+      if (newEmail) nextSettings.managerEmail = newEmail;
+      if (newPass) nextSettings.managerPassword = newPass;
+    }
+
+    const { error: wsErr } = await sb
+      .from('workshops')
+      .update({ name: newName, settings: nextSettings })
+      .eq('id', editingWorkshopId);
+
+    if (wsErr) throw wsErr;
+
+    if (isOwnWs) {
+      settings.shopName = newName;
+      applyBrandingUI();
+    }
+
+    editingWorkshopId = null;
+    editingWorkshopAdminId = null;
+    closeModal('editWorkshopModal');
+    showToast('تم حفظ تعديلات الورشة وبيانات المدير بنجاح ✓');
+    loadIsolatedWorkshops();
+  } catch (err) {
+    showAccAlert('تعذّر الحفظ: ' + (err.message || err));
+    showToast(err.message || 'تعذّر حفظ التعديل');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'حفظ التعديل';
   }
-
-  if (editingWorkshopId === currentProfile.workshop_id) {
-    settings.shopName = newName;
-    applyBrandingUI();
-  }
-  editingWorkshopId = null;
-  closeModal('editWorkshopModal');
-  showToast('تم تعديل اسم الورشة بنجاح');
-  loadIsolatedWorkshops();
 }
 
 async function toggleWorkshopFreeze(wsId) {
@@ -1059,7 +1222,6 @@ async function toggleWorkshopFreeze(wsId) {
     return;
   }
 
-  // أيضاً نحدّث حالة أعضاء تلك الورشة ليكون التجميد فورياً على جميع أجهزتها
   await sb.from('workshop_members').update({ active: !willFreeze }).eq('workshop_id', wsId);
 
   showToast(willFreeze ? `تم تجميد ورشة "${ws.name}" بنجاح` : `تم فك التجميد وتفعيل ورشة "${ws.name}"`);
@@ -1074,15 +1236,12 @@ async function deleteIsolatedWorkshop(wsId) {
   if (!confirm(`تحذير: هل أنت متأكد من إزالة ورشة "${ws.name}" نهائياً مع جميع حساباتها وديونها؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
 
   showAccAlert('');
-  // 1. حذف سجلات الديون الخاصة بالورشة (إن وجدت)
   await sb.from('debt_records').delete().eq('workshop_id', wsId);
-  // 2. حذف الأعضاء المرتبطين بالورشة
   const { error: memDelErr } = await sb.from('workshop_members').delete().eq('workshop_id', wsId);
   if (memDelErr) {
     showAccAlert('تعذّر إزالة حسابات الورشة: ' + memDelErr.message);
     return;
   }
-  // 3. حذف الورشة نفسها
   const { error: wsDelErr } = await sb.from('workshops').delete().eq('id', wsId);
   if (wsDelErr) {
     showAccAlert('تعذّر إزالة الورشة: ' + wsDelErr.message);
@@ -1102,7 +1261,7 @@ async function createIsolatedWorkshop(ev) {
   const wsName = document.getElementById('wsNewName').value.trim();
   const adminName = document.getElementById('wsAdminName').value.trim();
   const email = document.getElementById('wsAdminEmail').value.trim().toLowerCase();
-  const password = document.getElementById('wsAdminPass').value;
+  const password = document.getElementById('wsAdminPass').value.trim();
 
   btn.disabled = true;
   btn.textContent = 'جاري إنشاء الورشة...';
@@ -1116,20 +1275,36 @@ async function createIsolatedWorkshop(ev) {
 
     const { data: wsData, error: wsErr } = await sb
       .from('workshops')
-      .insert({ name: wsName, settings: { shopName: wsName, currency: 'BOTH', frozen: false } })
+      .insert({
+        name: wsName,
+        settings: {
+          shopName: wsName,
+          currency: 'BOTH',
+          frozen: false,
+          managerEmail: email,
+          managerPassword: password
+        }
+      })
       .select()
       .single();
     if (wsErr) throw wsErr;
 
-    const { error: memErr } = await sb.from('workshop_members').insert({
+    const memPayload = {
       user_id: signUpData.user.id,
       workshop_id: wsData.id,
       role: 'admin',
       display_name: adminName,
       email,
+      login_password: password,
       can_delete: true,
       active: true
-    });
+    };
+    let { error: memErr } = await sb.from('workshop_members').insert(memPayload);
+    if (memErr && String(memErr.message || '').includes('login_password')) {
+      delete memPayload.login_password;
+      const retry = await sb.from('workshop_members').insert(memPayload);
+      memErr = retry.error;
+    }
     if (memErr) throw memErr;
 
     document.getElementById('addWorkshopForm').reset();

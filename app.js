@@ -1115,11 +1115,19 @@ function addShopPhoneInput(val = '') {
   const listEl = document.getElementById('shopPhonesList');
   const row = document.createElement('div');
   row.className = 'phone-row';
+  const uniqueName = 'workshop_phone_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
   row.innerHTML = `
-    <input type="tel" class="input shop-phone-input" dir="ltr" style="text-align:right;" placeholder="09xxxxxxxx" value="${escapeHtml(val)}" />
+    <input type="tel" inputmode="tel" pattern="[0-9+\-\s]*" name="${uniqueName}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" class="input shop-phone-input" dir="ltr" style="text-align:right;" placeholder="09xxxxxxxx" value="${escapeHtml(val)}" />
     <button type="button" class="phone-del-btn" title="حذف الرقم" onclick="removeShopPhoneRow(this)">✕</button>
   `;
   listEl.appendChild(row);
+}
+
+function toggleMaskedInput(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  const revealed = inp.classList.toggle('revealed');
+  if (btn) btn.textContent = revealed ? 'إخفاء' : 'إظهار';
 }
 
 function removeShopPhoneRow(btn) {
@@ -1287,7 +1295,7 @@ async function saveSettings() {
       ...(settings.backupConfig || DEFAULT_BACKUP_CONFIG),
       driveEmail: document.getElementById('setDriveEmail').value.trim(),
       driveScriptUrl: document.getElementById('setDriveScriptUrl').value.trim(),
-      autoDailyEnabled: document.getElementById('setAutoDailyBackup').checked
+      manualOnly: true
     };
     settings.currency = tempSettingsCurrency;
 
@@ -1569,10 +1577,8 @@ function populateBackupSettingsDrawer() {
   const bCfg = { ...DEFAULT_BACKUP_CONFIG, ...(settings.backupConfig || {}) };
   const emailEl = document.getElementById('setDriveEmail');
   const urlEl = document.getElementById('setDriveScriptUrl');
-  const autoEl = document.getElementById('setAutoDailyBackup');
   if (emailEl) emailEl.value = bCfg.driveEmail || '';
   if (urlEl) urlEl.value = bCfg.driveScriptUrl || '';
-  if (autoEl) autoEl.checked = bCfg.autoDailyEnabled !== false;
   updateBackupStatusUI();
   renderLocalSnapshotsUI();
 }
@@ -1588,7 +1594,8 @@ function updateBackupStatusUI() {
   const emailLine = bCfg.driveEmail ? `<div><strong>حساب Google Drive:</strong> <span dir="ltr">${escapeHtml(bCfg.driveEmail)}</span></div>` : '';
   box.innerHTML = `
     ${emailLine}
-    <div><strong>آخر حفظ على Google Drive:</strong> ${escapeHtml(driveTxt)}</div>
+    <div><strong>وضع الحفظ على Google Drive:</strong> يدوي فقط</div>
+    <div><strong>آخر حفظ يدوي على Google Drive:</strong> ${escapeHtml(driveTxt)}</div>
     <div><strong>آخر نسخة يومية على الجوال:</strong> ${escapeHtml(lastSnapTxt)}</div>
   `;
 }
@@ -1683,31 +1690,37 @@ async function restoreRecordsArray(recs) {
   );
 }
 
-async function backupToGoogleDriveNow(silent = false) {
+async function backupToGoogleDriveNow() {
   if (isDriveBackingUp || !currentProfile) return;
   const inputUrlEl = document.getElementById('setDriveScriptUrl');
-  const scriptUrl = (inputUrlEl && document.getElementById('settingsView').classList.contains('open')
+  const inputEmailEl = document.getElementById('setDriveEmail');
+  const settingsOpen = document.getElementById('settingsView').classList.contains('open');
+  const scriptUrl = (inputUrlEl && settingsOpen
     ? inputUrlEl.value.trim()
     : ((settings.backupConfig && settings.backupConfig.driveScriptUrl) || '').trim());
+  const driveEmail = (inputEmailEl && settingsOpen
+    ? inputEmailEl.value.trim()
+    : ((settings.backupConfig && settings.backupConfig.driveEmail) || '').trim());
 
   if (!scriptUrl || !scriptUrl.toLowerCase().startsWith('http')) {
-    if (!silent) showToast('يرجى إدخال رابط سكربت Google Drive أولاً');
+    showToast('يرجى إدخال رابط سكربت Google Drive أولاً');
     return;
   }
   if (!navigator.onLine) {
-    if (!silent) showToast('يلزم الاتصال بالإنترنت للنسخ إلى Google Drive');
+    showToast('يلزم الاتصال بالإنترنت للحفظ اليدوي على Google Drive');
     return;
   }
 
   const btn = document.getElementById('backupDriveNowBtn');
   isDriveBackingUp = true;
-  if (!silent && btn) {
+  if (btn) {
     btn.disabled = true;
-    btn.querySelector('span').textContent = 'جاري الرفع إلى Google Drive...';
+    btn.querySelector('span').textContent = 'جاري الحفظ اليدوي على Google Drive...';
   }
 
   try {
     const payload = buildBackupPayloadObject();
+    payload.driveEmail = driveEmail;
     payload.action = 'backup';
     payload.csvContent = buildBackupCsvText(payload.records);
 
@@ -1726,37 +1739,28 @@ async function backupToGoogleDriveNow(silent = false) {
     }
 
     const stamp = `${todayString()} (${new Date().toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' })})`;
-    localStorage.setItem(wsKey('last_drive_backup_date'), todayString());
     localStorage.setItem(wsKey('last_drive_backup_at'), stamp);
     saveDailyLocalSnapshot(true);
     updateBackupStatusUI();
     renderLocalSnapshotsUI();
-    if (!silent) showToast('تم حفظ النسخة الاحتياطية في Google Drive بنجاح ✓');
+    showToast('تم الحفظ اليدوي على Google Drive بنجاح ✓');
   } catch (err) {
     console.error('Drive backup error:', err);
-    if (!silent) showToast('تعذّر الرفع إلى Google Drive، تأكد من الرابط وصلاحية النشر');
+    showToast('تعذّر الحفظ على Google Drive، تأكد من الرابط وصلاحية النشر');
   } finally {
     isDriveBackingUp = false;
-    if (!silent && btn) {
+    if (btn) {
       btn.disabled = false;
-      btn.querySelector('span').textContent = 'نسخ احتياطي إلى Google Drive الآن';
+      btn.querySelector('span').textContent = 'حفظ يدوي على Google Drive الآن';
     }
   }
 }
 
 function checkAndRunDailyBackups() {
   if (!currentProfile || !isUnlocked) return;
-  // 1. حفظ نسخة يومية تلقائية على الجوال نفسه (يعمل لكل جهاز/موظف)
+  // حفظ نسخة محلية يومية على الجوال فقط — أما Google Drive فيدوي 100% ولا يرفع تلقائياً
   if (allRecords.length > 0) {
     saveDailyLocalSnapshot(false);
-  }
-  // 2. رفع نسخة يومية تلقائية إلى Google Drive بعد الساعة 12:00 ليلاً إذا كان الرابط مضبوطاً
-  const bCfg = settings.backupConfig || DEFAULT_BACKUP_CONFIG;
-  if (isAdmin() && bCfg.autoDailyEnabled !== false && bCfg.driveScriptUrl && navigator.onLine && allRecords.length > 0) {
-    const lastDate = localStorage.getItem(wsKey('last_drive_backup_date')) || '';
-    if (lastDate !== todayString()) {
-      backupToGoogleDriveNow(true);
-    }
   }
 }
 

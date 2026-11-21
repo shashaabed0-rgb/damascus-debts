@@ -310,11 +310,11 @@
             </div>
             <div class="field">
               <label>بريد الدخول (يمكن ابتكار أي بريد بصيغة إيميل)</label>
-              <input type="email" id="memEmailInput" class="input" dir="ltr" placeholder="pc1@dimashqi.com" required />
+              <input type="email" id="memEmailInput" class="input" dir="ltr" autocomplete="off" data-lpignore="true" data-form-type="other" name="new_member_mail" placeholder="pc1@dimashqi.com" required />
             </div>
             <div class="field">
               <label>كلمة المرور (6 أحرف أو أرقام على الأقل)</label>
-              <input type="text" id="memPassInput" class="input" dir="ltr" minlength="6" placeholder="6 أحرف فأكثر" required />
+              <input type="text" id="memPassInput" class="input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="new_member_secret" placeholder="6 أحرف فأكثر" required />
             </div>
             <div class="switch-row" style="margin-bottom:14px;">
               <div>
@@ -350,11 +350,11 @@
             </div>
             <div class="field">
               <label>بريد مدير الورشة</label>
-              <input type="email" id="wsAdminEmail" class="input" dir="ltr" placeholder="owner@shop.com" required />
+              <input type="email" id="wsAdminEmail" class="input" dir="ltr" autocomplete="off" data-lpignore="true" data-form-type="other" name="new_ws_admin_mail" placeholder="owner@shop.com" required />
             </div>
             <div class="field">
               <label>كلمة المرور (6 أحرف فأكثر)</label>
-              <input type="text" id="wsAdminPass" class="input" dir="ltr" minlength="6" placeholder="6 أحرف فأكثر" required />
+              <input type="text" id="wsAdminPass" class="input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="new_ws_admin_secret" placeholder="6 أحرف فأكثر" required />
             </div>
             <button type="submit" id="addWorkshopSubmitBtn" class="btn btn-primary">إنشاء الورشة وحساب مديرها</button>
           </form>
@@ -404,11 +404,11 @@
 
           <div class="field">
             <label>اسم المحل</label>
-            <input type="text" id="setShopName" class="input" placeholder="مركز الدمشقي للصيانة" />
+            <input type="text" id="setShopName" class="input" autocomplete="off" data-lpignore="true" data-form-type="other" name="shop_title_cfg" placeholder="مركز الدمشقي للصيانة" />
           </div>
           <div class="field">
             <label>العنوان</label>
-            <input type="text" id="setShopAddress" class="input" placeholder="مثال: دمشق - ..." />
+            <input type="text" id="setShopAddress" class="input" autocomplete="off" data-lpignore="true" data-form-type="other" name="shop_loc_cfg" placeholder="مثال: دمشق - ..." />
           </div>
           <div class="field" style="margin-bottom:0;">
             <label>أرقام هواتف المحل (تظهر في كشف PDF وواتساب)</label>
@@ -436,7 +436,7 @@
             <div id="shamCashFields" class="hidden">
               <div class="field" style="margin-bottom:0;">
                 <label>كود / رقم حساب شام كاش</label>
-                <input type="text" id="setShamCashCode" class="input" dir="ltr" placeholder="أدخل كود شام كاش هنا" />
+                <input type="text" id="setShamCashCode" class="input" dir="ltr" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="sham_code_cfg" placeholder="أدخل كود شام كاش هنا" />
                 <div class="field-hint">يظهر الكود بجانب عبارة "شام كاش" كنص حقيقي قابل للتحديد والنسخ مباشرة من داخل ملف PDF.</div>
               </div>
             </div>
@@ -577,7 +577,7 @@
         <div id="lockSettingsFields" class="hidden" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
           <div class="field">
             <label>الرمز السري (PIN)</label>
-            <input type="tel" id="setPinInput" class="input" maxlength="6" placeholder="أدخل الرمز السري" />
+            <input type="tel" id="setPinInput" class="input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" data-lpignore="true" data-form-type="other" name="device_pin_cfg" placeholder="أدخل الرمز السري" />
           </div>
           <div class="switch-row">
             <div>
@@ -589,7 +589,7 @@
         </div>
       </div>
 
-      <!-- درج النسخ الاحتياطي (Google Drive والجوال) -->
+      <!-- درج النسخ الاحتياطي (Google Drive يدوي + الجوال) -->
       <div id="backupSettingsDrawer" class="settings-drawer">
         <button type="button" class="settings-drawer-toggle" onclick="toggleSettingsDrawer('backupSettingsDrawer')">
           <span class="settings-drawer-left">
@@ -598,7 +598,7 @@
             </span>
             <div>
               <div class="settings-drawer-title">النسخ الاحتياطي (Google Drive والجوال)</div>
-              <div class="settings-drawer-sub">مزامنة يومية الساعة 12 ليلاً + حفظ نسخة على الجوال</div>
+              <div class="settings-drawer-sub">الحفظ يدوي على Google Drive + حفظ نسخة على الجوال</div>
             </div>
           </span>
           <svg class="ic ic-sm settings-drawer-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
@@ -606,28 +606,25 @@
 
         <div class="settings-drawer-body">
           <div id="driveAdminConfigWrap">
-            <div class="field">
-              <label>بريد حساب Google Drive (للنسخ الاحتياطي)</label>
-              <input type="email" id="setDriveEmail" class="input" dir="ltr" placeholder="yourname@gmail.com" />
+            <div class="manual-drive-badge">
+              <span class="manual-drive-pill">حفظ يدوي</span>
+              <span>الحفظ على Google Drive يدوي فقط — يتم الرفع عند ضغط الزر بالأسفل ولا يُحفظ تلقائياً</span>
             </div>
 
             <div class="field">
-              <label>رابط ربط Google Drive (سكربت النسخ الاحتياطي)</label>
-              <input type="url" id="setDriveScriptUrl" class="input" dir="ltr" placeholder="https://script.google.com/macros/s/.../exec" />
-              <div class="field-hint">يحفظ نسخة كاملة (JSON + ملف Excel) داخل مجلد «نسخ احتياطي - دفتر الديون» على حسابك في Google Drive.</div>
+              <label>بريد حساب Google Drive (اختياري للتوثيق)</label>
+              <input type="text" id="setDriveEmail" class="input" dir="ltr" inputmode="email" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="drive_target_mail" placeholder="yourname@gmail.com" />
             </div>
 
-            <div class="switch-row" style="margin-bottom:12px;">
-              <div>
-                <div style="font-size:13.5px;font-weight:700;">نسخ احتياطي يومي تلقائي (بعد 12:00 ليلاً)</div>
-                <div style="font-size:11.5px;color:var(--muted);">يرفع نسخة تلقائياً إلى Google Drive ويحفظ نسخة يومية على الجوال</div>
-              </div>
-              <input type="checkbox" id="setAutoDailyBackup" />
+            <div class="field">
+              <label>رابط ربط Google Drive (سكربت الحفظ اليدوي)</label>
+              <input type="url" id="setDriveScriptUrl" class="input" dir="ltr" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="drive_script_endpoint" placeholder="https://script.google.com/macros/s/.../exec" />
+              <div class="field-hint">يحفظ نسخة كاملة (JSON + ملف Excel) يدوياً داخل مجلد «نسخ احتياطي - دفتر الديون» على الإيميل المرتبط بالرابط.</div>
             </div>
 
-            <button type="button" id="backupDriveNowBtn" class="btn btn-primary" style="margin-bottom:9px;" onclick="backupToGoogleDriveNow(false)">
+            <button type="button" id="backupDriveNowBtn" class="btn btn-primary" style="margin-bottom:9px;" onclick="backupToGoogleDriveNow()">
               <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span>نسخ احتياطي إلى Google Drive الآن</span>
+              <span>حفظ يدوي على Google Drive الآن</span>
             </button>
           </div>
 
@@ -666,9 +663,10 @@
 
         <div class="field">
           <label>تغيير كلمة مرور حسابك</label>
-          <div style="display:flex;gap:8px;">
-            <input type="password" id="setNewPassInput" class="input" dir="ltr" minlength="6" placeholder="كلمة مرور جديدة (6 أحرف فأكثر)" />
-            <button type="button" class="btn btn-light btn-sm" style="white-space:nowrap;" onclick="changeMyPassword()">تحديث</button>
+          <div style="display:flex;gap:7px;align-items:center;">
+            <input type="text" id="setNewPassInput" class="input masked-pass-input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="account_new_secret_val" placeholder="كلمة مرور جديدة (6 أحرف فأكثر)" />
+            <button type="button" class="btn btn-light btn-sm" id="toggleMyPassVisBtn" title="إظهار / إخفاء" onclick="toggleMaskedInput('setNewPassInput', this)">إظهار</button>
+            <button type="button" class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="changeMyPassword()">تحديث</button>
           </div>
         </div>
 
@@ -696,7 +694,7 @@
 
       <div class="field">
         <label>رقم الهاتف (اختياري)</label>
-        <input type="tel" id="txPhone" class="input" placeholder="09xxxxxxxx" />
+        <input type="tel" id="txPhone" class="input" inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="cust_phone_tx" placeholder="09xxxxxxxx" />
       </div>
 
       <div class="field">
@@ -745,22 +743,33 @@
       </div>
       <div class="field">
         <label>رقم الهاتف</label>
-        <input type="tel" id="editCustPhoneInput" class="input" placeholder="09xxxxxxxx" />
+        <input type="tel" id="editCustPhoneInput" class="input" inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="cust_phone_edit" placeholder="09xxxxxxxx" />
       </div>
       <button class="btn btn-primary" onclick="saveCustomerEdit()">حفظ التعديل</button>
     </div>
   </div>
 
-  <!-- ==================== نافذة تعديل الورشة ==================== -->
+  <!-- ==================== نافذة تعديل الورشة وبيانات مديرها ==================== -->
   <div class="modal-backdrop" id="editWorkshopModal">
-    <div class="modal-sheet" style="max-width:420px;">
+    <div class="modal-sheet" style="max-width:440px;">
       <div class="sheet-head">
-        <h3>تعديل بيانات الورشة</h3>
+        <h3>تعديل الورشة وبيانات المدير</h3>
         <button class="close-btn" onclick="closeModal('editWorkshopModal')">✕</button>
       </div>
       <div class="field">
         <label>اسم الورشة</label>
-        <input type="text" id="editWsNameInput" class="input" placeholder="اكتب اسم الورشة" />
+        <input type="text" id="editWsNameInput" class="input" autocomplete="off" data-lpignore="true" placeholder="اكتب اسم الورشة" />
+      </div>
+      <div id="editWsCredsWrap">
+        <div class="field">
+          <label>إيميل مدير الورشة</label>
+          <input type="text" id="editWsEmailInput" class="input" dir="ltr" inputmode="email" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="ws_mgr_email_edit" placeholder="owner@shop.com" />
+        </div>
+        <div class="field">
+          <label>كلمة مرور مدير الورشة (6 أحرف فأكثر)</label>
+          <input type="text" id="editWsPassInput" class="input" dir="ltr" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="ws_mgr_pass_edit" placeholder="اتركها كما هي أو اكتب كلمة مرور جديدة" />
+          <div class="field-hint">تغيير الإيميل أو كلمة المرور هنا يطبّق مباشرةً على حساب مدير الورشة، كما يظهر التحديث عندك لو غيّرها المدير من حسابه.</div>
+        </div>
       </div>
       <button class="btn btn-primary" id="saveWsEditBtn" onclick="saveWorkshopEdit()">حفظ التعديل</button>
     </div>

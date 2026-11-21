@@ -1122,3 +1122,90 @@ textarea.input { resize: vertical; min-height: 68px; }
   gap: 5px;
   flex-shrink: 0;
 }
+
+/* ==================== الحفظ اليدوي على Drive + إخفاء الإكمال التلقائي + بيانات دخول المدير ==================== */
+.masked-pass-input {
+  -webkit-text-security: disc;
+}
+.masked-pass-input.revealed {
+  -webkit-text-security: none;
+}
+
+.manual-drive-badge {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  border-radius: 11px;
+  padding: 9px 11px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.5;
+}
+.manual-drive-pill {
+  background: #1d4ed8;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ws-creds-box {
+  margin-top: 9px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ws-cred-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.ws-cred-lbl {
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ws-cred-val {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  color: var(--text);
+  direction: ltr;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-cred-val.unset {
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--muted);
+  direction: rtl;
+  text-align: right;
+}
+.ws-cred-mini-btn {
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: #334155;
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ws-cred-mini-btn:active { background: #f1f5f9; }
