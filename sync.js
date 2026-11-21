@@ -24,6 +24,35 @@ const CURRENCIES = {
 
 const DEVICE_SETTINGS_KEY = 'debt_device_settings_sb_v1';
 
+const DEFAULT_WA_CONFIG = {
+  showShopName: true,
+  showGreeting: true,
+  greetingText: 'السلام عليكم',
+  showLatestTx: true,
+  debtIntroText: 'تم تسجيل دين جديد على حسابك:',
+  payIntroText: 'تم تسجيل دفعة جديدة في حسابك:',
+  showTxNote: true,
+  showTxDate: true,
+  showSummary: true,
+  summaryTitleText: 'ملخص حسابك حتى تاريخ',
+  showTotalDebt: true,
+  showTotalPay: true,
+  showBalance: true,
+  showShamCash: true,
+  shamCashLabel: 'شام كاش:',
+  showGeneralNote: true,
+  showContactInfo: true,
+  showCustomNote: false,
+  customNoteText: ''
+};
+
+const DEFAULT_BACKUP_CONFIG = {
+  driveEmail: '',
+  driveScriptUrl: '',
+  autoDailyEnabled: true,
+  lastDriveBackupAt: ''
+};
+
 let settings = {
   shopName: 'مركز الدمشقي للصيانة',
   shopAddress: '',
@@ -33,6 +62,8 @@ let settings = {
   generalNote: '',
   shamCashEnabled: false,
   shamCashCode: '',
+  waConfig: { ...DEFAULT_WA_CONFIG },
+  backupConfig: { ...DEFAULT_BACKUP_CONFIG },
   currency: 'BOTH',
   whatsappApp: 'normal',
   lockEnabled: false,
@@ -141,6 +172,8 @@ function applyWorkshopSettingsToState(ws) {
   settings.generalNote = s.generalNote || '';
   settings.shamCashEnabled = !!s.shamCashEnabled;
   settings.shamCashCode = s.shamCashCode || '';
+  settings.waConfig = { ...DEFAULT_WA_CONFIG, ...(s.waConfig && typeof s.waConfig === 'object' ? s.waConfig : {}) };
+  settings.backupConfig = { ...DEFAULT_BACKUP_CONFIG, ...(s.backupConfig && typeof s.backupConfig === 'object' ? s.backupConfig : {}) };
   settings.currency = (s.currency === 'USD' || s.currency === 'SYP' || s.currency === 'BOTH') ? s.currency : 'BOTH';
 }
 
@@ -329,6 +362,8 @@ function applyPermissionsUI() {
   document.getElementById('detailDeleteCustomerBtn').classList.toggle('hidden', !canDeleteRecords());
   document.getElementById('workshopAdminSettingsWrap').classList.toggle('hidden', !isAdmin());
   document.getElementById('currencySettingField').classList.toggle('hidden', !isAdmin());
+  document.getElementById('driveAdminConfigWrap')?.classList.toggle('hidden', !isAdmin());
+  document.getElementById('restoreBackupWrap')?.classList.toggle('hidden', !isAdmin());
 }
 
 async function handleLogout() {
@@ -589,6 +624,7 @@ async function syncData(silent) {
 
     const now = new Date().toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' });
     updateSyncStatusUI(`متصل ومُزامن (${now})`, 'ok');
+    if (typeof checkAndRunDailyBackups === 'function') checkAndRunDailyBackups();
 
     if (currentCustomerName && document.getElementById('detailView').classList.contains('open')) {
       renderCustomerDetail(currentCustomerName);

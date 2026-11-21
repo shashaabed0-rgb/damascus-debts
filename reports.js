@@ -1,4 +1,4 @@
-// ==================== واتساب (عادي أو أعمال) مع دعم العملتين وإعلام العميل بالدين الجديد ====================
+// ==================== واتساب (عادي أو أعمال) حسب تخصيص المستخدم ====================
 function formatPhoneForWa(rawPhone) {
   let p = String(rawPhone || '').replace(/[^\d]/g, '');
   if (p.startsWith('00')) p = p.slice(2);
@@ -25,11 +25,8 @@ function getActiveCurrenciesForReport(cust) {
   return withAny.length > 0 ? [withAny[0]] : [enabled[0]];
 }
 
-function sendWhatsApp(specificTx = null, customerNameOverride = null) {
-  const targetName = customerNameOverride || currentCustomerName;
-  const cust = groupedCustomers.find(c => c.name === targetName);
-  if (!cust) return;
-
+function buildWhatsAppMessageText(cust, specificTx = null, waCfgOverride = null) {
+  const cfg = { ...DEFAULT_WA_CONFIG, ...(waCfgOverride || settings.waConfig || {}) };
   const activeCodes = getActiveCurrenciesForReport(cust);
 
   let latestTx = specificTx;
@@ -40,68 +37,100 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
   }
 
   const lines = [];
-  if (settings.shopName) lines.push(`*${settings.shopName}*`);
-  lines.push(`السلام عليكم ${cust.name}،`);
+  if (cfg.showShopName && settings.shopName) {
+    lines.push(`*${settings.shopName}*`);
+  }
 
-  if (latestTx) {
+  if (cfg.showGreeting) {
+    const greet = (cfg.greetingText || 'السلام عليكم').trim();
+    lines.push(`${greet} ${cust.name}،`);
+  }
+
+  if (cfg.showLatestTx && latestTx) {
     const txIsPay = latestTx.kind ? (latestTx.kind === 'pay') : isPayType(latestTx.type);
     const txCode = latestTx.currency || getRecordCurrency(latestTx);
     const txUnit = getCurrencyUnitWord(txCode);
     const txNote = String(latestTx.note || '').trim();
     const txDate = formatDate(latestTx.date || todayString());
+
     if (txIsPay) {
-      lines.push(`تم تسجيل *دفعة جديدة* في حسابك:`);
+      const intro = (cfg.payIntroText || 'تم تسجيل دفعة جديدة في حسابك:').trim();
+      lines.push(intro);
       lines.push(`• مبلغ الدفعة: ${formatNum(latestTx.amount)} ${txUnit}`);
     } else {
-      lines.push(`تم تسجيل *دين جديد* على حسابك:`);
+      const intro = (cfg.debtIntroText || 'تم تسجيل دين جديد على حسابك:').trim();
+      lines.push(intro);
       lines.push(`• مبلغ الدين: ${formatNum(latestTx.amount)} ${txUnit}`);
     }
-    if (txNote) {
+    if (cfg.showTxNote && txNote) {
       lines.push(`• البيان: ${txNote}`);
     }
-    lines.push(`• التاريخ: ${txDate}`);
-    lines.push(`----------------`);
+    if (cfg.showTxDate) {
+      lines.push(`• التاريخ: ${txDate}`);
+    }
   }
 
-  lines.push(`ملخص حسابك حتى تاريخ ${todayString()}:`);
+  if (cfg.showSummary && (cfg.showTotalDebt || cfg.showTotalPay || cfg.showBalance)) {
+    if (lines.length > 0 && cfg.showLatestTx && latestTx) lines.push(`----------------`);
+    const sumTitle = (cfg.summaryTitleText || 'ملخص حسابك حتى تاريخ').trim();
+    lines.push(`${sumTitle} ${todayString()}:`);
 
-  if (activeCodes.length === 1) {
-    const code = activeCodes[0];
-    const info = cust.byCurrency[code];
-    const unit = getCurrencyUnitWord(code);
-    lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${unit}`);
-    lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${unit}`);
-    lines.push(`• ${formatBalanceWaLine(info.balance, code)}`);
-  } else {
-    activeCodes.forEach(code => {
+    if (activeCodes.length === 1) {
+      const code = activeCodes[0];
       const info = cust.byCurrency[code];
       const unit = getCurrencyUnitWord(code);
-      lines.push('');
-      lines.push(`*حساب ${unit}:*`);
-      lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${unit}`);
-      lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${unit}`);
-      lines.push(`• ${formatBalanceWaLine(info.balance, code)}`);
-    });
+      if (cfg.showTotalDebt) lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${unit}`);
+      if (cfg.showTotalPay) lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${unit}`);
+      if (cfg.showBalance) lines.push(`• ${formatBalanceWaLine(info.balance, code)}`);
+    } else {
+      activeCodes.forEach(code => {
+        const info = cust.byCurrency[code];
+        const unit = getCurrencyUnitWord(code);
+        lines.push('');
+        lines.push(`*حساب ${unit}:*`);
+        if (cfg.showTotalDebt) lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${unit}`);
+        if (cfg.showTotalPay) lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${unit}`);
+        if (cfg.showBalance) lines.push(`• ${formatBalanceWaLine(info.balance, code)}`);
+      });
+    }
   }
 
-  if (settings.shamCashEnabled && (settings.shamCashCode || '').trim()) {
+  if (cfg.showShamCash && settings.shamCashEnabled && (settings.shamCashCode || '').trim()) {
+    const shamLbl = (cfg.shamCashLabel || 'شام كاش:').trim();
     lines.push(`----------------`);
-    lines.push(`شام كاش: ${settings.shamCashCode.trim()}`);
+    lines.push(`${shamLbl} ${settings.shamCashCode.trim()}`);
   }
-  if ((settings.generalNote || '').trim()) {
+
+  if (cfg.showGeneralNote && (settings.generalNote || '').trim()) {
     lines.push(`----------------`);
     lines.push(settings.generalNote.trim());
   }
 
-  const phones = getShopPhonesList();
-  const footerParts = [];
-  if (settings.shopAddress) footerParts.push(settings.shopAddress);
-  if (phones.length > 0) footerParts.push(phones.join(' / '));
-  if (footerParts.length > 0) {
-    lines.push(footerParts.join(' - '));
+  if (cfg.showCustomNote && (cfg.customNoteText || '').trim()) {
+    lines.push(`----------------`);
+    lines.push(cfg.customNoteText.trim());
   }
 
-  const msg = encodeURIComponent(lines.join('\n'));
+  if (cfg.showContactInfo) {
+    const phones = getShopPhonesList();
+    const footerParts = [];
+    if (settings.shopAddress) footerParts.push(settings.shopAddress);
+    if (phones.length > 0) footerParts.push(phones.join(' / '));
+    if (footerParts.length > 0) {
+      lines.push(footerParts.join(' - '));
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function sendWhatsApp(specificTx = null, customerNameOverride = null) {
+  const targetName = customerNameOverride || currentCustomerName;
+  const cust = groupedCustomers.find(c => c.name === targetName);
+  if (!cust) return;
+
+  const text = buildWhatsAppMessageText(cust, specificTx);
+  const msg = encodeURIComponent(text);
   const phone = formatPhoneForWa(cust.phone);
   const fallbackUrl = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
 

@@ -1151,6 +1151,9 @@ function openSettingsView() {
   document.getElementById('setGeneralNote').value = settings.generalNote || '';
   document.getElementById('setShamCashToggle').checked = !!settings.shamCashEnabled;
   document.getElementById('setShamCashCode').value = settings.shamCashCode || '';
+  populateWaSettingsDrawer();
+  populateBackupSettingsDrawer();
+
   document.getElementById('setLockToggle').checked = !!settings.lockEnabled;
   document.getElementById('setPinInput').value = settings.pin || '';
   document.getElementById('setNewPassInput').value = '';
@@ -1279,6 +1282,13 @@ async function saveSettings() {
     settings.generalNote = document.getElementById('setGeneralNote').value.trim();
     settings.shamCashEnabled = document.getElementById('setShamCashToggle').checked;
     settings.shamCashCode = document.getElementById('setShamCashCode').value.trim();
+    settings.waConfig = readWaConfigFromForm();
+    settings.backupConfig = {
+      ...(settings.backupConfig || DEFAULT_BACKUP_CONFIG),
+      driveEmail: document.getElementById('setDriveEmail').value.trim(),
+      driveScriptUrl: document.getElementById('setDriveScriptUrl').value.trim(),
+      autoDailyEnabled: document.getElementById('setAutoDailyBackup').checked
+    };
     settings.currency = tempSettingsCurrency;
 
     const wsSettingsObj = {
@@ -1290,7 +1300,10 @@ async function saveSettings() {
       generalNote: settings.generalNote,
       shamCashEnabled: settings.shamCashEnabled,
       shamCashCode: settings.shamCashCode,
-      currency: settings.currency
+      waConfig: settings.waConfig,
+      backupConfig: settings.backupConfig,
+      currency: settings.currency,
+      frozen: Boolean(currentWorkshop && currentWorkshop.settings && currentWorkshop.settings.frozen)
     };
 
     if (currentWorkshop) {
@@ -1333,6 +1346,424 @@ document.querySelectorAll('.modal-backdrop').forEach(el => {
   });
 });
 
+
+
+
+
+// ==================== أدراج الضبط وتخصيص رسالة واتساب ====================
+function toggleSettingsDrawer(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('open');
+  if (id === 'waSettingsDrawer' && el.classList.contains('open')) {
+    updateWaLivePreview();
+  }
+  if (id === 'backupSettingsDrawer' && el.classList.contains('open')) {
+    renderLocalSnapshotsUI();
+    updateBackupStatusUI();
+  }
+}
+
+function populateWaSettingsDrawer() {
+  const cfg = { ...DEFAULT_WA_CONFIG, ...(settings.waConfig || {}) };
+  document.getElementById('waOptShopName').checked = !!cfg.showShopName;
+  document.getElementById('waOptGreeting').checked = !!cfg.showGreeting;
+  document.getElementById('waTxtGreeting').value = cfg.greetingText || 'السلام عليكم';
+  document.getElementById('waOptLatestTx').checked = !!cfg.showLatestTx;
+  document.getElementById('waTxtDebtIntro').value = cfg.debtIntroText || 'تم تسجيل دين جديد على حسابك:';
+  document.getElementById('waTxtPayIntro').value = cfg.payIntroText || 'تم تسجيل دفعة جديدة في حسابك:';
+  document.getElementById('waOptTxNote').checked = !!cfg.showTxNote;
+  document.getElementById('waOptTxDate').checked = !!cfg.showTxDate;
+  document.getElementById('waOptSummary').checked = !!cfg.showSummary;
+  document.getElementById('waTxtSummaryTitle').value = cfg.summaryTitleText || 'ملخص حسابك حتى تاريخ';
+  document.getElementById('waOptTotalDebt').checked = !!cfg.showTotalDebt;
+  document.getElementById('waOptTotalPay').checked = !!cfg.showTotalPay;
+  document.getElementById('waOptBalance').checked = !!cfg.showBalance;
+  document.getElementById('waOptShamCash').checked = !!cfg.showShamCash;
+  document.getElementById('waTxtShamLabel').value = cfg.shamCashLabel || 'شام كاش:';
+  document.getElementById('waOptGeneralNote').checked = !!cfg.showGeneralNote;
+  document.getElementById('waOptContactInfo').checked = !!cfg.showContactInfo;
+  document.getElementById('waOptCustomNote').checked = !!cfg.showCustomNote;
+  document.getElementById('waTxtCustomNote').value = cfg.customNoteText || '';
+  toggleWaSubOptions();
+  updateWaLivePreview();
+}
+
+function toggleWaSubOptions() {
+  document.getElementById('waLatestTxSub').classList.toggle('hidden', !document.getElementById('waOptLatestTx').checked);
+  document.getElementById('waSummarySub').classList.toggle('hidden', !document.getElementById('waOptSummary').checked);
+}
+
+function readWaConfigFromForm() {
+  return {
+    showShopName: document.getElementById('waOptShopName').checked,
+    showGreeting: document.getElementById('waOptGreeting').checked,
+    greetingText: document.getElementById('waTxtGreeting').value.trim() || 'السلام عليكم',
+    showLatestTx: document.getElementById('waOptLatestTx').checked,
+    debtIntroText: document.getElementById('waTxtDebtIntro').value.trim() || 'تم تسجيل دين جديد على حسابك:',
+    payIntroText: document.getElementById('waTxtPayIntro').value.trim() || 'تم تسجيل دفعة جديدة في حسابك:',
+    showTxNote: document.getElementById('waOptTxNote').checked,
+    showTxDate: document.getElementById('waOptTxDate').checked,
+    showSummary: document.getElementById('waOptSummary').checked,
+    summaryTitleText: document.getElementById('waTxtSummaryTitle').value.trim() || 'ملخص حسابك حتى تاريخ',
+    showTotalDebt: document.getElementById('waOptTotalDebt').checked,
+    showTotalPay: document.getElementById('waOptTotalPay').checked,
+    showBalance: document.getElementById('waOptBalance').checked,
+    showShamCash: document.getElementById('waOptShamCash').checked,
+    shamCashLabel: document.getElementById('waTxtShamLabel').value.trim() || 'شام كاش:',
+    showGeneralNote: document.getElementById('waOptGeneralNote').checked,
+    showContactInfo: document.getElementById('waOptContactInfo').checked,
+    showCustomNote: document.getElementById('waOptCustomNote').checked,
+    customNoteText: document.getElementById('waTxtCustomNote').value.trim()
+  };
+}
+
+function updateWaLivePreview() {
+  const el = document.getElementById('waLivePreview');
+  if (!el) return;
+  const cfg = readWaConfigFromForm();
+  const sampleCust = {
+    name: 'أبو محمد',
+    phone: '0999000000',
+    byCurrency: {
+      USD: {
+        activeRecords: [{ date: todayString(), kind: 'debt', currency: 'USD', amount: 25, note: 'صيانة انفرتر' }],
+        allRecords: [{ date: todayString(), kind: 'debt', currency: 'USD', amount: 25, note: 'صيانة انفرتر' }],
+        totalDebt: 50,
+        totalPay: 10,
+        balance: 40
+      },
+      SYP: {
+        activeRecords: [],
+        allRecords: [],
+        totalDebt: 0,
+        totalPay: 0,
+        balance: 0
+      }
+    },
+    activeRecords: [{ date: todayString(), kind: 'debt', currency: 'USD', amount: 25, note: 'صيانة انفرتر' }],
+    records: [{ date: todayString(), kind: 'debt', currency: 'USD', amount: 25, note: 'صيانة انفرتر' }]
+  };
+  const previewText = buildWhatsAppMessageText(sampleCust, sampleCust.activeRecords[0], cfg);
+  el.textContent = previewText || '(الرسالة فارغة — يرجى تفعيل خيار واحد على الأقل)';
+}
+
+// ==================== النسخ الاحتياطي (Google Drive + النسخ اليومي على الجوال) ====================
+let isDriveBackingUp = false;
+
+function getLocalSnapshotsKey() {
+  return wsKey('daily_snaps_v1');
+}
+
+function getLocalSnapshots() {
+  try {
+    return JSON.parse(localStorage.getItem(getLocalSnapshotsKey()) || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveLocalSnapshots(list) {
+  try {
+    localStorage.setItem(getLocalSnapshotsKey(), JSON.stringify(list.slice(0, 7)));
+  } catch (e) {}
+}
+
+function buildBackupPayloadObject() {
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    backupDate: todayString(),
+    workshopId: currentProfile ? currentProfile.workshop_id : '',
+    shopName: settings.shopName || 'دفتر الديون',
+    driveEmail: (settings.backupConfig && settings.backupConfig.driveEmail) || '',
+    totalRecords: allRecords.length,
+    totalCustomers: groupedCustomers.length,
+    records: allRecords.map(r => ({
+      id: String(r.id),
+      date: formatDate(r.date),
+      name: String(r.name || '').trim(),
+      phone: String(r.phone || '').trim(),
+      type: String(r.type || ''),
+      amount: Number(r.amount) || 0,
+      note: String(r.note || '').trim(),
+      created_by: String(r.created_by || '')
+    }))
+  };
+}
+
+function buildBackupCsvText(recordsArr) {
+  const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const headers = ['المعرف', 'التاريخ', 'اسم الزبون', 'رقم الهاتف', 'النوع', 'المبلغ', 'الملاحظة', 'المُدخل'];
+  const rows = (recordsArr || []).map(r => [
+    r.id,
+    formatDate(r.date),
+    r.name || '',
+    r.phone || '',
+    r.type || '',
+    r.amount || 0,
+    r.note || '',
+    r.created_by || ''
+  ].map(esc).join(','));
+  return '\uFEFF' + [headers.map(esc).join(','), ...rows].join('\r\n');
+}
+
+function triggerFileDownload(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function downloadLocalJsonBackup(customRecords = null, customDate = null) {
+  const payload = buildBackupPayloadObject();
+  if (customRecords) {
+    payload.records = customRecords;
+    payload.totalRecords = customRecords.length;
+  }
+  const datePart = (customDate || todayString()).replace(/\//g, '-');
+  const safeShop = (settings.shopName || 'دفتر_الديون').replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '').trim() || 'دفتر_الديون';
+  const fileName = `نسخة_احتياطية_${safeShop}_${datePart}.json`;
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+  triggerFileDownload(blob, fileName);
+  showToast('تم حفظ النسخة الاحتياطية على الجوال ✓');
+}
+
+function downloadLocalCsvBackup(customRecords = null, customDate = null) {
+  const recs = customRecords || allRecords;
+  const csv = buildBackupCsvText(recs);
+  const datePart = (customDate || todayString()).replace(/\//g, '-');
+  const safeShop = (settings.shopName || 'دفتر_الديون').replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '').trim() || 'دفتر_الديون';
+  const fileName = `دفتر_الديون_${safeShop}_${datePart}.csv`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  triggerFileDownload(blob, fileName);
+  showToast('تم تصدير ملف Excel (CSV) على الجوال ✓');
+}
+
+function saveDailyLocalSnapshot(force = false) {
+  if (!currentProfile || allRecords.length === 0) return false;
+  const today = todayString();
+  const snaps = getLocalSnapshots();
+  const existingIdx = snaps.findIndex(s => s.date === today);
+  if (existingIdx !== -1 && !force) return false;
+
+  const snapEntry = {
+    date: today,
+    savedAt: new Date().toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' }),
+    count: allRecords.length,
+    records: buildBackupPayloadObject().records
+  };
+
+  if (existingIdx !== -1) snaps[existingIdx] = snapEntry;
+  else snaps.unshift(snapEntry);
+
+  saveLocalSnapshots(snaps);
+  return true;
+}
+
+function populateBackupSettingsDrawer() {
+  const bCfg = { ...DEFAULT_BACKUP_CONFIG, ...(settings.backupConfig || {}) };
+  const emailEl = document.getElementById('setDriveEmail');
+  const urlEl = document.getElementById('setDriveScriptUrl');
+  const autoEl = document.getElementById('setAutoDailyBackup');
+  if (emailEl) emailEl.value = bCfg.driveEmail || '';
+  if (urlEl) urlEl.value = bCfg.driveScriptUrl || '';
+  if (autoEl) autoEl.checked = bCfg.autoDailyEnabled !== false;
+  updateBackupStatusUI();
+  renderLocalSnapshotsUI();
+}
+
+function updateBackupStatusUI() {
+  const box = document.getElementById('backupStatusSummary');
+  if (!box) return;
+  const bCfg = { ...DEFAULT_BACKUP_CONFIG, ...(settings.backupConfig || {}) };
+  const lastDriveLocal = localStorage.getItem(wsKey('last_drive_backup_at')) || bCfg.lastDriveBackupAt || '';
+  const snaps = getLocalSnapshots();
+  const lastSnapTxt = snaps.length > 0 ? `${snaps[0].date} (${snaps[0].savedAt}) — ${snaps[0].count} حركة` : 'لا توجد بعد';
+  const driveTxt = lastDriveLocal ? lastDriveLocal : 'لم يتم الرفع بعد';
+  const emailLine = bCfg.driveEmail ? `<div><strong>حساب Google Drive:</strong> <span dir="ltr">${escapeHtml(bCfg.driveEmail)}</span></div>` : '';
+  box.innerHTML = `
+    ${emailLine}
+    <div><strong>آخر حفظ على Google Drive:</strong> ${escapeHtml(driveTxt)}</div>
+    <div><strong>آخر نسخة يومية على الجوال:</strong> ${escapeHtml(lastSnapTxt)}</div>
+  `;
+}
+
+function renderLocalSnapshotsUI() {
+  const listEl = document.getElementById('localSnapsList');
+  const countEl = document.getElementById('localSnapsCount');
+  if (!listEl || !countEl) return;
+  const snaps = getLocalSnapshots();
+  countEl.textContent = `${snaps.length} نسخة`;
+  if (snaps.length === 0) {
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:12px;">سيتم حفظ نسخة يومية تلقائياً على الجوال عند توفر حركات.</div>';
+    return;
+  }
+  listEl.innerHTML = snaps.map((s, idx) => `
+    <div class="snap-row">
+      <div class="snap-info">
+        <strong>نسخة ${escapeHtml(s.date)}</strong>
+        <span>الساعة ${escapeHtml(s.savedAt)} • ${s.count} حركة</span>
+      </div>
+      <div class="snap-btns">
+        <button type="button" class="btn btn-light btn-sm" onclick="downloadSnapshotByIndex(${idx})">تحميل</button>
+        ${isAdmin() ? `<button type="button" class="btn btn-wa btn-sm" onclick="restoreSnapshotByIndex(${idx})">استعادة</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function downloadSnapshotByIndex(idx) {
+  const snaps = getLocalSnapshots();
+  const snap = snaps[idx];
+  if (!snap) return;
+  downloadLocalJsonBackup(snap.records, snap.date);
+}
+
+async function restoreSnapshotByIndex(idx) {
+  if (!isAdmin()) return showToast('الاستعادة مخصصة للمدير فقط');
+  const snaps = getLocalSnapshots();
+  const snap = snaps[idx];
+  if (!snap || !Array.isArray(snap.records)) return;
+  if (!confirm(`هل تريد استعادة نسخة تاريخ ${snap.date} (${snap.records.length} حركة) ودمجها مع السحابة؟`)) return;
+  await restoreRecordsArray(snap.records);
+}
+
+async function handleRestoreBackupFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  if (!isAdmin()) return showToast('الاستعادة مخصصة للمدير فقط');
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const recs = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.records) ? parsed.records : null);
+    if (!recs || recs.length === 0) {
+      return showToast('الملف لا يحتوي على سجلات صالحة للاستعادة');
+    }
+    if (!confirm(`تم العثور على ${recs.length} حركة داخل الملف. هل تريد استعادتها ومزامنتها مع السحابة؟`)) return;
+    await restoreRecordsArray(recs);
+  } catch (err) {
+    showToast('ملف النسخة الاحتياطية غير صالح');
+  }
+}
+
+async function restoreRecordsArray(recs) {
+  let restoredCount = 0;
+  const existingMap = new Map(allRecords.map(r => [String(r.id), r]));
+  recs.forEach((raw, i) => {
+    if (!raw || !raw.name) return;
+    const rec = toDbRecord({
+      id: raw.id || genId(i),
+      date: formatDate(raw.date || todayString()),
+      name: raw.name,
+      phone: raw.phone || '',
+      type: raw.type || 'دين ($)',
+      amount: Number(raw.amount) || 0,
+      note: raw.note || '',
+      created_by: raw.created_by || currentProfile.display_name || ''
+    });
+    existingMap.set(String(rec.id), rec);
+    queueUpsertRecord(rec);
+    restoredCount++;
+  });
+  allRecords = Array.from(existingMap.values());
+  persistData();
+  processAndRender();
+  saveDailyLocalSnapshot(true);
+  renderLocalSnapshotsUI();
+  updateBackupStatusUI();
+  triggerSyncOrOfflineToast(
+    `تمت استعادة ${restoredCount} حركة، جاري المزامنة مع السحابة...`,
+    `تمت استعادة ${restoredCount} حركة محلياً (ستُزامن عند عودة الإنترنت)`
+  );
+}
+
+async function backupToGoogleDriveNow(silent = false) {
+  if (isDriveBackingUp || !currentProfile) return;
+  const inputUrlEl = document.getElementById('setDriveScriptUrl');
+  const scriptUrl = (inputUrlEl && document.getElementById('settingsView').classList.contains('open')
+    ? inputUrlEl.value.trim()
+    : ((settings.backupConfig && settings.backupConfig.driveScriptUrl) || '').trim());
+
+  if (!scriptUrl || !scriptUrl.toLowerCase().startsWith('http')) {
+    if (!silent) showToast('يرجى إدخال رابط سكربت Google Drive أولاً');
+    return;
+  }
+  if (!navigator.onLine) {
+    if (!silent) showToast('يلزم الاتصال بالإنترنت للنسخ إلى Google Drive');
+    return;
+  }
+
+  const btn = document.getElementById('backupDriveNowBtn');
+  isDriveBackingUp = true;
+  if (!silent && btn) {
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'جاري الرفع إلى Google Drive...';
+  }
+
+  try {
+    const payload = buildBackupPayloadObject();
+    payload.action = 'backup';
+    payload.csvContent = buildBackupCsvText(payload.records);
+
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+
+    const txt = await res.text();
+    let json = {};
+    try { json = JSON.parse(txt); } catch (e) {}
+    if (json.status && json.status !== 'ok') {
+      throw new Error(json.message || 'DRIVE_ERR');
+    }
+
+    const stamp = `${todayString()} (${new Date().toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' })})`;
+    localStorage.setItem(wsKey('last_drive_backup_date'), todayString());
+    localStorage.setItem(wsKey('last_drive_backup_at'), stamp);
+    saveDailyLocalSnapshot(true);
+    updateBackupStatusUI();
+    renderLocalSnapshotsUI();
+    if (!silent) showToast('تم حفظ النسخة الاحتياطية في Google Drive بنجاح ✓');
+  } catch (err) {
+    console.error('Drive backup error:', err);
+    if (!silent) showToast('تعذّر الرفع إلى Google Drive، تأكد من الرابط وصلاحية النشر');
+  } finally {
+    isDriveBackingUp = false;
+    if (!silent && btn) {
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'نسخ احتياطي إلى Google Drive الآن';
+    }
+  }
+}
+
+function checkAndRunDailyBackups() {
+  if (!currentProfile || !isUnlocked) return;
+  // 1. حفظ نسخة يومية تلقائية على الجوال نفسه (يعمل لكل جهاز/موظف)
+  if (allRecords.length > 0) {
+    saveDailyLocalSnapshot(false);
+  }
+  // 2. رفع نسخة يومية تلقائية إلى Google Drive بعد الساعة 12:00 ليلاً إذا كان الرابط مضبوطاً
+  const bCfg = settings.backupConfig || DEFAULT_BACKUP_CONFIG;
+  if (isAdmin() && bCfg.autoDailyEnabled !== false && bCfg.driveScriptUrl && navigator.onLine && allRecords.length > 0) {
+    const lastDate = localStorage.getItem(wsKey('last_drive_backup_date')) || '';
+    if (lastDate !== todayString()) {
+      backupToGoogleDriveNow(true);
+    }
+  }
+}
+
+// فحص كل 10 دقائق في حال بقي التطبيق مفتوحاً عند مرور الساعة 12:00 ليلاً
+setInterval(() => {
+  if (isUnlocked && currentProfile) checkAndRunDailyBackups();
+}, 10 * 60 * 1000);
 
 
 // ==================== تثبيت التطبيق (PWA) والتحديث التلقائي ====================
