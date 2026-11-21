@@ -120,6 +120,7 @@ function updateBodyScrollLock() {
     document.getElementById('accountsView').classList.contains('open') ||
     document.getElementById('addModal').classList.contains('open') ||
     document.getElementById('editCustomerModal').classList.contains('open') ||
+    document.getElementById('editWorkshopModal').classList.contains('open') ||
     document.getElementById('confirmModal').classList.contains('open');
   document.body.classList.toggle('no-scroll', anyOpen);
 }
@@ -209,7 +210,7 @@ window.addEventListener('popstate', () => {
   }
 
   // تنظيف احتياطي في حال كانت أي طبقة مفتوحة بصرياً
-  const fallbackLayers = ['sideMenu', 'confirmModal', 'editCustomerModal', 'addModal', 'accountsView', 'settingsView', 'detailView'];
+  const fallbackLayers = ['sideMenu', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'accountsView', 'settingsView', 'detailView'];
   for (const id of fallbackLayers) {
     const domId = id === 'sideMenu' ? 'sideMenuBackdrop' : id;
     if (document.getElementById(domId).classList.contains('open')) {
@@ -686,11 +687,11 @@ function buildCustomerBalancePillsHtml(c) {
 
   enabled.forEach(code => {
     const bal = c.byCurrency[code].balance;
-    const sym = getCurr(code).symbol;
+    const unit = code === 'USD' ? 'دولار' : 'ليرة سوري';
     if (bal > 0.001) {
-      pills.push(`<span class="bal-pill bal-debt">${formatNum(bal)} ${sym}</span>`);
+      pills.push(`<span class="bal-pill bal-debt">${formatNum(bal)} ${unit}</span>`);
     } else if (bal < -0.001) {
-      pills.push(`<span class="bal-pill bal-credit">له ${formatNum(Math.abs(bal))} ${sym}</span>`);
+      pills.push(`<span class="bal-pill bal-credit">له ${formatNum(Math.abs(bal))} ${unit}</span>`);
     }
   });
 
@@ -775,61 +776,43 @@ function renderDetailSummaryCards(cust) {
   const displayCodes = enabled.filter(code => cust.byCurrency[code].activeRecords.length > 0);
   const codesToShow = displayCodes.length > 0 ? displayCodes : [enabled[0]];
 
-  if (codesToShow.length === 1) {
-    const code = codesToShow[0];
+  const rowsHtml = codesToShow.map(code => {
     const info = cust.byCurrency[code];
     const curr = getCurr(code);
-    wrap.innerHTML = `
-      <div class="stats-3">
-        <div class="stat-box">
-          <span>إجمالي الدين</span>
-          <strong style="color:var(--danger);">${formatNum(info.totalDebt)} ${curr.symbol}</strong>
+    const pillCls = code === 'USD' ? 'usd' : 'syp';
+    const labelTxt = code === 'USD' ? 'دولار' : 'ليرة سوري';
+
+    let balCls = 'bal-zero';
+    let balVal = '0';
+    if (info.balance > 0.001) {
+      balCls = 'bal-pos';
+      balVal = formatNum(info.balance);
+    } else if (info.balance < -0.001) {
+      balCls = 'bal-neg';
+      balVal = `له ${formatNum(Math.abs(info.balance))}`;
+    }
+
+    return `
+      <div class="unified-stats-row">
+        <div class="unified-curr-cell">
+          <span class="unified-curr-pill ${pillCls}">${labelTxt}</span>
         </div>
-        <div class="stat-box">
-          <span>المدفوع</span>
-          <strong style="color:var(--success);">${formatNum(info.totalPay)} ${curr.symbol}</strong>
-        </div>
-        <div class="stat-box">
-          <span>المتبقي</span>
-          <strong>${formatDetailBalanceHtml(info.balance, curr.symbol)}</strong>
-        </div>
+        <div class="unified-num debt">${formatNum(info.totalDebt)}</div>
+        <div class="unified-num pay">${formatNum(info.totalPay)}</div>
+        <div class="unified-num ${balCls}">${balVal}</div>
       </div>
     `;
-    return;
-  }
+  }).join('');
 
   wrap.innerHTML = `
-    <div class="curr-summary-grid">
-      ${codesToShow.map(code => {
-        const info = cust.byCurrency[code];
-        const curr = getCurr(code);
-        const cardCls = code === 'USD' ? 'usd-card' : 'syp-card';
-        const chipCls = code === 'USD' ? 'curr-usd' : 'curr-syp';
-        return `
-          <div class="curr-summary-card ${cardCls}">
-            <div class="curr-summary-head">
-              <div class="curr-summary-title">
-                <span class="curr-chip ${chipCls}">${curr.name} (${curr.symbol})</span>
-              </div>
-              <span style="font-size:11.5px;color:var(--muted);font-weight:700;">${info.activeRecords.length} حركة</span>
-            </div>
-            <div class="curr-summary-cols">
-              <div class="curr-mini-box">
-                <span>إجمالي الدين</span>
-                <strong style="color:var(--danger);">${formatNum(info.totalDebt)} ${curr.symbol}</strong>
-              </div>
-              <div class="curr-mini-box">
-                <span>المدفوع</span>
-                <strong style="color:var(--success);">${formatNum(info.totalPay)} ${curr.symbol}</strong>
-              </div>
-              <div class="curr-mini-box">
-                <span>المتبقي</span>
-                <strong>${formatDetailBalanceHtml(info.balance, curr.symbol)}</strong>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('')}
+    <div class="unified-stats-card">
+      <div class="unified-stats-head">
+        <span>العملة</span>
+        <span>إجمالي الدين</span>
+        <span>المدفوع</span>
+        <span>المتبقي</span>
+      </div>
+      ${rowsHtml}
     </div>
   `;
 }
@@ -841,9 +824,7 @@ function renderTxCardHtml(r, isArchived = false, showCurrencyChip = false) {
   const lbl = r.kind === 'debt' ? 'دين' : 'دفعة';
   const safeId = escapeHtml(r.id);
   const byTxt = r.created_by ? ` • ${escapeHtml(r.created_by)}` : '';
-  const currBadgeHtml = showCurrencyChip
-    ? `<span class="curr-chip ${code === 'USD' ? 'curr-usd' : 'curr-syp'}">${curr.short}</span>`
-    : '';
+  const currBadgeHtml = `<span class="curr-chip ${code === 'USD' ? 'curr-usd' : 'curr-syp'}">${code === 'USD' ? 'دولار' : 'ليرة سوري'}</span>`;
   const delBtnHtml = canDeleteRecords()
     ? `<button class="tx-btn del" title="حذف" onclick="askDeleteTx('${safeId}')">
          <svg class="ic ic-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>

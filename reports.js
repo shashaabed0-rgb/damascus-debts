@@ -6,10 +6,15 @@ function formatPhoneForWa(rawPhone) {
   return p;
 }
 
-function formatBalanceWaLine(balance, symbol) {
-  if (Math.abs(balance) < 0.001) return `خالص (0 ${symbol})`;
-  if (balance > 0) return `المتبقي عليك: ${formatNum(balance)} ${symbol}`;
-  return `لك رصيد متبقي: ${formatNum(Math.abs(balance))} ${symbol}`;
+function getCurrencyUnitWord(code) {
+  return code === 'SYP' ? 'ليرة سوري' : 'دولار';
+}
+
+function formatBalanceWaLine(balance, code) {
+  const unit = getCurrencyUnitWord(code);
+  if (Math.abs(balance) < 0.001) return `خالص (0 ${unit})`;
+  if (balance > 0) return `المتبقي عليك: ${formatNum(balance)} ${unit}`;
+  return `لك رصيد متبقي: ${formatNum(Math.abs(balance))} ${unit}`;
 }
 
 function getActiveCurrenciesForReport(cust) {
@@ -27,7 +32,6 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
 
   const activeCodes = getActiveCurrenciesForReport(cust);
 
-  // تحديد أحدث عملية (أو العملية المحددة) لإعلام العميل بالدين الجديد وما هو وبأي عملة
   let latestTx = specificTx;
   if (!latestTx && cust.activeRecords && cust.activeRecords.length > 0) {
     latestTx = cust.activeRecords[cust.activeRecords.length - 1];
@@ -41,15 +45,16 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
 
   if (latestTx) {
     const txIsPay = latestTx.kind ? (latestTx.kind === 'pay') : isPayType(latestTx.type);
-    const txCurr = getCurr(latestTx.currency || getRecordCurrency(latestTx));
+    const txCode = latestTx.currency || getRecordCurrency(latestTx);
+    const txUnit = getCurrencyUnitWord(txCode);
     const txNote = String(latestTx.note || '').trim();
     const txDate = formatDate(latestTx.date || todayString());
     if (txIsPay) {
       lines.push(`تم تسجيل *دفعة جديدة* في حسابك:`);
-      lines.push(`• مبلغ الدفعة: ${formatNum(latestTx.amount)} ${txCurr.symbol}`);
+      lines.push(`• مبلغ الدفعة: ${formatNum(latestTx.amount)} ${txUnit}`);
     } else {
       lines.push(`تم تسجيل *دين جديد* على حسابك:`);
-      lines.push(`• مبلغ الدين: ${formatNum(latestTx.amount)} ${txCurr.symbol}`);
+      lines.push(`• مبلغ الدين: ${formatNum(latestTx.amount)} ${txUnit}`);
     }
     if (txNote) {
       lines.push(`• البيان: ${txNote}`);
@@ -63,19 +68,19 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
   if (activeCodes.length === 1) {
     const code = activeCodes[0];
     const info = cust.byCurrency[code];
-    const curr = getCurr(code);
-    lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${curr.symbol}`);
-    lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${curr.symbol}`);
-    lines.push(`• ${formatBalanceWaLine(info.balance, curr.symbol)}`);
+    const unit = getCurrencyUnitWord(code);
+    lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${unit}`);
+    lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${unit}`);
+    lines.push(`• ${formatBalanceWaLine(info.balance, code)}`);
   } else {
     activeCodes.forEach(code => {
       const info = cust.byCurrency[code];
-      const curr = getCurr(code);
+      const unit = getCurrencyUnitWord(code);
       lines.push('');
-      lines.push(`*حساب ${curr.name} (${curr.symbol}):*`);
-      lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${curr.symbol}`);
-      lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${curr.symbol}`);
-      lines.push(`• ${formatBalanceWaLine(info.balance, curr.symbol)}`);
+      lines.push(`*حساب ${unit}:*`);
+      lines.push(`• إجمالي الدين: ${formatNum(info.totalDebt)} ${unit}`);
+      lines.push(`• المدفوع: ${formatNum(info.totalPay)} ${unit}`);
+      lines.push(`• ${formatBalanceWaLine(info.balance, code)}`);
     });
   }
 
@@ -109,7 +114,7 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
   }
 }
 
-// ==================== تصدير كشف PDF (دعم العملتين بشكل منفصل + تعدد الهواتف + نسخ شام كاش) ====================
+// ==================== تصدير كشف PDF (سادة وخفيف الألوان للطباعة + دمج أنيق للعملتين) ====================
 async function waitImagesAndPaint(rootEl) {
   const imgs = Array.from(rootEl.querySelectorAll('img'));
   await Promise.all(imgs.map(img => {
@@ -128,65 +133,6 @@ function extractCopyableAscii(rawText) {
   return m ? m.join(' ') : '';
 }
 
-function buildPdfCurrencySectionHtml(code, info, showSectionHeader) {
-  const curr = getCurr(code);
-  const accent = code === 'USD' ? '#1e3a8a' : '#b45309';
-  const softBg = code === 'USD' ? '#eff6ff' : '#fffbeb';
-  const softBorder = code === 'USD' ? '#bfdbfe' : '#fde68a';
-
-  const balText = Math.abs(info.balance) < 0.001
-    ? `0 ${curr.symbol} (خالص)`
-    : (info.balance > 0 ? `${formatNum(info.balance)} ${curr.symbol}` : `له ${formatNum(Math.abs(info.balance))} ${curr.symbol}`);
-
-  const rowsHtml = info.activeRecords.map((r, i) => `
-    <tr style="background:${i % 2 === 1 ? '#f8fafc' : '#ffffff'};">
-      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;text-align:center;color:#64748b;">${i + 1}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;white-space:nowrap;">${escapeHtml(formatDate(r.date))}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;font-weight:700;color:${r.kind === 'debt' ? '#dc2626' : '#15803d'};">${r.kind === 'debt' ? 'دين (+)' : 'دفعة (−)'}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;direction:ltr;text-align:right;font-weight:800;white-space:nowrap;">${formatNum(r.amount)} ${curr.symbol}</td>
-      <td style="padding:9px 8px;border-bottom:1px solid #e2e8f0;color:#334155;">${escapeHtml(r.note || '—')}</td>
-    </tr>
-  `).join('');
-
-  const sectionBanner = showSectionHeader
-    ? `<div style="background:${softBg};border:1px solid ${softBorder};border-right:4px solid ${accent};border-radius:9px;padding:8px 13px;margin:18px 0 11px;display:flex;justify-content:space-between;align-items:center;">
-         <div style="font-size:15px;font-weight:800;color:${accent};">حساب ${curr.name} (${curr.symbol})</div>
-         <div style="font-size:12px;color:#475569;font-weight:700;">${info.activeRecords.length} حركة</div>
-       </div>`
-    : '';
-
-  return `
-    ${sectionBanner}
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
-      <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:11.5px;color:#64748b;">إجمالي الديون</div>
-        <div style="font-size:16px;font-weight:800;color:#dc2626;direction:ltr;margin-top:3px;">${formatNum(info.totalDebt)} ${curr.symbol}</div>
-      </div>
-      <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:11.5px;color:#64748b;">إجمالي الدفعات</div>
-        <div style="font-size:16px;font-weight:800;color:#15803d;direction:ltr;margin-top:3px;">${formatNum(info.totalPay)} ${curr.symbol}</div>
-      </div>
-      <div style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:9px;padding:10px;text-align:center;">
-        <div style="font-size:11.5px;color:#64748b;">الرصيد المتبقي</div>
-        <div style="font-size:16px;font-weight:800;color:#0f172a;direction:ltr;margin-top:3px;">${balText}</div>
-      </div>
-    </div>
-
-    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px;">
-      <thead>
-        <tr style="background:${accent};color:#ffffff;">
-          <th style="padding:10px 8px;width:40px;text-align:center;">#</th>
-          <th style="padding:10px 8px;width:110px;text-align:right;">التاريخ</th>
-          <th style="padding:10px 8px;width:90px;text-align:right;">النوع</th>
-          <th style="padding:10px 8px;width:130px;text-align:right;">المبلغ</th>
-          <th style="padding:10px 8px;text-align:right;">الملاحظات</th>
-        </tr>
-      </thead>
-      <tbody>${rowsHtml || `<tr><td colspan="5" style="padding:12px;text-align:center;color:#64748b;">لا توجد حركات</td></tr>`}</tbody>
-    </table>
-  `;
-}
-
 async function exportCustomerPDF() {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
@@ -195,66 +141,119 @@ async function exportCustomerPDF() {
   }
 
   const activeCodes = getActiveCurrenciesForReport(cust);
-  const isDualPdf = activeCodes.length > 1;
-  const headerCurrencyText = isDualPdf
-    ? 'دولار ($) وليرة سورية (ل.س)'
-    : `${getCurr(activeCodes[0]).name} (${getCurr(activeCodes[0]).symbol})`;
+  const headerCurrencyText = activeCodes.map(getCurrencyUnitWord).join(' / ');
 
   const overlay = document.getElementById('pdfBusyOverlay');
   overlay.classList.add('open');
 
   const prevScrollY = window.scrollY;
   const stage = document.createElement('div');
-  stage.style.cssText = 'position:absolute;top:0;left:0;width:740px;background:#ffffff;color:#0f172a;z-index:99990;direction:rtl;font-family:"Segoe UI",Tahoma,Arial,sans-serif;padding:0;margin:0;';
+  stage.style.cssText = 'position:absolute;top:0;left:0;width:740px;background:#ffffff;color:#111827;z-index:99990;direction:rtl;font-family:"Segoe UI",Tahoma,Arial,sans-serif;padding:0;margin:0;';
 
   try {
     const logoHtml = settings.shopLogo
-      ? `<img src="${settings.shopLogo}" style="width:62px;height:62px;object-fit:contain;border-radius:10px;border:1px solid #e2e8f0;padding:3px;background:#fff;" />`
+      ? `<img src="${settings.shopLogo}" style="width:58px;height:58px;object-fit:contain;border-radius:8px;border:1px solid #d1d5db;padding:3px;background:#ffffff;" />`
       : '';
 
     const shopPhones = getShopPhonesList();
     const shopAddressHtml = settings.shopAddress
-      ? `<div style="font-size:12.5px;color:#475569;margin-top:3px;">${escapeHtml(settings.shopAddress)}</div>`
+      ? `<div style="font-size:12px;color:#4b5563;margin-top:3px;">${escapeHtml(settings.shopAddress)}</div>`
       : '';
     const shopPhonesHtml = shopPhones.length > 0
-      ? `<div style="font-size:12.5px;color:#334155;margin-top:3px;font-weight:600;">هاتف: <span dir="ltr" style="unicode-bidi:embed;">${shopPhones.map(escapeHtml).join('  •  ')}</span></div>`
+      ? `<div style="font-size:12px;color:#374151;margin-top:2px;font-weight:600;">هاتف: <span dir="ltr" style="unicode-bidi:embed;">${shopPhones.map(escapeHtml).join('  •  ')}</span></div>`
       : '';
 
-    const sectionsHtml = activeCodes
-      .map(code => buildPdfCurrencySectionHtml(code, cust.byCurrency[code], isDualPdf))
-      .join('');
+    // 1. جدول الملخص الموحّد (دولار + ليرة سوري فوق بعض بألوان خفيفة مناسبة للطباعة)
+    const summaryRowsHtml = activeCodes.map((code, idx) => {
+      const info = cust.byCurrency[code];
+      const unit = getCurrencyUnitWord(code);
+      const balText = Math.abs(info.balance) < 0.001
+        ? `0 ${unit} (خالص)`
+        : (info.balance > 0 ? `${formatNum(info.balance)} ${unit}` : `له ${formatNum(Math.abs(info.balance))} ${unit}`);
+      const borderTop = idx > 0 ? 'border-top:1px solid #e5e7eb;' : '';
+      return `
+        <tr style="${borderTop}">
+          <td style="padding:9px 10px;font-weight:800;color:#111827;text-align:right;width:110px;">${unit}</td>
+          <td style="padding:9px 10px;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(info.totalDebt)} ${unit}</td>
+          <td style="padding:9px 10px;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(info.totalPay)} ${unit}</td>
+          <td style="padding:9px 10px;text-align:center;font-weight:800;color:#111827;direction:ltr;">${balText}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // 2. جدول الحركات الموحّد والأنيق (سادة وخفيف الألوان للطباعة)
+    const unifiedRecords = cust.activeRecords || [];
+    const txRowsHtml = unifiedRecords.map((r, i) => {
+      const code = r.currency || getRecordCurrency(r);
+      const unit = getCurrencyUnitWord(code);
+      const isDebt = r.kind === 'debt';
+      return `
+        <tr style="background:${i % 2 === 1 ? '#fafafa' : '#ffffff'};">
+          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;text-align:center;color:#6b7280;">${i + 1}</td>
+          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;white-space:nowrap;color:#374151;">${escapeHtml(formatDate(r.date))}</td>
+          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${isDebt ? '#374151' : '#4b5563'};white-space:nowrap;">${isDebt ? 'دين (+)' : 'دفعة (−)'}</td>
+          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;direction:ltr;text-align:right;font-weight:800;color:#111827;white-space:nowrap;">${formatNum(r.amount)} ${unit}</td>
+          <td style="padding:8px 7px;border-bottom:1px solid #e5e7eb;color:#374151;">${escapeHtml(r.note || '—')}</td>
+        </tr>
+      `;
+    }).join('');
 
     const mainBlock = document.createElement('div');
-    mainBlock.style.cssText = 'width:740px;padding:26px 26px 14px;background:#ffffff;';
+    mainBlock.style.cssText = 'width:740px;padding:24px 26px 14px;background:#ffffff;';
     mainBlock.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1e3a8a;padding-bottom:14px;margin-bottom:18px;gap:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #374151;padding-bottom:12px;margin-bottom:14px;gap:14px;">
         <div style="display:flex;align-items:center;gap:12px;">
           ${logoHtml}
           <div>
-            <div style="font-size:22px;font-weight:800;color:#1e3a8a;">${escapeHtml(settings.shopName || 'دفتر الديون')}</div>
+            <div style="font-size:21px;font-weight:800;color:#111827;">${escapeHtml(settings.shopName || 'دفتر الديون')}</div>
             ${shopAddressHtml}
             ${shopPhonesHtml}
           </div>
         </div>
-        <div style="text-align:left;font-size:12.5px;color:#475569;line-height:1.6;">
-          <div style="font-size:15px;font-weight:800;color:#1e3a8a;">كشف حساب زبون</div>
+        <div style="text-align:left;font-size:12px;color:#4b5563;line-height:1.6;">
+          <div style="font-size:15px;font-weight:800;color:#111827;">كشف حساب زبون</div>
           <div>التاريخ: ${todayString()}</div>
           <div>العملة: ${headerCurrencyText}</div>
         </div>
       </div>
 
-      <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+      <div style="border:1px solid #d1d5db;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;background:#ffffff;">
         <div>
-          <div style="font-size:11.5px;color:#64748b;">اسم الزبون</div>
-          <div style="font-size:18px;font-weight:800;color:#0f172a;">${escapeHtml(cust.name)}</div>
+          <span style="font-size:11.5px;color:#6b7280;margin-left:6px;">اسم الزبون:</span>
+          <span style="font-size:16.5px;font-weight:800;color:#111827;">${escapeHtml(cust.name)}</span>
         </div>
         <div style="text-align:left;">
-          <div style="font-size:11.5px;color:#64748b;">رقم الهاتف</div>
-          <div style="font-size:14.5px;font-weight:700;direction:ltr;color:#0f172a;">${escapeHtml(cust.phone || '—')}</div>
+          <span style="font-size:11.5px;color:#6b7280;margin-left:6px;">الهاتف:</span>
+          <span style="font-size:13.5px;font-weight:700;direction:ltr;unicode-bidi:embed;color:#111827;">${escapeHtml(cust.phone || '—')}</span>
         </div>
       </div>
 
-      ${sectionsHtml}
+      <div style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#f3f4f6;color:#111827;border-bottom:1px solid #cbd5e1;">
+              <th style="padding:8px 10px;text-align:right;font-weight:800;">العملة</th>
+              <th style="padding:8px 10px;text-align:center;font-weight:800;">إجمالي الديون</th>
+              <th style="padding:8px 10px;text-align:center;font-weight:800;">إجمالي الدفعات</th>
+              <th style="padding:8px 10px;text-align:center;font-weight:800;">الرصيد المتبقي</th>
+            </tr>
+          </thead>
+          <tbody>${summaryRowsHtml}</tbody>
+        </table>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:12.8px;border:1px solid #d1d5db;">
+        <thead>
+          <tr style="background:#f3f4f6;color:#111827;border-bottom:1.5px solid #9ca3af;">
+            <th style="padding:9px 7px;width:36px;text-align:center;font-weight:800;">#</th>
+            <th style="padding:9px 7px;width:102px;text-align:right;font-weight:800;">التاريخ</th>
+            <th style="padding:9px 7px;width:82px;text-align:right;font-weight:800;">النوع</th>
+            <th style="padding:9px 7px;width:155px;text-align:right;font-weight:800;">المبلغ</th>
+            <th style="padding:9px 7px;text-align:right;font-weight:800;">الملاحظات</th>
+          </tr>
+        </thead>
+        <tbody>${txRowsHtml || `<tr><td colspan="5" style="padding:12px;text-align:center;color:#6b7280;">لا توجد حركات</td></tr>`}</tbody>
+      </table>
     `;
     stage.appendChild(mainBlock);
 
@@ -264,8 +263,8 @@ async function exportCustomerPDF() {
       generalNoteEl = document.createElement('div');
       generalNoteEl.style.cssText = 'width:740px;padding:0 26px;background:#ffffff;';
       generalNoteEl.innerHTML = `
-        <div style="background:#f8fafc;border:1px solid #cbd5e1;border-right:4px solid #2563eb;border-radius:10px;padding:11px 14px;color:#334155;font-size:13px;line-height:1.6;">
-          <div style="font-size:12px;font-weight:800;color:#1e3a8a;margin-bottom:3px;">ملاحظة عامة:</div>
+        <div style="background:#ffffff;border:1px solid #d1d5db;border-right:3px solid #4b5563;border-radius:8px;padding:10px 14px;color:#374151;font-size:12.5px;line-height:1.6;">
+          <div style="font-size:12px;font-weight:800;color:#111827;margin-bottom:2px;">ملاحظة عامة:</div>
           <div style="white-space:pre-wrap;">${escapeHtml(generalNote)}</div>
         </div>
       `;
@@ -279,15 +278,15 @@ async function exportCustomerPDF() {
     let shamCopyBtnEl = null;
     if (shamEnabled) {
       shamLabelEl = document.createElement('div');
-      shamLabelEl.style.cssText = 'width:210px;background:#fffbeb;padding:6px 4px;text-align:center;line-height:1.35;';
+      shamLabelEl.style.cssText = 'width:210px;background:#f9fafb;padding:6px 4px;text-align:center;line-height:1.35;';
       shamLabelEl.innerHTML = `
-        <div style="color:#92400e;font-size:16px;font-weight:800;">شام كاش</div>
-        <div style="color:#b45309;font-size:11.5px;font-weight:700;margin-top:3px;">يمكنك نسخ الرمز للدفع</div>
+        <div style="color:#111827;font-size:15.5px;font-weight:800;">شام كاش</div>
+        <div style="color:#4b5563;font-size:11.5px;font-weight:700;margin-top:3px;">يمكنك نسخ الرمز للدفع</div>
       `;
       stage.appendChild(shamLabelEl);
 
       shamCopyBtnEl = document.createElement('div');
-      shamCopyBtnEl.style.cssText = 'width:104px;height:48px;background:#d97706;color:#ffffff;font-size:16px;font-weight:800;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:5px;border:2px solid #b45309;';
+      shamCopyBtnEl.style.cssText = 'width:104px;height:46px;background:#ffffff;color:#111827;font-size:15.5px;font-weight:800;border-radius:9px;display:flex;align-items:center;justify-content:center;border:2px solid #374151;';
       shamCopyBtnEl.innerHTML = `<span>نسخ</span>`;
       stage.appendChild(shamCopyBtnEl);
     }
@@ -313,13 +312,13 @@ async function exportCustomerPDF() {
     let shamCopyBtnCanvas = null;
     if (shamLabelEl) {
       shamLabelCanvas = await html2canvas(shamLabelEl, {
-        scale: 2, useCORS: true, backgroundColor: '#fffbeb',
+        scale: 2, useCORS: true, backgroundColor: '#f9fafb',
         width: 210, windowWidth: 210, scrollX: 0, scrollY: 0
       });
     }
     if (shamCopyBtnEl) {
       shamCopyBtnCanvas = await html2canvas(shamCopyBtnEl, {
-        scale: 2, useCORS: true, backgroundColor: '#fffbeb',
+        scale: 2, useCORS: true, backgroundColor: '#f9fafb',
         width: 104, windowWidth: 104, scrollX: 0, scrollY: 0
       });
     }
@@ -390,9 +389,10 @@ async function exportCustomerPDF() {
         curY += 5;
       }
 
-      doc.setFillColor(255, 251, 235);
-      doc.setDrawColor(245, 158, 11);
-      doc.setLineWidth(0.5);
+      // خلفية خفيفة جداً مناسبة للطباعة العادية والأسود والأبيض
+      doc.setFillColor(249, 250, 251);
+      doc.setDrawColor(156, 163, 175);
+      doc.setLineWidth(0.45);
       doc.roundedRect(boxX, curY, boxW, boxH, 3, 3, 'FD');
 
       if (shamLabelCanvas) {
@@ -415,13 +415,13 @@ async function exportCustomerPDF() {
 
       const codeBoxH = boxH - 5;
       doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(217, 119, 6);
+      doc.setDrawColor(156, 163, 175);
       doc.setLineWidth(0.35);
       doc.roundedRect(codeBoxX, curY + 2.5, codeBoxW, codeBoxH, 2.2, 2.2, 'FD');
 
       doc.setFont('courier', 'bold');
       doc.setFontSize(12);
-      doc.setTextColor(15, 23, 42);
+      doc.setTextColor(17, 24, 39);
       const totalTextH = codeLines.length * 6.0;
       let textY = curY + (boxH - totalTextH) / 2 + 4.6;
       codeLines.forEach(line => {

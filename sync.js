@@ -19,7 +19,7 @@ function createIsolatedAuthClient() {
 
 const CURRENCIES = {
   USD: { code: 'USD', symbol: '$', name: 'دولار', short: 'دولار' },
-  SYP: { code: 'SYP', symbol: 'ل.س', name: 'ليرة سورية', short: 'سوري' }
+  SYP: { code: 'SYP', symbol: 'ل.س', name: 'ليرة سوري', short: 'ليرة سوري' }
 };
 
 const DEVICE_SETTINGS_KEY = 'debt_device_settings_sb_v1';
@@ -45,6 +45,14 @@ let currentUser = null;
 let currentProfile = null;
 let currentWorkshop = null;
 let realtimeChannel = null;
+let presenceChannel = null;
+let workshopStatusChannel = null;
+let onlineUsersMap = new Map();
+let onlineWorkshopsMap = new Map();
+let cachedMembersList = [];
+let cachedWorkshopsList = [];
+let cachedAllMembersByWs = new Map();
+let editingWorkshopId = null;
 
 let allRecords = [];
 let pendingQueue = [];
@@ -267,6 +275,11 @@ async function loadUserWorkspace(user) {
         .single();
 
       if (wsErr || !ws) throw wsErr;
+      if (ws.settings && ws.settings.frozen === true && mem.role !== 'super_admin') {
+        await sb.auth.signOut({ scope: 'local' });
+        showLoginScreen('تم تجميد حساب هذه الورشة من قبل الإدارة.');
+        return;
+      }
 
       profile = mem;
       workshop = ws;
@@ -323,11 +336,12 @@ async function handleLogout() {
     if (!confirm(`يوجد ${pendingQueue.length} عملية لم تُرفع بعد للسحابة. هل تريد تسجيل الخروج رغم ذلك؟`)) return;
   }
   try {
-    if (realtimeChannel) {
-      sb.removeChannel(realtimeChannel);
-      realtimeChannel = null;
-    }
+    if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+    if (presenceChannel) { sb.removeChannel(presenceChannel); presenceChannel = null; }
+    if (workshopStatusChannel) { sb.removeChannel(workshopStatusChannel); workshopStatusChannel = null; }
   } catch (e) {}
+  onlineUsersMap.clear();
+  onlineWorkshopsMap.clear();
   try {
     await sb.auth.signOut({ scope: 'local' });
   } catch (e) {
@@ -355,12 +369,97 @@ async function changeMyPassword() {
 }
 
 // ==================== المزامنة مع Supabase والعمل أوفلاين ====================
+function rebuildOnlineMapsFromPresence() {
+  onlineUsersMap.clear();
+  onlineWorkshopsMap.clear();
+  if (!presenceChannel) return;
+  const state = presenceChannel.presenceState() || {};
+  Object.values(state).forEach(entries => {
+    (entries || []).forEach(p => {
+      if (!p || !p.user_id) return;
+      onlineUsersMap.set(p.user_id, p);
+      if (p.workshop_id) {
+        if (!onlineWorkshopsMap.has(p.workshop_id)) onlineWorkshopsMap.set(p.workshop_id, []);
+        const arr = onlineWorkshopsMap.get(p.workshop_id);
+        if (!arr.some(u => u.user_id === p.user_id)) arr.push(p);
+      }
+    });
+  });
+}
+
+function refreshOnlineIndicatorsUI() {
+  const accOpen = document.getElementById('accountsView')?.classList.contains('open');
+  if (!accOpen) return;
+  const staffVisible = !document.getElementById('accStaffPanel').classList.contains('hidden');
+  if (staffVisible && cachedMembersList.length > 0) {
+    renderWorkshopMembersList(cachedMembersList);
+  }
+  const wsVisible = !document.getElementById('accWorkshopsPanel').classList.contains('hidden');
+  if (wsVisible && cachedWorkshopsList.length > 0) {
+    renderIsolatedWorkshopsList(cachedWorkshopsList);
+  }
+}
+
+function subscribePresence() {
+  if (presenceChannel) {
+    try { sb.removeChannel(presenceChannel); } catch (e) {}
+    presenceChannel = null;
+  }
+  if (!currentUser || !currentProfile) return;
+
+  presenceChannel = sb.channel('damascus-online-presence', {
+    config: { presence: { key: currentUser.id } }
+  });
+
+  presenceChannel
+    .on('presence', { event: 'sync' }, () => {
+      rebuildOnlineMapsFromPresence();
+      refreshOnlineIndicatorsUI();
+    })
+    .on('presence', { event: 'join' }, ({ newPresences }) => {
+      rebuildOnlineMapsFromPresence();
+      refreshOnlineIndicatorsUI();
+      // إشعار أخضر فوري عند فتح صفحة الحسابات ودخول أحد الموظفين/المدراء أو الورشات على النت
+      if (document.getElementById('accountsView')?.classList.contains('open')) {
+        (newPresences || []).forEach(p => {
+          if (!p || p.user_id === currentUser.id) return;
+          if (p.workshop_id === currentProfile.workshop_id || isSuperAdmin()) {
+            showToast(`🟢 ${p.display_name || p.email} متصل الآن على الإنترنت`);
+          }
+        });
+      }
+    })
+    .on('presence', { event: 'leave' }, () => {
+      rebuildOnlineMapsFromPresence();
+      refreshOnlineIndicatorsUI();
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        try {
+          await presenceChannel.track({
+            user_id: currentUser.id,
+            workshop_id: currentProfile.workshop_id,
+            display_name: currentProfile.display_name || currentProfile.email || '',
+            email: currentProfile.email || '',
+            role: currentProfile.role,
+            online_at: new Date().toISOString()
+          });
+        } catch (e) {}
+      }
+    });
+}
+
 function subscribeRealtime() {
   if (realtimeChannel) {
     sb.removeChannel(realtimeChannel);
     realtimeChannel = null;
   }
+  if (workshopStatusChannel) {
+    sb.removeChannel(workshopStatusChannel);
+    workshopStatusChannel = null;
+  }
   if (!currentProfile) return;
+
   realtimeChannel = sb
     .channel('debt-live-' + currentProfile.workshop_id)
     .on('postgres_changes', {
@@ -372,6 +471,20 @@ function subscribeRealtime() {
       if (isUnlocked && navigator.onLine) syncData(true);
     })
     .subscribe();
+
+  workshopStatusChannel = sb
+    .channel('ws-status-' + currentProfile.workshop_id)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'workshops',
+      filter: `id=eq.${currentProfile.workshop_id}`
+    }, () => {
+      if (isUnlocked && navigator.onLine) syncData(true);
+    })
+    .subscribe();
+
+  subscribePresence();
 }
 
 async function syncData(silent) {
@@ -412,6 +525,15 @@ async function syncData(silent) {
       .select('*')
       .eq('id', currentProfile.workshop_id)
       .single();
+
+    if (wsFresh && wsFresh.settings && wsFresh.settings.frozen === true && currentProfile.role !== 'super_admin') {
+      isSyncing = false;
+      syncBtn.classList.remove('spinning');
+      await sb.auth.signOut({ scope: 'local' });
+      resetAllOpenLayersForLogout();
+      showLoginScreen('تم تجميد حساب هذه الورشة من قبل الإدارة.');
+      return;
+    }
 
     if (wsFresh) {
       currentWorkshop = wsFresh;
@@ -578,6 +700,66 @@ function onMemberRoleChange() {
   }
 }
 
+function renderWorkshopMembersList(list) {
+  const box = document.getElementById('membersListBox');
+  const banner = document.getElementById('onlineMembersBanner');
+  document.getElementById('membersCountLbl').textContent = `${list.length} حساب`;
+
+  const onlineOthers = list.filter(m => m.user_id !== currentUser.id && onlineUsersMap.has(m.user_id));
+  if (onlineOthers.length > 0) {
+    const names = onlineOthers.map(m => escapeHtml(m.display_name || m.email)).join('، ');
+    banner.innerHTML = `<span class="presence-dot online"></span><span>متصل الآن على الإنترنت: ${names}</span>`;
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+
+  box.innerHTML = list.map(m => {
+    const isSelf = m.user_id === currentUser.id;
+    const isSuper = m.role === 'super_admin';
+    const isOnline = (isSelf && navigator.onLine) || onlineUsersMap.has(m.user_id);
+
+    const presenceBadge = isOnline
+      ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصل الآن</span>`
+      : `<span class="m-badge m-offline"><span class="presence-dot offline"></span>غير متصل</span>`;
+
+    const onlineNotice = (!isSelf && isOnline)
+      ? `<div class="member-online-note"><span class="presence-dot online"></span><span>${escapeHtml(m.display_name || m.email)} موجود الآن على الإنترنت</span></div>`
+      : '';
+
+    const controls = (!isSelf && !isSuper) ? `
+      <div class="member-actions">
+        <button class="btn btn-light btn-sm" onclick="toggleMemberActive('${escapeHtml(m.user_id)}', ${!!m.active})">
+          ${m.active ? 'إيقاف الحساب' : 'تفعيل الحساب'}
+        </button>
+        ${m.role === 'staff' ? `
+          <button class="btn btn-light btn-sm" onclick="toggleMemberCanDelete('${escapeHtml(m.user_id)}', ${!!m.can_delete})">
+            ${m.can_delete ? 'منع الحذف' : 'السماح بالحذف'}
+          </button>` : ''}
+        <button class="btn btn-danger btn-sm" onclick="removeWorkshopMember('${escapeHtml(m.user_id)}', '${escapeHtml(m.display_name || m.email)}')">إزالة</button>
+      </div>` : '';
+
+    return `
+      <div class="member-card ${isOnline && !isSelf ? 'is-online-card' : ''}">
+        <div class="member-top">
+          <div>
+            <div class="member-name">${escapeHtml(m.display_name || 'بدون اسم')} ${isSelf ? '(أنت)' : ''}</div>
+            <div class="member-email">${escapeHtml(m.email)}</div>
+          </div>
+          <div class="member-badges">
+            ${presenceBadge}
+            <span class="m-badge m-role">${getRoleLabel(m.role)}</span>
+            <span class="m-badge ${m.active ? 'm-on' : 'm-off'}">${m.active ? 'مفعّل' : 'موقوف'}</span>
+            ${m.role === 'staff' ? `<span class="m-badge m-neutral">${m.can_delete ? 'يحذف' : 'بدون حذف'}</span>` : ''}
+          </div>
+        </div>
+        ${onlineNotice}
+        ${controls}
+      </div>
+    `;
+  }).join('');
+}
+
 async function loadWorkshopMembers() {
   const box = document.getElementById('membersListBox');
   if (!navigator.onLine) {
@@ -596,40 +778,9 @@ async function loadWorkshopMembers() {
     return;
   }
 
-  const list = data || [];
-  document.getElementById('membersCountLbl').textContent = `${list.length} حساب`;
-  box.innerHTML = list.map(m => {
-    const isSelf = m.user_id === currentUser.id;
-    const isSuper = m.role === 'super_admin';
-    const controls = (!isSelf && !isSuper) ? `
-      <div class="member-actions">
-        <button class="btn btn-light btn-sm" onclick="toggleMemberActive('${escapeHtml(m.user_id)}', ${!!m.active})">
-          ${m.active ? 'إيقاف الحساب' : 'تفعيل الحساب'}
-        </button>
-        ${m.role === 'staff' ? `
-          <button class="btn btn-light btn-sm" onclick="toggleMemberCanDelete('${escapeHtml(m.user_id)}', ${!!m.can_delete})">
-            ${m.can_delete ? 'منع الحذف' : 'السماح بالحذف'}
-          </button>` : ''}
-        <button class="btn btn-danger btn-sm" onclick="removeWorkshopMember('${escapeHtml(m.user_id)}', '${escapeHtml(m.display_name || m.email)}')">إزالة</button>
-      </div>` : '';
-
-    return `
-      <div class="member-card">
-        <div class="member-top">
-          <div>
-            <div class="member-name">${escapeHtml(m.display_name || 'بدون اسم')} ${isSelf ? '(أنت)' : ''}</div>
-            <div class="member-email">${escapeHtml(m.email)}</div>
-          </div>
-          <div class="member-badges">
-            <span class="m-badge m-role">${getRoleLabel(m.role)}</span>
-            <span class="m-badge ${m.active ? 'm-on' : 'm-off'}">${m.active ? 'مفعّل' : 'موقوف'}</span>
-            ${m.role === 'staff' ? `<span class="m-badge m-neutral">${m.can_delete ? 'يحذف' : 'بدون حذف'}</span>` : ''}
-          </div>
-        </div>
-        ${controls}
-      </div>
-    `;
-  }).join('');
+  cachedMembersList = data || [];
+  rebuildOnlineMapsFromPresence();
+  renderWorkshopMembersList(cachedMembersList);
 }
 
 async function createWorkshopMember(ev) {
@@ -702,6 +853,82 @@ async function removeWorkshopMember(uid, name) {
   loadWorkshopMembers();
 }
 
+function renderIsolatedWorkshopsList(list) {
+  const box = document.getElementById('workshopsListBox');
+  const banner = document.getElementById('onlineWorkshopsBanner');
+  document.getElementById('workshopsCountLbl').textContent = `${list.length} ورشة`;
+
+  const activeOnlineWs = list.filter(w => {
+    const onlineArr = onlineWorkshopsMap.get(w.id) || [];
+    return onlineArr.length > 0;
+  });
+
+  if (activeOnlineWs.length > 0) {
+    const wsNames = activeOnlineWs.map(w => escapeHtml(w.name)).join('، ');
+    banner.innerHTML = `<span class="presence-dot online"></span><span>الورشات المتصلة الآن (${activeOnlineWs.length}): ${wsNames}</span>`;
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+
+  box.innerHTML = list.map(w => {
+    const isOwnWs = w.id === currentProfile.workshop_id;
+    const isFrozen = Boolean(w.settings && w.settings.frozen === true);
+    const onlineArr = onlineWorkshopsMap.get(w.id) || [];
+    const isOnline = (isOwnWs && navigator.onLine) || onlineArr.length > 0;
+    const wsMembers = cachedAllMembersByWs.get(w.id) || [];
+    const adminMember = wsMembers.find(m => m.role === 'admin' || m.role === 'super_admin') || wsMembers[0];
+
+    const onlineBadge = isOnline
+      ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصلة (${Math.max(1, onlineArr.length)})</span>`
+      : `<span class="m-badge m-offline"><span class="presence-dot offline"></span>غير متصلة</span>`;
+
+    const stateBadge = isFrozen
+      ? `<span class="m-badge m-frozen">مجمّدة</span>`
+      : `<span class="m-badge m-on">شغّالة</span>`;
+
+    const onlineNamesList = onlineArr.map(u => escapeHtml(u.display_name || u.email)).filter(Boolean);
+    const onlineNoteHtml = (isOnline && onlineNamesList.length > 0)
+      ? `<div class="member-online-note"><span class="presence-dot online"></span><span>متصل الآن: ${onlineNamesList.join('، ')}</span></div>`
+      : '';
+
+    const adminInfoHtml = adminMember
+      ? `<div class="member-email" style="direction:rtl;">المدير: ${escapeHtml(adminMember.display_name || adminMember.email)} • ${wsMembers.length} حساب</div>`
+      : '';
+
+    const actionsHtml = isOwnWs
+      ? `<div class="member-actions">
+           <button class="btn btn-light btn-sm" onclick="openEditWorkshopModal('${escapeHtml(w.id)}')">تعديل الاسم</button>
+         </div>`
+      : `<div class="member-actions">
+           <button class="btn btn-light btn-sm" onclick="openEditWorkshopModal('${escapeHtml(w.id)}')">تعديل</button>
+           <button class="btn btn-light btn-sm" onclick="toggleWorkshopFreeze('${escapeHtml(w.id)}')">
+             ${isFrozen ? 'فك التجميد' : 'تجميد الورشة'}
+           </button>
+           <button class="btn btn-danger btn-sm" onclick="deleteIsolatedWorkshop('${escapeHtml(w.id)}')">إزالة</button>
+         </div>`;
+
+    return `
+      <div class="member-card ${isFrozen ? 'is-frozen-card' : (isOnline ? 'is-online-card' : '')}">
+        <div class="member-top">
+          <div>
+            <div class="member-name">${escapeHtml(w.name)}</div>
+            <div class="member-email" style="direction:rtl;">تاريخ الإنشاء: ${escapeHtml((w.created_at || '').slice(0, 10))}</div>
+            ${adminInfoHtml}
+          </div>
+          <div class="member-badges">
+            ${onlineBadge}
+            ${stateBadge}
+            <span class="m-badge ${isOwnWs ? 'm-role' : 'm-neutral'}">${isOwnWs ? 'ورشتك' : 'معزولة'}</span>
+          </div>
+        </div>
+        ${onlineNoteHtml}
+        ${actionsHtml}
+      </div>
+    `;
+  }).join('');
+}
+
 async function loadIsolatedWorkshops() {
   if (!isSuperAdmin()) return;
   const box = document.getElementById('workshopsListBox');
@@ -710,26 +937,124 @@ async function loadIsolatedWorkshops() {
     return;
   }
   box.innerHTML = '<div class="empty-box" style="padding:24px;">جاري تحميل الورشات...</div>';
-  const { data, error } = await sb.from('workshops').select('*').order('created_at', { ascending: false });
+
+  const [{ data, error }, { data: allMems }] = await Promise.all([
+    sb.from('workshops').select('*').order('created_at', { ascending: false }),
+    sb.from('workshop_members').select('*')
+  ]);
+
   if (error) {
     box.innerHTML = `<div class="alert-banner alert-err">${escapeHtml(error.message)}</div>`;
     return;
   }
-  const list = data || [];
-  document.getElementById('workshopsCountLbl').textContent = `${list.length} ورشة`;
-  box.innerHTML = list.map(w => `
-    <div class="member-card">
-      <div class="member-top">
-        <div>
-          <div class="member-name">${escapeHtml(w.name)}</div>
-          <div class="member-email" style="direction:rtl;">تاريخ الإنشاء: ${escapeHtml((w.created_at || '').slice(0, 10))}</div>
-        </div>
-        <span class="m-badge ${w.id === currentProfile.workshop_id ? 'm-role' : 'm-neutral'}">
-          ${w.id === currentProfile.workshop_id ? 'ورشتك الحالية' : 'ورشة معزولة'}
-        </span>
-      </div>
-    </div>
-  `).join('');
+
+  cachedAllMembersByWs.clear();
+  (allMems || []).forEach(m => {
+    if (!cachedAllMembersByWs.has(m.workshop_id)) cachedAllMembersByWs.set(m.workshop_id, []);
+    cachedAllMembersByWs.get(m.workshop_id).push(m);
+  });
+
+  cachedWorkshopsList = data || [];
+  rebuildOnlineMapsFromPresence();
+  renderIsolatedWorkshopsList(cachedWorkshopsList);
+}
+
+function openEditWorkshopModal(wsId) {
+  const ws = cachedWorkshopsList.find(w => w.id === wsId);
+  if (!ws) return;
+  editingWorkshopId = wsId;
+  document.getElementById('editWsNameInput').value = ws.name || '';
+  openModal('editWorkshopModal');
+}
+
+async function saveWorkshopEdit() {
+  if (!isSuperAdmin() || !editingWorkshopId) return;
+  const newName = document.getElementById('editWsNameInput').value.trim();
+  if (!newName) return showToast('يرجى كتابة اسم الورشة');
+
+  const ws = cachedWorkshopsList.find(w => w.id === editingWorkshopId);
+  const nextSettings = { ...(ws && ws.settings ? ws.settings : {}), shopName: newName };
+  const btn = document.getElementById('saveWsEditBtn');
+  btn.disabled = true;
+  btn.textContent = 'جاري الحفظ...';
+
+  const { error } = await sb
+    .from('workshops')
+    .update({ name: newName, settings: nextSettings })
+    .eq('id', editingWorkshopId);
+
+  btn.disabled = false;
+  btn.textContent = 'حفظ التعديل';
+
+  if (error) {
+    showAccAlert('تعذّر تعديل الورشة: ' + error.message);
+    return;
+  }
+
+  if (editingWorkshopId === currentProfile.workshop_id) {
+    settings.shopName = newName;
+    applyBrandingUI();
+  }
+  editingWorkshopId = null;
+  closeModal('editWorkshopModal');
+  showToast('تم تعديل اسم الورشة بنجاح');
+  loadIsolatedWorkshops();
+}
+
+async function toggleWorkshopFreeze(wsId) {
+  if (!isSuperAdmin()) return;
+  const ws = cachedWorkshopsList.find(w => w.id === wsId);
+  if (!ws || wsId === currentProfile.workshop_id) return;
+
+  const isCurrentlyFrozen = Boolean(ws.settings && ws.settings.frozen === true);
+  const willFreeze = !isCurrentlyFrozen;
+  const actionLabel = willFreeze ? 'تجميد' : 'فك تجميد';
+
+  if (!confirm(`هل أنت متأكد من ${actionLabel} ورشة "${ws.name}"؟`)) return;
+
+  const nextSettings = { ...(ws.settings || {}), frozen: willFreeze };
+  const { error } = await sb
+    .from('workshops')
+    .update({ settings: nextSettings })
+    .eq('id', wsId);
+
+  if (error) {
+    showAccAlert(`تعذّر ${actionLabel} الورشة: ${error.message}`);
+    return;
+  }
+
+  // أيضاً نحدّث حالة أعضاء تلك الورشة ليكون التجميد فورياً على جميع أجهزتها
+  await sb.from('workshop_members').update({ active: !willFreeze }).eq('workshop_id', wsId);
+
+  showToast(willFreeze ? `تم تجميد ورشة "${ws.name}" بنجاح` : `تم فك التجميد وتفعيل ورشة "${ws.name}"`);
+  loadIsolatedWorkshops();
+}
+
+async function deleteIsolatedWorkshop(wsId) {
+  if (!isSuperAdmin()) return;
+  const ws = cachedWorkshopsList.find(w => w.id === wsId);
+  if (!ws || wsId === currentProfile.workshop_id) return;
+
+  if (!confirm(`تحذير: هل أنت متأكد من إزالة ورشة "${ws.name}" نهائياً مع جميع حساباتها وديونها؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+
+  showAccAlert('');
+  // 1. حذف سجلات الديون الخاصة بالورشة (إن وجدت)
+  await sb.from('debt_records').delete().eq('workshop_id', wsId);
+  // 2. حذف الأعضاء المرتبطين بالورشة
+  const { error: memDelErr } = await sb.from('workshop_members').delete().eq('workshop_id', wsId);
+  if (memDelErr) {
+    showAccAlert('تعذّر إزالة حسابات الورشة: ' + memDelErr.message);
+    return;
+  }
+  // 3. حذف الورشة نفسها
+  const { error: wsDelErr } = await sb.from('workshops').delete().eq('id', wsId);
+  if (wsDelErr) {
+    showAccAlert('تعذّر إزالة الورشة: ' + wsDelErr.message);
+    return;
+  }
+
+  showToast(`تمت إزالة ورشة "${ws.name}" بنجاح`);
+  loadIsolatedWorkshops();
 }
 
 async function createIsolatedWorkshop(ev) {
@@ -755,7 +1080,7 @@ async function createIsolatedWorkshop(ev) {
 
     const { data: wsData, error: wsErr } = await sb
       .from('workshops')
-      .insert({ name: wsName })
+      .insert({ name: wsName, settings: { shopName: wsName, currency: 'BOTH', frozen: false } })
       .select()
       .single();
     if (wsErr) throw wsErr;

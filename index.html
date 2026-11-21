@@ -164,7 +164,7 @@
               <strong class="sum-dual-num" id="totalDebtUsd">0 $</strong>
             </div>
             <div class="sum-dual-row">
-              <span class="curr-chip curr-syp">سوري</span>
+              <span class="curr-chip curr-syp">ليرة سوري</span>
               <strong class="sum-dual-num" id="totalDebtSyp">0 ل.س</strong>
             </div>
           </div>
@@ -327,6 +327,7 @@
           </form>
         </div>
 
+        <div id="onlineMembersBanner" class="online-banner hidden"></div>
         <div class="section-head">
           <span>الحسابات والأجهزة المرتبطة بالورشة</span>
           <span id="membersCountLbl"></span>
@@ -359,6 +360,7 @@
           </form>
         </div>
 
+        <div id="onlineWorkshopsBanner" class="online-banner hidden"></div>
         <div class="section-head">
           <span>الورشات المسجلة</span>
           <span id="workshopsCountLbl"></span>
@@ -449,7 +451,7 @@
           <label>العملة المعتمدة</label>
           <div class="toggle-3">
             <button type="button" id="setCurrUsd" class="tog-btn" onclick="selectSettingCurrency('USD')">دولار ($)</button>
-            <button type="button" id="setCurrSyp" class="tog-btn" onclick="selectSettingCurrency('SYP')">سوري (ل.س)</button>
+            <button type="button" id="setCurrSyp" class="tog-btn" onclick="selectSettingCurrency('SYP')">ليرة سوري</button>
             <button type="button" id="setCurrBoth" class="tog-btn" onclick="selectSettingCurrency('BOTH')">العملتين معاً</button>
           </div>
         </div>
@@ -545,7 +547,7 @@
           <label style="margin:0;">المبلغ (<span id="txCurrLabel">$</span>)</label>
           <div class="tx-curr-switch" id="txCurrSwitch">
             <button type="button" id="btnCurrUsd" class="tx-curr-btn on-usd" onclick="setTxCurrency('USD')">دولار $</button>
-            <button type="button" id="btnCurrSyp" class="tx-curr-btn" onclick="setTxCurrency('SYP')">سوري ل.س</button>
+            <button type="button" id="btnCurrSyp" class="tx-curr-btn" onclick="setTxCurrency('SYP')">ليرة سوري</button>
           </div>
         </div>
         <input type="number" id="txAmount" class="input" inputmode="decimal" step="any" placeholder="أدخل المبلغ" />
@@ -581,6 +583,21 @@
         <input type="tel" id="editCustPhoneInput" class="input" placeholder="09xxxxxxxx" />
       </div>
       <button class="btn btn-primary" onclick="saveCustomerEdit()">حفظ التعديل</button>
+    </div>
+  </div>
+
+  <!-- ==================== نافذة تعديل الورشة ==================== -->
+  <div class="modal-backdrop" id="editWorkshopModal">
+    <div class="modal-sheet" style="max-width:420px;">
+      <div class="sheet-head">
+        <h3>تعديل بيانات الورشة</h3>
+        <button class="close-btn" onclick="closeModal('editWorkshopModal')">✕</button>
+      </div>
+      <div class="field">
+        <label>اسم الورشة</label>
+        <input type="text" id="editWsNameInput" class="input" placeholder="اكتب اسم الورشة" />
+      </div>
+      <button class="btn btn-primary" id="saveWsEditBtn" onclick="saveWorkshopEdit()">حفظ التعديل</button>
     </div>
   </div>
 
