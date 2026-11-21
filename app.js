@@ -921,5 +921,102 @@ document.querySelectorAll('.modal-backdrop').forEach(el => {
   });
 });
 
+
+
+// ==================== تثبيت التطبيق (PWA) والتحديث التلقائي ====================
+let deferredInstallPrompt = null;
+
+function isRunningStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function updatePwaInstallUI() {
+  const hdrBtn = document.getElementById('headerInstallBtn');
+  const setBtn = document.getElementById('settingsInstallBtn');
+  const hint = document.getElementById('pwaStatusHint');
+  if (!hdrBtn || !setBtn || !hint) return;
+
+  if (isRunningStandalone()) {
+    hdrBtn.classList.add('hidden');
+    setBtn.classList.add('hidden');
+    hint.textContent = 'التطبيق مثبّت حالياً على جهازك ✓ — أي تعديل ترفعه على GitHub يظهر تلقائياً عند فتح التطبيق بوجود إنترنت.';
+  } else if (deferredInstallPrompt) {
+    hdrBtn.classList.remove('hidden');
+    setBtn.classList.remove('hidden');
+    hint.textContent = 'التطبيق جاهز للتثبيت على الشاشة الرئيسية بضغطة زر.';
+  } else {
+    hdrBtn.classList.add('hidden');
+    setBtn.classList.add('hidden');
+    hint.textContent = 'لتثبيت التطبيق من المتصفح: اضغط قائمة المتصفح (⋮) ثم اختر «تثبيت التطبيق» أو «الإضافة إلى الشاشة الرئيسية».';
+  }
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  updatePwaInstallUI();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  updatePwaInstallUI();
+  showToast('تم تثبيت التطبيق على جهازك بنجاح ✓');
+});
+
+async function triggerPwaInstall() {
+  if (!deferredInstallPrompt) {
+    showToast('اضغط قائمة المتصفح (⋮) واختر «تثبيت التطبيق»');
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  const choice = await deferredInstallPrompt.userChoice;
+  if (choice && choice.outcome === 'accepted') {
+    showToast('جاري تثبيت التطبيق...');
+  }
+  deferredInstallPrompt = null;
+  updatePwaInstallUI();
+}
+
+async function forceRefreshApp() {
+  if (!navigator.onLine) return showToast('يلزم الاتصال بالإنترنت لجلب آخر تحديث');
+  showToast('جاري جلب أحدث نسخة من الكود...');
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.update()));
+    }
+  } catch (e) {}
+  window.location.reload();
+}
+
+function registerPwaServiceWorker() {
+  updatePwaInstallUI();
+  if (!('serviceWorker' in navigator)) return;
+
+  let reloadedForUpdate = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadedForUpdate) return;
+    reloadedForUpdate = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+    // فحص وجود تحديث عند كل رجوع للتطبيق
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && navigator.onLine) {
+        reg.update().catch(() => {});
+      }
+    });
+  }).catch((err) => {
+    console.warn('SW registration skipped:', err);
+  });
+}
+
+registerPwaServiceWorker();
+
 // بدء تشغيل التطبيق بعد تحميل كل الملفات
 initApp();

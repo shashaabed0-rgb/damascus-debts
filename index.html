@@ -8,6 +8,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="دفتر الديون" />
   <title>دفتر الديون - مركز الدمشقي للصيانة</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -66,6 +69,9 @@
           </div>
         </div>
         <div class="header-btns">
+          <button class="icon-btn hidden" id="headerInstallBtn" title="تثبيت التطبيق" onclick="triggerPwaInstall()">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
           <button class="icon-btn hidden" id="headerAccountsBtn" title="إدارة الحسابات والأجهزة" onclick="openAccountsView()">
             <svg class="ic" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </button>
@@ -417,6 +423,18 @@
       </div>
 
       <button class="btn btn-primary" id="saveSettingsBtn" style="padding:14px;font-size:15.5px;margin-bottom:14px;" onclick="saveSettings()">حفظ الإعدادات</button>
+
+      <!-- تثبيت وتحديث التطبيق (PWA) -->
+      <div class="set-card" id="pwaInstallCard">
+        <h4 class="set-title">تثبيت وتحديث التطبيق</h4>
+        <div id="pwaStatusHint" style="font-size:12.5px;color:var(--muted);margin-bottom:10px;line-height:1.5;">
+          يمكنك تثبيت التطبيق على الشاشة الرئيسية ليفتح كبرنامج مستقل، وأي تعديل بالكود يظهر تلقائياً عند توفر الإنترنت.
+        </div>
+        <div class="toggle-2">
+          <button type="button" id="settingsInstallBtn" class="btn btn-primary hidden" onclick="triggerPwaInstall()">تثبيت التطبيق</button>
+          <button type="button" class="btn btn-light" onclick="forceRefreshApp()">تحديث النسخة الآن</button>
+        </div>
+      </div>
 
       <!-- الحساب السحابي (Supabase) -->
       <div class="set-card">
