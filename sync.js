@@ -36,7 +36,7 @@ let settings = {
   currency: 'USD',
   whatsappApp: 'normal',
   lockEnabled: false,
-  pin: '1234',
+  pin: '',
   bioEnabled: false,
   bioCredId: ''
 };
@@ -90,7 +90,7 @@ function loadDeviceSettings() {
     const dev = JSON.parse(localStorage.getItem(DEVICE_SETTINGS_KEY) || '{}');
     settings.whatsappApp = dev.whatsappApp || 'normal';
     settings.lockEnabled = !!dev.lockEnabled;
-    settings.pin = dev.pin || '1234';
+    settings.pin = dev.pin || '';
     settings.bioEnabled = !!dev.bioEnabled;
     settings.bioCredId = dev.bioCredId || '';
   } catch (e) {}
@@ -275,7 +275,7 @@ async function loadUserWorkspace(user) {
   updateHeaderLockButton();
 
   document.getElementById('loginScreen').classList.add('hidden');
-  if (settings.lockEnabled && sessionStorage.getItem('debt_unlocked_v3') !== '1') {
+  if (settings.lockEnabled && settings.pin && sessionStorage.getItem('debt_unlocked_v3') !== '1') {
     showLockScreen();
   } else {
     showMainView();

@@ -138,9 +138,7 @@ function applyBrandingUI() {
     document.getElementById('drawerUserMeta').textContent = `${uName} (${getRoleLabel(currentProfile.role)})`;
   }
 
-  const phones = getShopPhonesList();
-  const subParts = [phones[0] || '', settings.shopAddress].filter(Boolean);
-  document.getElementById('headerShopSub').textContent = subParts.length ? subParts.join(' • ') : 'دفتر الديون';
+  document.getElementById('headerShopSub').textContent = 'دفتر الديون';
 
   const hLogo = document.getElementById('headerLogo');
   const dLogo = document.getElementById('drawerLogo');
@@ -180,7 +178,7 @@ document.getElementById('pinInput').addEventListener('keydown', e => {
 
 function unlockWithPin() {
   const val = document.getElementById('pinInput').value.trim();
-  if (val === String(settings.pin || '1234')) {
+  if (settings.pin && val === String(settings.pin)) {
     sessionStorage.setItem('debt_unlocked_v3', '1');
     showMainView();
   } else {
@@ -189,12 +187,22 @@ function unlockWithPin() {
 }
 
 function lockApp() {
+  if (!settings.pin) return showToast('يرجى تعيين رمز سري من الإعدادات أولاً');
   sessionStorage.removeItem('debt_unlocked_v3');
   showLockScreen();
 }
 
+function refreshDrawerToolsSection() {
+  const installHidden = document.getElementById('drawerInstallBtn')?.classList.contains('hidden');
+  const lockHidden = document.getElementById('drawerLockBtn')?.classList.contains('hidden');
+  const hideSection = Boolean(installHidden && lockHidden);
+  document.getElementById('drawerToolsDivider')?.classList.toggle('hidden', hideSection);
+  document.getElementById('drawerToolsLabel')?.classList.toggle('hidden', hideSection);
+}
+
 function updateHeaderLockButton() {
-  document.getElementById('drawerLockBtn').classList.toggle('hidden', !settings.lockEnabled);
+  document.getElementById('drawerLockBtn').classList.toggle('hidden', !(settings.lockEnabled && settings.pin));
+  refreshDrawerToolsSection();
 }
 
 function bufToBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
@@ -592,15 +600,12 @@ function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt')
   editingTxId = null;
   document.getElementById('txModalTitle').textContent = 'تسجيل عملية جديدة';
   document.getElementById('saveTxBtn').textContent = 'حفظ العملية';
-  document.getElementById('saveTxWaBtn').classList.remove('hidden');
   document.getElementById('txName').value = prefillName;
   document.getElementById('txPhone').value = prefillPhone;
   document.getElementById('txAmount').value = '';
-  const dateEl = document.getElementById('txDate');
-  dateEl.value = toInputDate(todayString());
-  dateEl.disabled = true;
-  document.getElementById('txDateLockHint').textContent = '(مثبّت تلقائياً لليوم — يتعدل من زر التعديل)';
   document.getElementById('txNote').value = '';
+  document.getElementById('txDate').value = toInputDate(todayString());
+  document.getElementById('txDateField').classList.add('hidden');
   document.getElementById('txCurrLabel').textContent = getCurr().symbol;
   setTxKind(defaultKind);
   openModal('addModal');
@@ -616,15 +621,12 @@ function openEditTxModal(id) {
   editingTxId = String(rec.id);
   document.getElementById('txModalTitle').textContent = 'تعديل الحركة';
   document.getElementById('saveTxBtn').textContent = 'حفظ التعديل';
-  document.getElementById('saveTxWaBtn').classList.add('hidden');
   document.getElementById('txName').value = rec.name || '';
   document.getElementById('txPhone').value = String(rec.phone || '').replace(/^'/, '');
   document.getElementById('txAmount').value = rec.amount || '';
-  const dateEl = document.getElementById('txDate');
-  dateEl.value = toInputDate(rec.date);
-  dateEl.disabled = false;
-  document.getElementById('txDateLockHint').textContent = '(قابل للتعديل)';
   document.getElementById('txNote').value = rec.note || '';
+  document.getElementById('txDate').value = toInputDate(rec.date);
+  document.getElementById('txDateField').classList.remove('hidden');
   document.getElementById('txCurrLabel').textContent = getCurr().symbol;
   setTxKind(isPayType(rec.type) ? 'pay' : 'debt');
   openModal('addModal');
@@ -648,7 +650,7 @@ function setTxKind(k) {
   document.getElementById('btnKindPay').className = 'tog-btn' + (k === 'pay' ? ' on-pay' : '');
 }
 
-function saveTransaction(alsoSendWa = false) {
+function saveTransaction() {
   const name = document.getElementById('txName').value.trim();
   const phone = document.getElementById('txPhone').value.trim();
   const amount = parseFloat(document.getElementById('txAmount').value);
@@ -693,9 +695,6 @@ function saveTransaction(alsoSendWa = false) {
       renderCustomerDetail(name);
     }
     triggerSyncOrOfflineToast('تم الحفظ، جاري المزامنة...', 'تم الحفظ محلياً (سيُزامن عند عودة الإنترنت)');
-    if (alsoSendWa) {
-      sendWhatsApp({ ...rec, kind: txKind }, name);
-    }
   }
 }
 
@@ -817,7 +816,7 @@ function openSettingsView() {
   document.getElementById('setShamCashToggle').checked = !!settings.shamCashEnabled;
   document.getElementById('setShamCashCode').value = settings.shamCashCode || '';
   document.getElementById('setLockToggle').checked = !!settings.lockEnabled;
-  document.getElementById('setPinInput').value = settings.pin || '1234';
+  document.getElementById('setPinInput').value = settings.pin || '';
   document.getElementById('setNewPassInput').value = '';
 
   document.getElementById('setAccountName').textContent = currentProfile?.display_name || '—';
@@ -928,7 +927,7 @@ async function saveSettings() {
   // حفظ إعدادات هذا الجهاز محلياً
   settings.whatsappApp = tempSettingsWa;
   settings.lockEnabled = lockOn;
-  settings.pin = pinVal || '1234';
+  settings.pin = lockOn ? pinVal : '';
   if (!lockOn) { settings.bioEnabled = false; settings.bioCredId = ''; }
   persistDeviceSettings();
 
@@ -1017,6 +1016,7 @@ function updatePwaInstallUI() {
   } else {
     drawerBtn.classList.remove('hidden');
   }
+  refreshDrawerToolsSection();
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {

@@ -78,7 +78,8 @@ button, input, textarea, select { font-family: inherit; }
 /* ==================== القائمة الجانبية (3 شخطات) ==================== */
 .side-menu-backdrop {
   position: fixed; inset: 0; z-index: 420;
-  background: rgba(15, 23, 42, 0.48);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
   opacity: 0; pointer-events: none;
   transition: opacity 0.2s ease;
 }
@@ -87,47 +88,65 @@ button, input, textarea, select { font-family: inherit; }
 }
 .side-menu-drawer {
   position: fixed; top: 0; right: 0; bottom: 0;
-  width: 285px; max-width: 84vw;
-  background: #ffffff;
+  width: 292px; max-width: 84vw;
+  background: #f8fafc;
   display: flex; flex-direction: column;
-  box-shadow: -8px 0 30px rgba(15, 23, 42, 0.22);
+  box-shadow: -10px 0 32px rgba(15, 23, 42, 0.22);
   transform: translateX(100%);
-  transition: transform 0.22s ease;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .side-menu-backdrop.open .side-menu-drawer {
   transform: translateX(0);
 }
 .side-menu-head {
-  background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
-  color: #fff; padding: 18px 16px;
+  background: linear-gradient(145deg, #1e3a8a 0%, #2563eb 100%);
+  color: #fff; padding: 20px 16px;
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
 }
-.side-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.side-brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .side-shop-name { font-size: 15.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.side-user-meta { font-size: 12px; opacity: 0.88; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-user-meta { font-size: 12px; opacity: 0.88; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .side-close-btn {
   width: 34px; height: 34px; border-radius: 10px; border: none;
-  background: rgba(255, 255, 255, 0.16); color: #fff; font-size: 16px;
+  background: rgba(255, 255, 255, 0.16); color: #fff; font-size: 15px;
   cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
 }
+.side-close-btn:active { background: rgba(255, 255, 255, 0.28); }
 .side-menu-list {
-  flex: 1; padding: 12px 10px; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 6px;
+  flex: 1; padding: 14px 12px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.side-section-label {
+  font-size: 11.5px; font-weight: 800; color: var(--muted);
+  padding: 4px 6px 2px; letter-spacing: 0.2px;
+}
+.side-divider {
+  height: 1px; background: var(--border); margin: 6px 4px;
 }
 .side-menu-footer {
-  padding: 10px; border-top: 1px solid var(--border);
+  padding: 12px; background: #fff; border-top: 1px solid var(--border);
 }
 .side-menu-item {
-  width: 100%; border: none; background: transparent;
-  color: var(--text); padding: 12px 13px; border-radius: 12px;
-  font-size: 14.5px; font-weight: 700; cursor: pointer;
-  display: flex; align-items: center; gap: 11px; text-align: right;
-  transition: background 0.15s;
+  width: 100%; border: 1px solid var(--border); background: #ffffff;
+  color: var(--text); padding: 10px 11px; border-radius: 13px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; text-align: right;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
-.side-menu-item:active, .side-menu-item:hover { background: var(--primary-soft); color: var(--primary); }
-.side-menu-item.danger { color: var(--danger); }
-.side-menu-item.danger:active, .side-menu-item.danger:hover { background: var(--danger-soft); color: var(--danger); }
+.side-menu-item:active { transform: scale(0.985); }
+.side-menu-item:hover { background: var(--primary-soft); border-color: #bfdbfe; color: var(--primary); }
+.side-item-ic {
+  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+  background: var(--primary-soft); color: var(--primary);
+  display: flex; align-items: center; justify-content: center;
+}
+.side-item-ic.danger { background: var(--danger-soft); color: var(--danger); }
+.side-item-txt { flex: 1; min-width: 0; }
+.side-item-arrow { color: #94a3b8; flex-shrink: 0; }
+.side-menu-item.danger { color: var(--danger); border-color: var(--danger-border); background: #fff; }
+.side-menu-item.danger:hover, .side-menu-item.danger:active { background: var(--danger-soft); color: var(--danger); }
 
 /* ==================== الهيدر ==================== */
 .top-header {
@@ -204,28 +223,35 @@ button, input, textarea, select { font-family: inherit; }
 .search-input:focus { border-color: var(--primary-2); }
 
 .segmented {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-  background: #e2e8f0; padding: 4px; border-radius: 12px; margin-bottom: 14px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+  background: #e6ecf5; padding: 4px; border-radius: 13px; margin-bottom: 14px;
+  border: 1px solid #dbe4f0;
 }
 .segmented.cols-2 { grid-template-columns: repeat(2, 1fr); }
 .seg-btn {
-  padding: 8px 6px; border: none; background: transparent;
-  border-radius: 9px; font-size: 13px; font-weight: 700;
-  color: #475569; cursor: pointer; transition: 0.15s;
+  padding: 9px 6px; border: none; background: transparent;
+  border-radius: 10px; font-size: 13px; font-weight: 700;
+  color: #475569; cursor: pointer; transition: all 0.16s ease;
 }
-.seg-btn.active { background: #fff; color: var(--primary); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
+.seg-btn.active {
+  background: #fff; color: var(--primary);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
 
 .cust-card {
-  background: var(--card); border-radius: var(--radius); padding: 13px 14px;
-  margin-bottom: 9px; border: 1px solid var(--border); box-shadow: var(--shadow);
+  background: var(--card); border-radius: 15px; padding: 13px 14px;
+  margin-bottom: 10px; border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  cursor: pointer; transition: transform 0.1s, background 0.15s;
+  cursor: pointer; transition: transform 0.12s, border-color 0.15s, background 0.15s;
 }
+.cust-card:hover { border-color: #cbd5e1; }
 .cust-card:active { transform: scale(0.99); background: #f8fafc; }
-.cust-left { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.cust-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .avatar {
-  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
-  background: var(--primary-soft); color: var(--primary);
+  width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0;
+  background: linear-gradient(145deg, #eff6ff, #dbeafe); color: var(--primary);
+  border: 1px solid #dbeafe;
   display: flex; align-items: center; justify-content: center;
   font-size: 17px; font-weight: 800;
 }
@@ -476,7 +502,6 @@ button, input, textarea, select { font-family: inherit; }
 /* حقول النماذج */
 .field { margin-bottom: 13px; }
 .field label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 5px; }
-.date-lock-hint { font-size: 11px; font-weight: 600; color: var(--muted); margin-right: 4px; }
 .field-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
 .input {
   width: 100%; padding: 11px 12px; border: 1.5px solid var(--border);
@@ -500,10 +525,13 @@ textarea.input { resize: vertical; min-height: 68px; }
 
 /* بطاقات الإعدادات */
 .set-card {
-  background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 15px; margin-bottom: 13px; box-shadow: var(--shadow);
+  background: #fff; border: 1px solid rgba(226, 232, 240, 0.95); border-radius: 16px;
+  padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
 }
-.set-title { font-size: 14.5px; font-weight: 800; color: var(--primary); margin: 0 0 12px; }
+.set-title {
+  font-size: 14.5px; font-weight: 800; color: var(--primary);
+  margin: 0 0 13px; padding-bottom: 9px; border-bottom: 1px solid #f1f5f9;
+}
 .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .logo-prev {
   width: 58px; height: 58px; border-radius: 12px; border: 1.5px dashed #cbd5e1;
