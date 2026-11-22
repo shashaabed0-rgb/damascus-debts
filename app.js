@@ -388,6 +388,7 @@ function showMainView() {
   document.getElementById('lockScreen').classList.add('hidden');
   document.getElementById('mainView').classList.remove('hidden');
   armRootExitGuard();
+  applyMainFiltersVisibility();
   processAndRender();
   subscribeRealtime();
   syncData(false);
@@ -684,9 +685,28 @@ function processAndRender() {
 
 function setFilter(f, btn) {
   currentFilter = f;
-  document.querySelectorAll('#mainView .seg-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  document.querySelectorAll('#mainFilterTabs .seg-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
   renderCustomers();
+}
+
+function applyMainFiltersVisibility() {
+  const show = !!settings.showMainFilters;
+  const el = document.getElementById('mainFilterTabs');
+  if (el) el.classList.toggle('hidden', !show);
+  if (!show && currentFilter !== 'all') {
+    currentFilter = 'all';
+    const btns = document.querySelectorAll('#mainFilterTabs .seg-btn');
+    btns.forEach((b, idx) => b.classList.toggle('active', idx === 0));
+    renderCustomers();
+  }
+}
+
+function toggleShowFiltersSetting(checked) {
+  settings.showMainFilters = !!checked;
+  persistDeviceSettings();
+  applyMainFiltersVisibility();
+  showToast(settings.showMainFilters ? 'تم إظهار التصنيفات في الواجهة الرئيسية' : 'تم إخفاء التصنيفات من الواجهة الرئيسية');
 }
 
 function buildCustomerBalancePillsHtml(c) {
@@ -1198,6 +1218,7 @@ function openSettingsView() {
   populateWaSettingsDrawer();
   populateBackupSettingsDrawer();
 
+  document.getElementById('setShowFiltersToggle').checked = !!settings.showMainFilters;
   document.getElementById('setLockToggle').checked = !!settings.lockEnabled;
   document.getElementById('setPinInput').value = settings.pin || '';
   document.getElementById('setNewPassInput').value = '';
@@ -1311,6 +1332,7 @@ async function saveSettings() {
 
   // حفظ إعدادات هذا الجهاز محلياً
   settings.whatsappApp = tempSettingsWa;
+  settings.showMainFilters = !!document.getElementById('setShowFiltersToggle').checked;
   settings.lockEnabled = lockOn;
   settings.pin = lockOn ? pinVal : '';
   if (!lockOn) { settings.bioEnabled = false; settings.bioCredId = ''; }
@@ -1371,6 +1393,7 @@ async function saveSettings() {
   }
 
   applyBrandingUI();
+  applyMainFiltersVisibility();
   updateHeaderLockButton();
   processAndRender();
   closeSettingsView();
@@ -1772,7 +1795,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v14.0';
+  const ver = (APP_META && APP_META.version) || 'v15.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -1803,7 +1826,7 @@ function openAboutModal() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v14.0';
+  const ver = (APP_META && APP_META.version) || 'v15.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
@@ -1919,6 +1942,10 @@ function registerPwaServiceWorker() {
   });
 
   navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+    // محاولة تفعيل فحص دوري بالخلفية (على أندرويد عند تثبيت التطبيق) لإبقاء السيرفر نشطاً
+    if ('periodicSync' in reg) {
+      reg.periodicSync.register('supabase-keepalive', { minInterval: 24 * 60 * 60 * 1000 }).catch(() => {});
+    }
     // فحص وجود تحديث عند كل رجوع للتطبيق
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && navigator.onLine) {

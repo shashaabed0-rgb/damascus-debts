@@ -20,7 +20,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v14.0',
+  version: 'v15.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '' // ضع رقم التواصل هنا لتثبيته لجميع الورشات (أو يُؤخذ تلقائياً من هاتف المحل)
@@ -68,6 +68,7 @@ let settings = {
   currency: 'BOTH',
   whatsappApp: 'normal',
   themeMode: 'auto',
+  showMainFilters: false,
   lockEnabled: false,
   pin: '',
   bioEnabled: false,
@@ -136,6 +137,7 @@ function loadDeviceSettings() {
     const dev = JSON.parse(localStorage.getItem(DEVICE_SETTINGS_KEY) || '{}');
     settings.whatsappApp = dev.whatsappApp || 'normal';
     settings.themeMode = (dev.themeMode === 'light' || dev.themeMode === 'dark' || dev.themeMode === 'auto') ? dev.themeMode : 'auto';
+    settings.showMainFilters = !!dev.showMainFilters;
     settings.lockEnabled = !!dev.lockEnabled;
     settings.pin = dev.pin || '';
     settings.bioEnabled = !!dev.bioEnabled;
@@ -148,6 +150,7 @@ function persistDeviceSettings() {
   localStorage.setItem(DEVICE_SETTINGS_KEY, JSON.stringify({
     whatsappApp: settings.whatsappApp,
     themeMode: settings.themeMode || 'auto',
+    showMainFilters: !!settings.showMainFilters,
     lockEnabled: settings.lockEnabled,
     pin: settings.pin,
     bioEnabled: settings.bioEnabled,

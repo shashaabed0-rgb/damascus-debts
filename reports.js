@@ -592,22 +592,18 @@ async function exportCustomerPDF(includeArchive = false) {
     }
 
     const safeName = cust.name.replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '').trim() || 'كشف_حساب';
-    const fileName = `${isFullReport ? 'كشف_شامل' : 'كشف_حساب'}_${safeName}.pdf`;
+    const dateSlug = todayString().replace(/\//g, '-');
+    const fileName = `${safeName}_${dateSlug}.pdf`;
     const pdfBlob = doc.output('blob');
     const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
-    const shareLines = [
-      `${isFullReport ? 'كشف حساب شامل (مطابقة)' : 'كشف حساب'} ${cust.name} - ${settings.shopName}`
-    ];
-    if (shamEnabled) {
-      shareLines.push(`شام كاش (للنسخ المباشر): ${shamAscii || shamRaw}`);
-    }
+    const shareLabel = `${cust.name} - ${todayString()}`;
 
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       await navigator.share({
         files: [pdfFile],
-        title: `${isFullReport ? 'كشف حساب شامل' : 'كشف حساب'} ${cust.name}`,
-        text: shareLines.join('\n')
+        title: shareLabel,
+        text: shareLabel
       });
     } else {
       const url = URL.createObjectURL(pdfBlob);

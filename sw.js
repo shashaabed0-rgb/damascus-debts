@@ -1,4 +1,4 @@
-const APP_CACHE = 'damascus-debts-app-v11';
+const APP_CACHE = 'damascus-debts-app-v12';
 const CDN_CACHE = 'damascus-debts-cdn-v1';
 
 const APP_SHELL = [
@@ -90,6 +90,20 @@ self.addEventListener('fetch', (event) => {
           .catch(() => cached);
         return cached || netPromise;
       })
+    );
+  }
+});
+
+// نبضة يومية خفيفة بالخلفية (في حال سمح نظام الجهاز) لإبقاء Supabase نشطاً
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'supabase-keepalive') {
+    event.waitUntil(
+      fetch('https://oeojvcikwiyiwmenozew.supabase.co/rest/v1/workshops?select=id&limit=1', {
+        method: 'GET',
+        headers: {
+          apikey: 'sb_publishable_Qescc0we7OizukGkCGc29w_kIiBhUHU'
+        }
+      }).catch(() => {})
     );
   }
 });
