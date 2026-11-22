@@ -196,6 +196,56 @@ function formatPdfMoneyHtml(amount, unit, opts = {}) {
   return `<span dir="rtl" style="display:inline-block;white-space:nowrap;letter-spacing:0;">${prefixHtml}<span dir="ltr" style="display:inline-block;unicode-bidi:isolate;color:${numColor};font-weight:${weight};">${numStr}</span><span style="display:inline-block;width:5px;"></span><span style="display:inline-block;color:${unitColor};font-weight:700;">${escapeHtml(unit)}</span>${suffixHtml}</span>`;
 }
 
+function formatPdfTextHtml(rawText) {
+  const s = String(rawText == null ? '' : rawText).trim();
+  if (!s) return '—';
+  const lines = s.split(/\r?\n/);
+  const ltrRe = /[A-Za-z0-9٠-٩۰-۹]+(?:[ \t._:/\-+][A-Za-z0-9٠-٩۰-۹]+)*/g;
+
+  return lines.map(line => {
+    const parts = [];
+    let lastIdx = 0;
+    let m;
+    ltrRe.lastIndex = 0;
+    while ((m = ltrRe.exec(line)) !== null) {
+      if (m.index > lastIdx) {
+        parts.push({ type: 'rtl', text: line.slice(lastIdx, m.index) });
+      }
+      parts.push({ type: 'ltr', text: normalizeDigits(m[0]) });
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < line.length) {
+      parts.push({ type: 'rtl', text: line.slice(lastIdx) });
+    }
+    if (parts.length === 0) return '';
+
+    const htmlParts = [];
+    for (let i = 0; i < parts.length; i++) {
+      const prev = parts[i - 1];
+      const cur = parts[i];
+      const next = parts[i + 1];
+
+      if (cur.type === 'rtl') {
+        let t = cur.text;
+        if (prev && prev.type === 'ltr') t = t.replace(/^\s+/, '');
+        if (next && next.type === 'ltr') t = t.replace(/\s+$/, '');
+        if (t) {
+          if (htmlParts.length > 0) {
+            htmlParts.push('<span style="display:inline-block;width:5px;"></span>');
+          }
+          htmlParts.push(`<span>${escapeHtml(t)}</span>`);
+        }
+      } else {
+        if (htmlParts.length > 0) {
+          htmlParts.push('<span style="display:inline-block;width:5px;"></span>');
+        }
+        htmlParts.push(`<span dir="ltr" style="display:inline-block;unicode-bidi:isolate;white-space:normal;">${escapeHtml(cur.text)}</span>`);
+      }
+    }
+    return htmlParts.join('');
+  }).join('<br/>');
+}
+
 async function exportCustomerPDF(includeArchive = false) {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
@@ -221,7 +271,7 @@ async function exportCustomerPDF(includeArchive = false) {
 
     const shopPhones = getShopPhonesList();
     const shopAddressHtml = settings.shopAddress
-      ? `<div style="font-size:12px;color:#4b5563;margin-top:3px;">${escapeHtml(settings.shopAddress)}</div>`
+      ? `<div style="font-size:12px;color:#4b5563;margin-top:3px;">${formatPdfTextHtml(settings.shopAddress)}</div>`
       : '';
     const shopPhonesHtml = shopPhones.length > 0
       ? `<div style="font-size:12px;color:#374151;margin-top:2px;font-weight:600;">هاتف: <span dir="ltr" style="unicode-bidi:embed;">${shopPhones.map(escapeHtml).join('  •  ')}</span></div>`
@@ -296,7 +346,7 @@ async function exportCustomerPDF(includeArchive = false) {
           <td style="padding:8px 6px;border:1px solid #cbd5e1;white-space:nowrap;color:#334155;text-align:center;"><span dir="ltr" style="display:inline-block;">${escapeHtml(formatDate(r.date))}</span></td>
           <td style="padding:8px 6px;border:1px solid #cbd5e1;font-weight:700;color:${isDebt ? '#1e293b' : '#334155'};white-space:nowrap;text-align:center;">${isDebt ? 'دين (+)' : 'دفعة (−)'}${archBadge}</td>
           <td style="padding:8px 7px;border:1px solid #cbd5e1;direction:rtl;text-align:center;white-space:nowrap;">${formatPdfMoneyHtml(r.amount, unit, { color: '#0f172a', weight: '800' })}</td>
-          <td style="padding:8px 9px;border:1px solid #cbd5e1;color:#334155;line-height:1.5;">${escapeHtml(r.note || '—')}</td>
+          <td style="padding:8px 9px;border:1px solid #cbd5e1;color:#1e293b;font-size:13.5px;font-weight:600;line-height:1.6;">${r.note ? formatPdfTextHtml(r.note) : '—'}</td>
         </tr>
       `;
     }).join('');
@@ -310,7 +360,7 @@ async function exportCustomerPDF(includeArchive = false) {
           <div style="display:flex;align-items:center;gap:12px;">
             ${logoHtml}
             <div>
-              <div style="font-size:20px;font-weight:800;color:#1e293b;">${escapeHtml(settings.shopName || 'دفتر الديون')}</div>
+              <div style="font-size:20px;font-weight:800;color:#1e293b;">${formatPdfTextHtml(settings.shopName || 'دفتر الديون')}</div>
               ${shopAddressHtml}
               ${shopPhonesHtml}
             </div>
@@ -326,7 +376,7 @@ async function exportCustomerPDF(includeArchive = false) {
         <div style="border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;background:#ffffff;">
           <div>
             <span style="font-size:11.5px;color:#64748b;margin-left:6px;">اسم الزبون:</span>
-            <span style="font-size:16px;font-weight:800;color:#0f172a;">${escapeHtml(cust.name)}</span>
+            <span style="font-size:16px;font-weight:800;color:#0f172a;">${formatPdfTextHtml(cust.name)}</span>
           </div>
           <div style="text-align:left;">
             <span style="font-size:11.5px;color:#64748b;margin-left:6px;">الهاتف:</span>
@@ -376,7 +426,7 @@ async function exportCustomerPDF(includeArchive = false) {
       generalNoteEl.innerHTML = `
         <div style="background:#ffffff;border:1px solid #d1d5db;border-right:3px solid #4b5563;border-radius:8px;padding:10px 14px;color:#374151;font-size:12.5px;line-height:1.6;">
           <div style="font-size:12px;font-weight:800;color:#111827;margin-bottom:2px;">ملاحظة عامة:</div>
-          <div style="white-space:pre-wrap;">${escapeHtml(generalNote)}</div>
+          <div style="line-height:1.65;">${formatPdfTextHtml(generalNote)}</div>
         </div>
       `;
       stage.appendChild(generalNoteEl);

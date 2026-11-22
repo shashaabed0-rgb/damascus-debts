@@ -381,7 +381,7 @@ button, input, textarea, select { font-family: inherit; }
 .tx-tag.debt { background: var(--danger-soft); color: var(--danger); }
 .tx-tag.pay { background: var(--success-soft); color: var(--success); }
 .tx-date { font-size: 12px; color: var(--muted); }
-.tx-note { font-size: 13px; color: #334155; margin-top: 4px; word-break: break-word; }
+.tx-note { font-size: 15px; font-weight: 600; color: #1e293b; margin-top: 6px; line-height: 1.5; word-break: break-word; }
 .tx-right { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
 .tx-amt { font-size: 15px; font-weight: 800; direction: rtl; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
 .tx-btn {
@@ -1492,7 +1492,7 @@ html[data-theme="dark"] .tx-card.archived {
   background: #151f30;
   border-color: #233046;
 }
-html[data-theme="dark"] .tx-note { color: #cbd5e1; }
+html[data-theme="dark"] .tx-note { color: #e2e8f0; }
 
 html[data-theme="dark"] .cust-card:hover { border-color: #3b4f70; }
 html[data-theme="dark"] .cust-card:active { background: #1e2b40; }
@@ -1824,4 +1824,20 @@ html[data-theme="dark"] .about-app-icon {
   font-weight: 700;
   color: var(--muted);
   margin-right: 4px;
+}
+
+/* ==================== قفل تحديد النصوص والنسخ العشوائي (التحديد فقط ضمن مربعات الإدخال) ==================== */
+html, body, body * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, select, [contenteditable="true"], .qc-code-box {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
 }

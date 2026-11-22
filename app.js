@@ -1772,7 +1772,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v13.0';
+  const ver = (APP_META && APP_META.version) || 'v14.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -1803,7 +1803,7 @@ function openAboutModal() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v13.0';
+  const ver = (APP_META && APP_META.version) || 'v14.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
@@ -1929,6 +1929,18 @@ function registerPwaServiceWorker() {
     console.warn('SW registration skipped:', err);
   });
 }
+
+// ==================== منع التحديد والنسخ العشوائي خارج مربعات الإدخال ====================
+function isSelectableField(target) {
+  if (!target || !target.closest) return false;
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"], .qc-code-box'));
+}
+
+document.addEventListener('selectstart', (e) => {
+  if (!isSelectableField(e.target)) {
+    e.preventDefault();
+  }
+});
 
 syncAppVersionBadges();
 registerPwaServiceWorker();
