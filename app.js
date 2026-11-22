@@ -391,10 +391,9 @@ function showMainView() {
   applyMainFiltersVisibility();
   processAndRender();
   if (!navigator.onLine || !ensureSupabaseClient()) {
-    showOfflineStatusBanner('بدون شبكة (بياناتك محفوظة)');
+    showOfflineStatusBanner('بدون شبكة');
   } else {
-    const lastTxt = getLastUpdateDisplayText();
-    if (lastTxt) updateSyncStatusUI(`جاري التحديث... • ${lastTxt}`, 'off');
+    updateSyncStatusUI('جاري المزامنة...', 'off');
   }
   subscribeRealtime();
   syncData(false);
@@ -639,20 +638,50 @@ function processAndRender() {
     });
   });
 
-  groupedCustomers = Object.values(map).map(entry => {
+  const tempList = Object.values(map).map(entry => {
     const summary = finalizeCustomerCurrencies(entry.rawRecords);
     return {
       name: entry.name,
       phone: entry.phone,
       records: entry.rawRecords,
+      conflictGroupKey: getConflictBaseKey(entry.name),
+      isDuplicateConflict: false,
+      conflictPeers: [],
       ...summary
     };
-  }).sort((a, b) => {
+  });
+
+  // كشف الأسماء المتطابقة / المتشابهة (سواء المضافة أوفلاين أو المتشابهة إملائياً) لإظهارها معاً بعلامة تعديل
+  const conflictGroups = new Map();
+  tempList.forEach(c => {
+    if (!c.conflictGroupKey) return;
+    if (!conflictGroups.has(c.conflictGroupKey)) conflictGroups.set(c.conflictGroupKey, []);
+    conflictGroups.get(c.conflictGroupKey).push(c);
+  });
+
+  conflictGroups.forEach(group => {
+    if (group.length >= 2) {
+      group.forEach(c => {
+        c.isDuplicateConflict = true;
+        c.conflictPeers = group.filter(x => x.name !== c.name).map(x => x.name);
+      });
+    }
+  });
+
+  groupedCustomers = tempList.sort((a, b) => {
+    const aDup = a.isDuplicateConflict ? 1 : 0;
+    const bDup = b.isDuplicateConflict ? 1 : 0;
+    if (bDup !== aDup) return bDup - aDup;
+    if (aDup && bDup && a.conflictGroupKey !== b.conflictGroupKey) {
+      return a.conflictGroupKey.localeCompare(b.conflictGroupKey, 'ar');
+    }
     const aHas = a.hasDebt ? 1 : 0;
     const bHas = b.hasDebt ? 1 : 0;
     if (bHas !== aHas) return bHas - aHas;
     return a.name.localeCompare(b.name, 'ar');
   });
+
+  updateDuplicateConflictBannerUI();
 
   let grandUsd = 0;
   let grandSyp = 0;
@@ -735,10 +764,38 @@ function buildCustomerBalancePillsHtml(c) {
   return `<div class="bal-stack">${pills.join('')}</div>`;
 }
 
+let showConflictsOnly = false;
+
+function updateDuplicateConflictBannerUI() {
+  const banner = document.getElementById('duplicateConflictBanner');
+  if (!banner) return;
+  const dupList = groupedCustomers.filter(c => c.isDuplicateConflict);
+  if (dupList.length === 0) {
+    showConflictsOnly = false;
+    banner.classList.add('hidden');
+    banner.innerHTML = '';
+    return;
+  }
+  banner.classList.remove('hidden');
+  banner.innerHTML = `
+    <div>⚠️ يوجد أسماء متطابقة/متشابهة (${dupList.length} حساب) — ظهرت معاً بالأسفل لتعديل أحدها</div>
+    <button type="button" class="dup-banner-btn" onclick="toggleConflictsOnlyFilter()">
+      ${showConflictsOnly ? 'عرض كل الزبائن' : 'عرض المتشابهة فقط'}
+    </button>
+  `;
+}
+
+function toggleConflictsOnlyFilter() {
+  showConflictsOnly = !showConflictsOnly;
+  updateDuplicateConflictBannerUI();
+  renderCustomers();
+}
+
 function renderCustomers() {
   const q = normalizeDigits(document.getElementById('searchInput').value).trim().toLowerCase();
 
   visibleCustomers = groupedCustomers.filter(c => {
+    if (showConflictsOnly && !c.isDuplicateConflict) return false;
     const normPhone = normalizeDigits(c.phone || '').toLowerCase();
     const matches = !q || c.name.toLowerCase().includes(q) || normPhone.includes(q);
     if (!matches) return false;
@@ -759,14 +816,22 @@ function renderCustomers() {
     const metaParts = [c.phone, `${c.activeRecords.length} حركة حالية`];
     if (c.archivedCount > 0) metaParts.push(`${c.archivedCount} بالأرشيف`);
     const meta = metaParts.filter(Boolean).join(' • ') + pendMark;
+    const encName = encodeURIComponent(c.name);
+    const dupRowHtml = c.isDuplicateConflict
+      ? `<div class="dup-tag-row">
+           <span class="dup-badge">⚠️ اسم مكرر — عدّل الاسم</span>
+           <button type="button" class="dup-edit-btn" onclick="event.stopPropagation(); openEditCustomerModalByName('${encName}')">تعديل الاسم</button>
+         </div>`
+      : '';
 
     return `
-      <div class="cust-card" onclick="openCustomerDetail(${idx})">
+      <div class="cust-card${c.isDuplicateConflict ? ' is-dup-card' : ''}" onclick="openCustomerDetail(${idx})">
         <div class="cust-left">
           <div class="avatar">${escapeHtml(initial)}</div>
           <div style="min-width:0;">
             <div class="cust-name">${escapeHtml(c.name)}</div>
             <div class="cust-meta">${escapeHtml(meta)}</div>
+            ${dupRowHtml}
           </div>
         </div>
         ${buildCustomerBalancePillsHtml(c)}
@@ -892,6 +957,21 @@ function renderCustomerDetail(name) {
 
   document.getElementById('detailName').textContent = cust.name;
   document.getElementById('detailPhone').textContent = cust.phone ? cust.phone : 'بدون رقم هاتف';
+
+  const detDupBanner = document.getElementById('detailDupBanner');
+  if (detDupBanner) {
+    if (cust.isDuplicateConflict) {
+      const peersTxt = (cust.conflictPeers || []).map(escapeHtml).join('، ');
+      detDupBanner.classList.remove('hidden');
+      detDupBanner.innerHTML = `
+        <div>⚠️ هذا الاسم مطابق/مشابه لـ «<strong>${peersTxt}</strong>» — يرجى تعديل أحد الاسمين للتمييز بينهما.</div>
+        <button type="button" class="dup-banner-btn" onclick="openEditCustomerModal()">تعديل الاسم</button>
+      `;
+    } else {
+      detDupBanner.classList.add('hidden');
+      detDupBanner.innerHTML = '';
+    }
+  }
   document.getElementById('activeSectionTitle').textContent =
     cust.archivedCount > 0 ? 'الحركات الحالية (تُدرج في كشف PDF)' : 'سجل الحركات';
   document.getElementById('detailTxCount').textContent = `${cust.activeRecords.length} حركة`;
@@ -971,13 +1051,15 @@ function findSimilarCustomer(rawName, excludeExactName = null) {
   const normNoSpace = norm.replace(/\s+/g, '');
   const excludeTrim = excludeExactName ? String(excludeExactName).trim() : null;
 
+  const baseNoSpace = getConflictBaseKey(rawName);
   for (const c of groupedCustomers) {
     const cName = String(c.name || '').trim();
     if (excludeTrim && cName === excludeTrim) continue;
     const cNorm = normalizeArabicNameForCompare(cName);
     if (!cNorm) continue;
     const cNoSpace = cNorm.replace(/\s+/g, '');
-    if (cNorm === norm || cNoSpace === normNoSpace) {
+    const cBase = getConflictBaseKey(cName);
+    if (cNorm === norm || cNoSpace === normNoSpace || (baseNoSpace && cBase === baseNoSpace)) {
       return c;
     }
   }
@@ -1032,7 +1114,7 @@ function checkDuplicateEditCustName() {
   if (!inp || !warnEl) return null;
 
   const val = inp.value.trim();
-  const match = findSimilarCustomer(val, currentCustomerName || null);
+  const match = findSimilarCustomer(val, editingCustomerTargetName || currentCustomerName || null);
   if (match) {
     warnEl.innerHTML = `<strong>لا يمكن التثبيت:</strong> يوجد زبون آخر باسم مطابق أو مشابه «<strong>${escapeHtml(match.name)}</strong>». يرجى تغيير الاسم أولاً.`;
     warnEl.classList.remove('hidden');
@@ -1183,8 +1265,9 @@ function saveTransaction() {
       note,
       created_by: currentProfile.display_name || currentProfile.email || ''
     });
+    const existedLocally = groupedCustomers.some(c => c.name === name);
     allRecords.push(rec);
-    queueUpsertRecord(rec);
+    queueUpsertRecord(rec, { isNewCustomer: !existedLocally });
     persistData();
     processAndRender();
     closeModal('addModal');
@@ -1196,9 +1279,24 @@ function saveTransaction() {
 }
 
 // ==================== تعديل وحذف ملف الزبون ====================
+let editingCustomerTargetName = null;
+
+function openEditCustomerModalByName(encodedName) {
+  const targetName = decodeURIComponent(encodedName || '');
+  const cust = groupedCustomers.find(c => c.name === targetName);
+  if (!cust) return;
+  editingCustomerTargetName = cust.name;
+  document.getElementById('editCustNameInput').value = cust.name;
+  document.getElementById('editCustPhoneInput').value = cust.phone || '';
+  checkDuplicateEditCustName();
+  openModal('editCustomerModal');
+  setTimeout(() => document.getElementById('editCustNameInput').focus(), 120);
+}
+
 function openEditCustomerModal() {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
+  editingCustomerTargetName = cust.name;
   document.getElementById('editCustNameInput').value = cust.name;
   document.getElementById('editCustPhoneInput').value = cust.phone || '';
   checkDuplicateEditCustName();
@@ -1206,7 +1304,8 @@ function openEditCustomerModal() {
 }
 
 function saveCustomerEdit() {
-  const oldName = currentCustomerName;
+  const oldName = editingCustomerTargetName || currentCustomerName;
+  if (!oldName) return;
   const newName = document.getElementById('editCustNameInput').value.trim();
   const newPhone = normalizeLocalPhoneInput(document.getElementById('editCustPhoneInput').value);
   if (!newName) return showToast('يرجى كتابة اسم الزبون');
@@ -1219,11 +1318,17 @@ function saveCustomerEdit() {
   const affectedIds = allRecords.filter(r => String(r.name || '').trim() === oldName).map(r => r.id);
   affectedIds.forEach(id => queueUpdateRecord(id, { name: newName, phone: newPhone }));
 
-  currentCustomerName = newName;
+  editingCustomerTargetName = null;
+  const detailOpen = document.getElementById('detailView').classList.contains('open');
+  if (detailOpen && currentCustomerName === oldName) {
+    currentCustomerName = newName;
+  }
   persistData();
   closeModal('editCustomerModal');
   processAndRender();
-  renderCustomerDetail(newName);
+  if (detailOpen && currentCustomerName) {
+    renderCustomerDetail(currentCustomerName);
+  }
   triggerSyncOrOfflineToast('تم تعديل ملف الزبون، جاري المزامنة...', 'تم التعديل محلياً (سيُزامن لاحقاً)');
 }
 
@@ -1911,7 +2016,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v16.0';
+  const ver = (APP_META && APP_META.version) || 'v17.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -1942,7 +2047,7 @@ function openAboutModal() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v16.0';
+  const ver = (APP_META && APP_META.version) || 'v17.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;

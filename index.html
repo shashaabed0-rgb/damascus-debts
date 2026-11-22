@@ -24,6 +24,125 @@
     })();
   </script>
   <link rel="stylesheet" href="style.css" />
+  <style id="v17-enhancements">
+    .dup-banner {
+      background: #fff7ed;
+      border: 1.5px solid #fb923c;
+      color: #9a3412;
+      border-radius: 12px;
+      padding: 11px 13px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    [data-theme="dark"] .dup-banner {
+      background: rgba(234, 88, 12, 0.16);
+      border-color: rgba(251, 146, 60, 0.55);
+      color: #fdba74;
+    }
+    .dup-banner-btn {
+      background: #ea580c;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 11px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .cust-card.is-dup-card {
+      border: 1.5px solid #f97316 !important;
+      box-shadow: 0 2px 10px rgba(249, 115, 22, 0.14);
+    }
+    .dup-tag-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 5px;
+    }
+    .dup-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #ffedd5;
+      color: #c2410c;
+      border: 1px solid #fdba74;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    [data-theme="dark"] .dup-badge {
+      background: rgba(234, 88, 12, 0.24);
+      color: #fdba74;
+      border-color: rgba(251, 146, 60, 0.5);
+    }
+    .dup-edit-btn {
+      background: #fff;
+      color: #c2410c;
+      border: 1px solid #fb923c;
+      border-radius: 7px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    [data-theme="dark"] .dup-edit-btn {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fed7aa;
+    }
+    .m-badge.m-dev-on {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+    }
+    [data-theme="dark"] .m-badge.m-dev-on {
+      background: rgba(59, 130, 246, 0.18);
+      color: #93c5fd;
+      border-color: rgba(59, 130, 246, 0.35);
+    }
+    .second-dev-alert {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #b91c1c;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      line-height: 1.5;
+    }
+    [data-theme="dark"] .second-dev-alert {
+      background: rgba(220, 38, 38, 0.18);
+      border-color: rgba(248, 113, 113, 0.45);
+      color: #fca5a5;
+    }
+    .btn-warn-sm {
+      background: #fff7ed !important;
+      color: #c2410c !important;
+      border: 1px solid #fdba74 !important;
+    }
+    [data-theme="dark"] .btn-warn-sm {
+      background: rgba(234, 88, 12, 0.2) !important;
+      color: #fdba74 !important;
+      border-color: rgba(251, 146, 60, 0.45) !important;
+    }
+  </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -134,7 +253,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v16.0</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v17.0</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -215,6 +334,8 @@
         <button class="seg-btn" onclick="setFilter('zero', this)">خالصين</button>
       </div>
 
+      <div id="duplicateConflictBanner" class="dup-banner hidden"></div>
+
       <div id="customerList"></div>
     </main>
 
@@ -249,6 +370,7 @@
     </div>
 
     <div class="view-body detail-view-body">
+      <div id="detailDupBanner" class="dup-banner hidden"></div>
       <div id="detailStatsWrap"></div>
 
       <div class="detail-box detail-actions-box">
@@ -349,12 +471,19 @@
               <label>كلمة المرور (6 أحرف أو أرقام على الأقل)</label>
               <input type="text" id="memPassInput" class="input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="new_member_secret" placeholder="6 أحرف فأكثر" required />
             </div>
-            <div class="switch-row" style="margin-bottom:14px;">
+            <div class="switch-row" style="margin-bottom:10px;">
               <div>
                 <div style="font-size:13.5px;font-weight:700;">السماح بحذف الحركات والزبائن</div>
                 <div style="font-size:11.5px;color:var(--muted);">المدير يملك صلاحية الحذف تلقائياً</div>
               </div>
               <input type="checkbox" id="memCanDeleteInput" />
+            </div>
+            <div class="switch-row" style="margin-bottom:14px;">
+              <div>
+                <div style="font-size:13.5px;font-weight:700;">العمل على جهاز واحد فقط</div>
+                <div style="font-size:11.5px;color:var(--muted);">يمنع فتح الحساب على جوال ثاني ويعطيك تنبيهاً</div>
+              </div>
+              <input type="checkbox" id="memSingleDeviceInput" checked />
             </div>
             <button type="submit" id="addMemberSubmitBtn" class="btn btn-primary">إنشاء الحساب وربطه فوراً</button>
           </form>
@@ -706,7 +835,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v16.0</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v17.0</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -839,7 +968,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v16.0</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v17.0</span>
         <p class="about-desc">نظام متكامل لإدارة ديون ودفعات الزبائن بالعملتين مع مزامنة سحابية فورية وكشوفات حساب PDF.</p>
       </div>
 

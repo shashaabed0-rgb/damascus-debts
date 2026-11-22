@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v16.0',
+  version: 'v17.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '' // ضع رقم التواصل هنا لتثبيته لجميع الورشات (أو يُؤخذ تلقائياً من هاتف المحل)
@@ -47,9 +47,13 @@ const CURRENCIES = {
 
 const DEVICE_SETTINGS_KEY = 'debt_device_settings_sb_v1';
 const LAST_SESSION_KEY = 'debt_last_session_sb_v1';
+const DEVICE_UID_KEY = 'debt_device_uid_v1';
+const DEVICE_LOGOUT_VER_PREFIX = 'debt_logout_ver_v1_';
 let lastSyncMeta = { syncedAt: '', localUpdatedAt: '', lastAction: '' };
 const memberCredsMap = new Map();
 const workshopCredsMap = new Map();
+let memberStatusChannel = null;
+let lastNotifiedSecondAttemptIso = '';
 
 const DEFAULT_WA_CONFIG = {
   showShopName: true,
@@ -308,6 +312,209 @@ function toDbRecord(rec) {
   };
 }
 
+// ==================== معرف الجهاز الفريد وحماية الجهاز الواحد ====================
+function getOrCreateDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_UID_KEY);
+    if (!id) {
+      if (window.crypto && typeof crypto.randomUUID === 'function') {
+        id = 'dev_' + crypto.randomUUID();
+      } else {
+        id = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+      }
+      localStorage.setItem(DEVICE_UID_KEY, id);
+    }
+    return id;
+  } catch (e) {
+    return 'dev_fallback';
+  }
+}
+
+function getFriendlyDeviceLabel() {
+  const ua = navigator.userAgent || '';
+  if (/Android/i.test(ua)) {
+    const m = ua.match(/Android[^;]*;\s*([^;)]+)/i);
+    const model = m && m[1] ? m[1].replace(/Build\/.*/i, '').trim() : '';
+    return model && model.length <= 24 ? `أندرويد (${model})` : 'هاتف أندرويد';
+  }
+  if (/iPhone/i.test(ua)) return 'هاتف آيفون';
+  if (/iPad/i.test(ua)) return 'جهاز آيباد';
+  if (/Windows/i.test(ua)) return 'كمبيوتر Windows';
+  if (/Macintosh|Mac OS/i.test(ua)) return 'كمبيوتر Mac';
+  if (/Linux/i.test(ua)) return 'كمبيوتر Linux';
+  return 'جهاز آخر';
+}
+
+function getSavedForceLogoutVersion(uid) {
+  if (!uid) return null;
+  try {
+    const v = localStorage.getItem(DEVICE_LOGOUT_VER_PREFIX + uid);
+    return v !== null ? Number(v) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveForceLogoutVersion(uid, ver) {
+  if (!uid) return;
+  try {
+    localStorage.setItem(DEVICE_LOGOUT_VER_PREFIX + uid, String(Number(ver || 0)));
+  } catch (e) {}
+}
+
+function clearSavedForceLogoutVersion(uid) {
+  if (!uid) return;
+  try { localStorage.removeItem(DEVICE_LOGOUT_VER_PREFIX + uid); } catch (e) {}
+}
+
+function formatIsoDateTimeShort(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  return formatDateTimeDisplay(d);
+}
+
+function stripDuplicateConflictTag(name) {
+  return String(name || '').trim().replace(/\s*\(مكرر(?:\s*[-–]\s*[^)]*|\s*\d+)?\)\s*$/, '').trim();
+}
+
+function getConflictBaseKey(name) {
+  const base = stripDuplicateConflictTag(name);
+  return normalizeDigits(base)
+    .trim()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/[ىئ]/g, 'ي')
+    .replace(/ؤ/g, 'و')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+}
+
+function wipeLocalWorkshopDataForSecurity(uid, wid) {
+  try {
+    if (uid) {
+      localStorage.removeItem('debt_ctx_sb_' + uid);
+      clearSavedForceLogoutVersion(uid);
+    }
+    if (wid) {
+      localStorage.removeItem(`debt_sb_records_${wid}`);
+      localStorage.removeItem(`debt_sb_queue_${wid}`);
+      localStorage.removeItem(`debt_sb_last_sync_meta_${wid}`);
+      localStorage.removeItem(`debt_sb_daily_snaps_v1_${wid}`);
+    }
+  } catch (e) {}
+}
+
+async function handleForcedRemoteLogout(reasonMsg) {
+  const uid = currentUser ? currentUser.id : null;
+  const wid = currentProfile ? currentProfile.workshop_id : null;
+
+  try {
+    const client = ensureSupabaseClient();
+    if (realtimeChannel && client) { client.removeChannel(realtimeChannel); realtimeChannel = null; }
+    if (presenceChannel && client) { client.removeChannel(presenceChannel); presenceChannel = null; }
+    if (workshopStatusChannel && client) { client.removeChannel(workshopStatusChannel); workshopStatusChannel = null; }
+    if (memberStatusChannel && client) { client.removeChannel(memberStatusChannel); memberStatusChannel = null; }
+  } catch (e) {}
+
+  onlineUsersMap.clear();
+  onlineWorkshopsMap.clear();
+  clearSavedLastUser();
+  wipeLocalWorkshopDataForSecurity(uid, wid);
+
+  try {
+    const client = ensureSupabaseClient();
+    if (client) await client.auth.signOut({ scope: 'local' });
+  } catch (e) {}
+
+  sessionStorage.removeItem('debt_unlocked_v3');
+  currentUser = null;
+  currentProfile = null;
+  currentWorkshop = null;
+  allRecords = [];
+  pendingQueue = [];
+  isSyncing = false;
+  resetAllOpenLayersForLogout();
+  showLoginScreen(reasonMsg || 'تم إخراج الحساب من هذا الجهاز من قبل المدير.');
+}
+
+async function claimDeviceLockOnServer(client, userId) {
+  try {
+    const { data, error } = await client.rpc('claim_member_device', {
+      p_device_id: getOrCreateDeviceId(),
+      p_device_label: getFriendlyDeviceLabel()
+    });
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.includes('claim_member_device') || msg.includes('does not exist')) {
+        return { allowed: true, skipped: true };
+      }
+      return { allowed: true, skipped: true };
+    }
+    if (data && data.allowed === false) {
+      return data;
+    }
+    if (data && typeof data.force_logout_version !== 'undefined') {
+      saveForceLogoutVersion(userId, data.force_logout_version);
+    }
+    return data || { allowed: true };
+  } catch (e) {
+    return { allowed: true, skipped: true };
+  }
+}
+
+async function verifyMemberDeviceBinding(memCheck, client) {
+  if (!memCheck || !currentUser) return true;
+  if (memCheck.role === 'super_admin' || memCheck.single_device_only === false) {
+    return true;
+  }
+
+  const myDevId = getOrCreateDeviceId();
+  const savedVer = getSavedForceLogoutVersion(currentUser.id);
+  const serverVer = Number(memCheck.force_logout_version || 0);
+
+  // 1. إذا قام المدير بالضغط على "إخراج من الجهاز" بعد تسجيل دخولنا
+  if (savedVer !== null && serverVer > savedVer) {
+    await handleForcedRemoteLogout('تم إخراج هذا الحساب من هذا الجهاز من قبل المدير.');
+    return false;
+  }
+
+  // 2. إذا كان الحساب مرتبطاً بجهاز آخر مختلف عن جهازنا
+  if (memCheck.active_device_id && memCheck.active_device_id !== myDevId) {
+    const otherLbl = memCheck.active_device_label ? ` (${memCheck.active_device_label})` : '';
+    await handleForcedRemoteLogout(`هذا الحساب مفتوح على جهاز آخر${otherLbl} — تم تسجيل الخروج من هذا الجهاز.`);
+    return false;
+  }
+
+  // 3. إذا لم يكن هناك جهاز مرتبط حالياً
+  if (!memCheck.active_device_id) {
+    // ترقية سلسة من الإصدار السابق فقط إذا لم يصدر أي أمر إخراج من المدير
+    if (savedVer === null && serverVer === 0) {
+      const claimRes = await claimDeviceLockOnServer(client, currentUser.id);
+      if (claimRes && claimRes.allowed === false) {
+        const otherLbl = claimRes.bound_device ? ` (${claimRes.bound_device})` : '';
+        await handleForcedRemoteLogout(`هذا الحساب مفتوح حالياً على جهاز آخر${otherLbl}.`);
+        return false;
+      }
+      saveForceLogoutVersion(currentUser.id, serverVer);
+      return true;
+    }
+    await handleForcedRemoteLogout('تم إخراج هذا الحساب من هذا الجهاز من قبل المدير.');
+    return false;
+  }
+
+  // 4. الجهاز مطابق لجهازنا الحالي — نحفظ رقم الإصدار الحالي ونتحقق من أي محاولة دخول ثانية
+  if (savedVer === null) {
+    saveForceLogoutVersion(currentUser.id, serverVer);
+  }
+  if (memCheck.second_device_attempt_at && memCheck.second_device_attempt_at !== lastNotifiedSecondAttemptIso) {
+    lastNotifiedSecondAttemptIso = memCheck.second_device_attempt_at;
+    showToast('⚠️ تنبيه: تمت محاولة فتح حسابك من جهاز ثاني وتم منعها');
+  }
+  return true;
+}
+
 // ==================== المصادقة وتسجيل الدخول (أوفلاين أولاً) ====================
 function getSavedLastUser() {
   try {
@@ -403,6 +610,18 @@ async function handleLogin(ev) {
   try {
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw error;
+
+    // فحص وقفل الحساب على جهاز واحد فقط (للموظفين والأجهزة الجديدة)
+    const claimRes = await claimDeviceLockOnServer(client, data.user.id);
+    if (claimRes && claimRes.allowed === false) {
+      clearSavedLastUser();
+      await client.auth.signOut({ scope: 'local' });
+      const devLbl = claimRes.bound_device ? ` (${claimRes.bound_device})` : '';
+      document.getElementById('loginErr').textContent =
+        `⚠️ هذا الحساب مفتوح حالياً على جهاز آخر${devLbl}. يعمل الحساب على جوال واحد فقط — اطلب من المدير إخراج الجهاز السابق.`;
+      return;
+    }
+
     saveLastUser(data.user);
     await loadUserWorkspace(data.user, true);
   } catch (err) {
@@ -519,14 +738,21 @@ async function handleLogout() {
   if (pendingQueue.length > 0) {
     if (!confirm(`يوجد ${pendingQueue.length} عملية لم تُرفع بعد للسحابة. هل تريد تسجيل الخروج رغم ذلك؟`)) return;
   }
+  const logoutUid = currentUser ? currentUser.id : null;
   try {
-    if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
-    if (presenceChannel) { sb.removeChannel(presenceChannel); presenceChannel = null; }
-    if (workshopStatusChannel) { sb.removeChannel(workshopStatusChannel); workshopStatusChannel = null; }
+    const client = ensureSupabaseClient();
+    if (client && navigator.onLine) {
+      try { await client.rpc('release_my_device', { p_device_id: getOrCreateDeviceId() }); } catch (e) {}
+    }
+    if (realtimeChannel && client) { client.removeChannel(realtimeChannel); realtimeChannel = null; }
+    if (presenceChannel && client) { client.removeChannel(presenceChannel); presenceChannel = null; }
+    if (workshopStatusChannel && client) { client.removeChannel(workshopStatusChannel); workshopStatusChannel = null; }
+    if (memberStatusChannel && client) { client.removeChannel(memberStatusChannel); memberStatusChannel = null; }
   } catch (e) {}
   onlineUsersMap.clear();
   onlineWorkshopsMap.clear();
   clearSavedLastUser();
+  clearSavedForceLogoutVersion(logoutUid);
   try {
     const client = ensureSupabaseClient();
     if (client) await client.auth.signOut({ scope: 'local' });
@@ -683,7 +909,12 @@ function subscribeRealtime() {
     })
     .subscribe();
 
-  workshopStatusChannel = sb
+  if (memberStatusChannel && client) {
+    client.removeChannel(memberStatusChannel);
+    memberStatusChannel = null;
+  }
+
+  workshopStatusChannel = client
     .channel('ws-status-' + currentProfile.workshop_id)
     .on('postgres_changes', {
       event: '*',
@@ -692,6 +923,42 @@ function subscribeRealtime() {
       filter: `id=eq.${currentProfile.workshop_id}`
     }, () => {
       if (isUnlocked && navigator.onLine) syncData(true);
+    })
+    .subscribe();
+
+  memberStatusChannel = client
+    .channel('member-status-' + currentProfile.workshop_id)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'workshop_members',
+      filter: `workshop_id=eq.${currentProfile.workshop_id}`
+    }, async (payload) => {
+      const row = payload && (payload.new || payload.old);
+      if (!row) return;
+      // فحص فوري إذا تم إخراج حسابنا أو إيقافه من قبل المدير
+      if (currentUser && row.user_id === currentUser.id) {
+        if (payload.eventType === 'DELETE') {
+          await handleForcedRemoteLogout('تمت إزالة هذا الحساب من الورشة.');
+          return;
+        }
+        if (payload.new && payload.new.active === false) {
+          await handleForcedRemoteLogout('تم إيقاف هذا الحساب من قبل مدير الورشة.');
+          return;
+        }
+        if (payload.new) {
+          const ok = await verifyMemberDeviceBinding(payload.new, client);
+          if (!ok) return;
+        }
+      }
+      // إشعار فوري للمدير عند محاولة فتح أي حساب موظف من جهاز ثاني
+      if (isAdmin() && payload.new && payload.new.second_device_attempt_at && (!payload.old || payload.new.second_device_attempt_at !== payload.old.second_device_attempt_at)) {
+        const who = payload.new.display_name || payload.new.email || 'موظف';
+        showToast(`⚠️ محاولة فتح حساب "${who}" من جهاز ثاني وتم منعها`);
+        if (document.getElementById('accountsView')?.classList.contains('open')) {
+          loadWorkshopMembers();
+        }
+      }
     })
     .subscribe();
 
@@ -748,6 +1015,12 @@ async function syncData(silent) {
       return;
     }
     if (memCheck) {
+      const deviceAllowed = await verifyMemberDeviceBinding(memCheck, client);
+      if (!deviceAllowed) {
+        isSyncing = false;
+        syncBtn.classList.remove('spinning');
+        return;
+      }
       currentProfile = memCheck;
       applyPermissionsUI();
     }
@@ -763,10 +1036,7 @@ async function syncData(silent) {
     if (wsFresh && wsFresh.settings && wsFresh.settings.frozen === true && currentProfile.role !== 'super_admin') {
       isSyncing = false;
       syncBtn.classList.remove('spinning');
-      clearSavedLastUser();
-      await client.auth.signOut({ scope: 'local' });
-      resetAllOpenLayersForLogout();
-      showLoginScreen('تم تجميد حساب هذه الورشة من قبل الإدارة.');
+      await handleForcedRemoteLogout('تم تجميد حساب هذه الورشة من قبل الإدارة.');
       return;
     }
 
@@ -778,6 +1048,75 @@ async function syncData(silent) {
         profile: currentProfile,
         workshop: currentWorkshop
       }));
+    }
+
+    // 1.5 فحص تعارض الأسماء المتطابقة المضافة أثناء الأوفلاين قبل الرفع لعدم دمجها وإظهارها معاً بعلامة تعديل
+    const detectedOfflineCollisions = [];
+    const offlineNewCustItems = pendingQueue.filter(
+      q => (q.action === 'upsert' || q.action === 'add') && q.isNewCustomer && q.payload && q.payload.name
+    );
+
+    if (offlineNewCustItems.length > 0) {
+      const { data: existingRows, error: preErr } = await client
+        .from('debt_records')
+        .select('id, name, created_by')
+        .eq('workshop_id', currentProfile.workshop_id);
+
+      if (!preErr && Array.isArray(existingRows)) {
+        const queuedIds = new Set(
+          pendingQueue.filter(q => q.payload && q.payload.id).map(q => String(q.payload.id))
+        );
+        const serverExactNames = new Set();
+        const serverBaseKeys = new Set();
+        existingRows.forEach(r => {
+          if (queuedIds.has(String(r.id))) return;
+          const nm = String(r.name || '').trim();
+          if (!nm) return;
+          serverExactNames.add(nm);
+          serverBaseKeys.add(getConflictBaseKey(nm));
+        });
+
+        const collisionRenameMap = new Map();
+        const offlineNewOrigNames = new Set(
+          offlineNewCustItems.map(q => String(q.payload.name || '').trim())
+        );
+
+        offlineNewOrigNames.forEach(origName => {
+          if (!origName) return;
+          const baseKey = getConflictBaseKey(origName);
+          if (serverExactNames.has(origName)) {
+            const firstItem = offlineNewCustItems.find(q => String(q.payload.name || '').trim() === origName);
+            const rawBy = String((firstItem && firstItem.payload && firstItem.payload.created_by) || currentProfile.display_name || '').trim();
+            const shortBy = rawBy.split(/\s+/)[0] || 'جهاز';
+            let cand = `${origName} (مكرر - ${shortBy})`;
+            let n = 2;
+            while (serverExactNames.has(cand)) {
+              cand = `${origName} (مكرر - ${shortBy} ${n})`;
+              n++;
+            }
+            collisionRenameMap.set(origName, cand);
+            serverExactNames.add(cand);
+            detectedOfflineCollisions.push(origName);
+          } else if (serverBaseKeys.has(baseKey)) {
+            detectedOfflineCollisions.push(origName);
+          }
+        });
+
+        if (collisionRenameMap.size > 0) {
+          pendingQueue.forEach(q => {
+            if ((q.action === 'upsert' || q.action === 'add') && q.payload && q.payload.name) {
+              const nm = String(q.payload.name).trim();
+              if (collisionRenameMap.has(nm)) {
+                const renamed = collisionRenameMap.get(nm);
+                q.payload.name = renamed;
+                const localRec = allRecords.find(r => String(r.id) === String(q.payload.id));
+                if (localRec) localRec.name = renamed;
+              }
+            }
+          });
+          persistData();
+        }
+      }
     }
 
     // 2. رفع العمليات المحفوظة محلياً بالترتيب
@@ -824,7 +1163,11 @@ async function syncData(silent) {
     persistData();
     processAndRender();
 
-    updateSyncStatusUI(`متصل ومُزامن • آخر تحديث: ${nowStamp}`, 'ok');
+    // عند المزامنة: إخفاء التاريخ والساعة (تظهر فقط في وضع الأوفلاين)
+    updateSyncStatusUI('متصل ومُزامن', 'ok');
+    if (detectedOfflineCollisions.length > 0) {
+      showToast('⚠️ تم اكتشاف أسماء متطابقة مضافة أوفلاين — ظهرت معاً بعلامة لتعديل أحدها');
+    }
     if (typeof checkAndRunDailyBackups === 'function') checkAndRunDailyBackups();
 
     if (currentCustomerName && document.getElementById('detailView').classList.contains('open')) {
@@ -833,7 +1176,7 @@ async function syncData(silent) {
   } catch (err) {
     console.error('Sync error:', err);
     const lastTxt = getLastUpdateDisplayText();
-    updateSyncStatusUI(lastTxt ? `محفوظ على الجهاز • ${lastTxt}` : 'محفوظ على الجهاز (سيُزامن عند عودة الاتصال)', 'err');
+    updateSyncStatusUI(lastTxt ? `بدون اتصال • ${lastTxt}` : 'محفوظ على الجهاز (سيُزامن عند عودة الاتصال)', 'err');
     if (!silent) showToast('محفوظ على الجهاز، وتعذّر الوصول للخادم حالياً');
   } finally {
     isSyncing = false;
@@ -842,12 +1185,17 @@ async function syncData(silent) {
 }
 
 // ==================== طابور العمليات (أوفلاين أولاً) ====================
-function queueUpsertRecord(rec) {
+function queueUpsertRecord(rec, opts = {}) {
   const idStr = String(rec.id);
   const dbRec = toDbRecord(rec);
+  const isNewCust = Boolean(opts && opts.isNewCustomer);
   const qIdx = pendingQueue.findIndex(q => (q.action === 'upsert' || q.action === 'add') && String(q.payload.id) === idStr);
-  if (qIdx !== -1) pendingQueue[qIdx] = { action: 'upsert', payload: dbRec };
-  else pendingQueue.push({ action: 'upsert', payload: dbRec });
+  if (qIdx !== -1) {
+    const prevNew = Boolean(pendingQueue[qIdx].isNewCustomer);
+    pendingQueue[qIdx] = { action: 'upsert', payload: dbRec, isNewCustomer: prevNew || isNewCust };
+  } else {
+    pendingQueue.push({ action: 'upsert', payload: dbRec, isNewCustomer: isNewCust });
+  }
 }
 
 function queueDeleteRecord(targetId) {
@@ -977,6 +1325,22 @@ function renderWorkshopMembersList(list) {
       ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصل الآن</span>`
       : `<span class="m-badge m-offline"><span class="presence-dot offline"></span>غير متصل</span>`;
 
+    const isBound = Boolean(m.active_device_id);
+    const devLabel = String(m.active_device_label || 'جهاز واحد');
+    const isSingleLocked = !isSuper && m.single_device_only !== false;
+    const deviceBadge = !isSuper
+      ? (isBound
+          ? `<span class="m-badge m-dev-on">📱 مفتوح: ${escapeHtml(devLabel)}</span>`
+          : `<span class="m-badge m-neutral">غير مرتبط بجهاز</span>`)
+      : '';
+
+    const secondAttemptHtml = m.second_device_attempt_at
+      ? `<div class="second-dev-alert">
+           <span>⚠️ محاولة فتح الحساب على جهاز ثاني (${escapeHtml(m.second_device_attempt_label || 'جهاز آخر')}) • ${escapeHtml(formatIsoDateTimeShort(m.second_device_attempt_at))}</span>
+           <button type="button" class="ws-cred-mini-btn" onclick="clearSecondDeviceAlert('${safeUid}')">إخفاء</button>
+         </div>`
+      : '';
+
     const onlineNotice = (!isSelf && isOnline)
       ? `<div class="member-online-note"><span class="presence-dot online"></span><span>${escapeHtml(m.display_name || m.email)} موجود الآن على الإنترنت</span></div>`
       : '';
@@ -1002,6 +1366,7 @@ function renderWorkshopMembersList(list) {
 
     const controls = (!isSelf && !isSuper) ? `
       <div class="member-actions">
+        <button class="btn btn-warn-sm btn-sm" onclick="forceLogoutMemberDevice('${safeUid}')">إخراج من الجهاز</button>
         <button class="btn btn-light btn-sm" onclick="toggleMemberActive('${safeUid}', ${!!m.active})">
           ${m.active ? 'إيقاف الحساب' : 'تفعيل الحساب'}
         </button>
@@ -1009,6 +1374,9 @@ function renderWorkshopMembersList(list) {
           <button class="btn btn-light btn-sm" onclick="toggleMemberCanDelete('${safeUid}', ${!!m.can_delete})">
             ${m.can_delete ? 'منع الحذف' : 'السماح بالحذف'}
           </button>` : ''}
+        <button class="btn btn-light btn-sm" onclick="toggleMemberSingleDevice('${safeUid}', ${isSingleLocked})">
+          ${isSingleLocked ? 'مقيد بجهاز واحد' : 'متعدد الأجهزة'}
+        </button>
         <button class="btn btn-light btn-sm" onclick="promptUpdateMemberPassword('${safeUid}')">تغيير كلمة السر</button>
         <button class="btn btn-danger btn-sm" onclick="removeWorkshopMember('${safeUid}')">إزالة نهائية</button>
       </div>` : '';
@@ -1022,11 +1390,13 @@ function renderWorkshopMembersList(list) {
           </div>
           <div class="member-badges">
             ${presenceBadge}
+            ${deviceBadge}
             <span class="m-badge m-role">${getRoleLabel(m.role)}</span>
             <span class="m-badge ${m.active ? 'm-on' : 'm-off'}">${m.active ? 'مفعّل' : 'موقوف'}</span>
             ${m.role === 'staff' ? `<span class="m-badge m-neutral">${m.can_delete ? 'يحذف' : 'بدون حذف'}</span>` : ''}
           </div>
         </div>
+        ${secondAttemptHtml}
         ${credsBoxHtml}
         ${onlineNotice}
         ${controls}
@@ -1069,6 +1439,7 @@ async function createWorkshopMember(ev) {
   const email = document.getElementById('memEmailInput').value.trim().toLowerCase();
   const password = document.getElementById('memPassInput').value;
   const can_delete = role === 'admin' ? true : document.getElementById('memCanDeleteInput').checked;
+  const single_device_only = document.getElementById('memSingleDeviceInput') ? document.getElementById('memSingleDeviceInput').checked : true;
 
   btn.disabled = true;
   btn.textContent = 'جاري إنشاء الحساب...';
@@ -1087,12 +1458,14 @@ async function createWorkshopMember(ev) {
       display_name,
       email,
       login_password: password,
+      single_device_only,
       can_delete,
       active: true
     };
     let { error: memErr } = await sb.from('workshop_members').insert(memPayload);
-    if (memErr && String(memErr.message || '').includes('login_password')) {
+    if (memErr && (String(memErr.message || '').includes('login_password') || String(memErr.message || '').includes('single_device_only'))) {
       delete memPayload.login_password;
+      delete memPayload.single_device_only;
       const retry = await sb.from('workshop_members').insert(memPayload);
       memErr = retry.error;
     }
@@ -1124,6 +1497,52 @@ async function toggleMemberCanDelete(uid, currentVal) {
   const { error } = await sb.from('workshop_members').update({ can_delete: !currentVal }).eq('user_id', uid);
   if (error) return showToast(error.message);
   showToast(!currentVal ? 'تم منح صلاحية الحذف' : 'تم إلغاء صلاحية الحذف');
+  loadWorkshopMembers();
+}
+
+async function toggleMemberSingleDevice(uid, currentVal) {
+  const nextVal = !currentVal;
+  const { error } = await sb.from('workshop_members').update({ single_device_only: nextVal }).eq('user_id', uid);
+  if (error) {
+    const msg = String(error.message || '');
+    if (msg.includes('single_device_only')) {
+      showAccAlert('يرجى تشغيل كود SQL الخاص بالتحديث (v17) في Supabase أولاً لتفعيل قفل الجهاز الواحد.');
+      return;
+    }
+    return showToast(msg);
+  }
+  showToast(nextVal ? 'تم تقييد الحساب على جهاز واحد فقط' : 'تم السماح للحساب بالعمل على أكثر من جهاز');
+  loadWorkshopMembers();
+}
+
+async function clearSecondDeviceAlert(uid) {
+  const { error } = await sb
+    .from('workshop_members')
+    .update({ second_device_attempt_at: null, second_device_attempt_label: null })
+    .eq('user_id', uid);
+  if (error) return showToast(error.message);
+  loadWorkshopMembers();
+}
+
+async function forceLogoutMemberDevice(uid) {
+  const rec = memberCredsMap.get(uid);
+  const label = (rec && (rec.display_name || rec.email)) || 'هذا الحساب';
+  if (!confirm(`هل تريد إخراج حساب "${label}" من جهازه الحالي؟\n\nفي حال فقدان الجهاز أو تبديله، سيتم تسجيل خروجه فوراً ومسح بياناته المحلية من الجهاز القديم، ويمكنه الدخول من جهاز جديد.`)) {
+    return;
+  }
+  showAccAlert('');
+  const { error } = await sb.rpc('admin_force_logout_member', { target_user_id: uid });
+  if (error) {
+    const msg = String(error.message || '');
+    if (msg.includes('admin_force_logout_member') || msg.includes('does not exist')) {
+      showAccAlert('يرجى تشغيل كود SQL الخاص بالتحديث (v17) في Supabase أولاً لتفعيل إخراج الحساب من الجهاز المفقود.');
+      return;
+    }
+    showAccAlert('تعذّر إخراج الحساب من الجهاز: ' + msg);
+    return;
+  }
+  showAccAlert(`تم إخراج حساب "${label}" من جهازه القديم بنجاح ✓ ويمكنه الآن تسجيل الدخول من جهاز جديد.`, true);
+  showToast('تم إخراج الحساب من الجهاز بنجاح ✓');
   loadWorkshopMembers();
 }
 
@@ -1325,6 +1744,7 @@ function renderIsolatedWorkshopsList(list) {
          </div>`
       : `<div class="member-actions">
            <button class="btn btn-primary btn-sm" onclick="openEditWorkshopModal('${safeWsId}')">تعديل الورشة / كلمة السر</button>
+           ${adminMember ? `<button class="btn btn-warn-sm btn-sm" onclick="forceLogoutWorkshopAdmin('${escapeHtml(adminMember.user_id)}', '${escapeHtml(w.name)}')">إخراج من الجهاز</button>` : ''}
            <button class="btn btn-light btn-sm" onclick="toggleWorkshopFreeze('${safeWsId}')">
              ${isFrozen ? 'فك التجميد' : 'تجميد الورشة'}
            </button>
@@ -1351,6 +1771,24 @@ function renderIsolatedWorkshopsList(list) {
       </div>
     `;
   }).join('');
+}
+
+async function forceLogoutWorkshopAdmin(adminUid, wsName) {
+  if (!isSuperAdmin() || !adminUid) return;
+  if (!confirm(`هل تريد إخراج مدير ورشة "${wsName}" من جهازه الحالي؟ سيتم تسجيل خروجه فوراً والسماح له بالدخول من جهاز جديد.`)) return;
+  showAccAlert('');
+  const { error } = await sb.rpc('admin_force_logout_member', { target_user_id: adminUid });
+  if (error) {
+    const msg = String(error.message || '');
+    if (msg.includes('admin_force_logout_member') || msg.includes('does not exist')) {
+      showAccAlert('يرجى تشغيل كود SQL الخاص بالتحديث (v17) في Supabase أولاً.');
+      return;
+    }
+    return showAccAlert('تعذّر إخراج الحساب: ' + msg);
+  }
+  showAccAlert(`تم إخراج مدير ورشة "${wsName}" من جهازه بنجاح ✓`, true);
+  showToast('تم إخراج الحساب من الجهاز بنجاح ✓');
+  loadIsolatedWorkshops();
 }
 
 async function loadIsolatedWorkshops() {
