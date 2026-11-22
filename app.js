@@ -126,7 +126,6 @@ function updateBodyScrollLock() {
     document.getElementById('aboutModal').classList.contains('open') ||
     document.getElementById('freeLimitModal').classList.contains('open') ||
     document.getElementById('auditLogView').classList.contains('open') ||
-    document.getElementById('dueDateModal').classList.contains('open') ||
     document.getElementById('migrateFreeModal').classList.contains('open');
   document.body.classList.toggle('no-scroll', anyOpen);
 }
@@ -216,7 +215,7 @@ window.addEventListener('popstate', () => {
   }
 
   // تنظيف احتياطي في حال كانت أي طبقة مفتوحة بصرياً
-  const fallbackLayers = ['sideMenu', 'migrateFreeModal', 'dueDateModal', 'freeLimitModal', 'aboutModal', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'auditLogView', 'accountsView', 'settingsView', 'detailView'];
+  const fallbackLayers = ['sideMenu', 'migrateFreeModal', 'freeLimitModal', 'aboutModal', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'auditLogView', 'accountsView', 'settingsView', 'detailView'];
   for (const id of fallbackLayers) {
     const domId = id === 'sideMenu' ? 'sideMenuBackdrop' : id;
     if (document.getElementById(domId).classList.contains('open')) {
@@ -731,54 +730,75 @@ function computeCustomerDueStatus(cust) {
   return { status: 'none', isDueAlert: false, severity: 0, dueDate: '', note: '', label: '' };
 }
 
-function setQuickDueDateInput(inputId, daysToAdd) {
-  const el = document.getElementById(inputId);
-  if (!el) return;
+function getDueControlIds(prefix) {
+  if (prefix === 'edit') {
+    return {
+      dateId: 'editCustDueDate',
+      noteId: 'editCustDueNote',
+      noteWrapId: 'editDueNoteWrap',
+      pillId: 'editDueSelectedPill',
+      pillTextId: 'editDueSelectedText',
+      chipsId: 'editDueChips',
+      calBtnId: 'editDueCalBtn'
+    };
+  }
+  return {
+    dateId: 'txDueDate',
+    noteId: 'txDueNote',
+    noteWrapId: 'txDueNoteWrap',
+    pillId: 'txDueSelectedPill',
+    pillTextId: 'txDueSelectedText',
+    chipsId: 'txDueChips',
+    calBtnId: 'txDueCalBtn'
+  };
+}
+
+function updateDueControlUI(prefix, activeDays = null) {
+  const ids = getDueControlIds(prefix);
+  const dateEl = document.getElementById(ids.dateId);
+  const noteWrap = document.getElementById(ids.noteWrapId);
+  const pill = document.getElementById(ids.pillId);
+  const pillTxt = document.getElementById(ids.pillTextId);
+  const calBtn = document.getElementById(ids.calBtnId);
+  const chipsWrap = document.getElementById(ids.chipsId);
+
+  const val = dateEl ? String(dateEl.value || '').trim() : '';
+  const hasVal = Boolean(val);
+  if (pill && pillTxt) {
+    pill.classList.toggle('hidden', !hasVal);
+    pillTxt.textContent = hasVal ? fromInputDate(val) : '';
+  }
+  if (calBtn) calBtn.classList.toggle('has-date', hasVal);
+  if (noteWrap) noteWrap.classList.toggle('hidden', !hasVal);
+  if (chipsWrap) {
+    chipsWrap.querySelectorAll('.due-chip-btn').forEach(btn => {
+      const d = Number(btn.getAttribute('data-days'));
+      btn.classList.toggle('active', hasVal && activeDays !== null && d === Number(activeDays));
+    });
+  }
+}
+
+function selectQuickDueChip(prefix, daysToAdd, btn) {
+  const ids = getDueControlIds(prefix);
+  const dateEl = document.getElementById(ids.dateId);
+  if (!dateEl) return;
   const d = new Date();
   d.setDate(d.getDate() + Number(daysToAdd || 0));
-  const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  el.value = ymd;
+  dateEl.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  updateDueControlUI(prefix, Number(daysToAdd));
 }
 
-function clearDueDateInput(inputId) {
-  const el = document.getElementById(inputId);
-  if (el) el.value = '';
+function onNativeDueDatePicked(prefix) {
+  updateDueControlUI(prefix, null);
 }
 
-function openDueDateModal() {
-  const cust = groupedCustomers.find(c => c.name === currentCustomerName);
-  if (!cust) return;
-  const existing = getCustomerDueEntry(cust.name);
-  document.getElementById('dueModalCustName').textContent = cleanDisplayCustomerName(cust.name);
-  document.getElementById('dueDateInput').value = existing && existing.date ? toInputDate(existing.date) : '';
-  document.getElementById('dueNoteInput').value = existing && existing.note ? existing.note : '';
-  document.getElementById('removeDueDateBtn').classList.toggle('hidden', !(existing && existing.date));
-  openModal('dueDateModal');
-}
-
-async function saveCustomerDueDateFromModal() {
-  const cust = groupedCustomers.find(c => c.name === currentCustomerName);
-  if (!cust) return;
-  const rawDate = document.getElementById('dueDateInput').value;
-  if (!rawDate) return showToast('يرجى اختيار تاريخ موعد التسديد');
-  const note = document.getElementById('dueNoteInput').value.trim();
-  const formatted = fromInputDate(rawDate);
-
-  closeModal('dueDateModal');
-  await persistCustomerDueDateChange(cust.name, formatted, note);
-  processAndRender();
-  if (currentCustomerName) renderCustomerDetail(currentCustomerName);
-  showToast(`تم حفظ موعد التسديد (${formatted}) ✓`);
-}
-
-async function removeCustomerDueDateFromModal() {
-  const cust = groupedCustomers.find(c => c.name === currentCustomerName);
-  if (!cust) return;
-  closeModal('dueDateModal');
-  await persistCustomerDueDateChange(cust.name, null, '');
-  processAndRender();
-  if (currentCustomerName) renderCustomerDetail(currentCustomerName);
-  showToast('تمت إزالة موعد التسديد');
+function clearDueControl(prefix) {
+  const ids = getDueControlIds(prefix);
+  const dateEl = document.getElementById(ids.dateId);
+  const noteEl = document.getElementById(ids.noteId);
+  if (dateEl) dateEl.value = '';
+  if (noteEl) noteEl.value = '';
+  updateDueControlUI(prefix, null);
 }
 
 // ==================== معالجة وعرض الزبائن ====================
@@ -1191,46 +1211,6 @@ function renderTxCardHtml(r, isArchived = false, showCurrencyChip = false) {
   `;
 }
 
-function renderDetailDueBar(cust) {
-  const bar = document.getElementById('detailDueBar');
-  if (!bar) return;
-  if (!cust || !cust.hasDebt) {
-    bar.classList.add('hidden');
-    bar.innerHTML = '';
-    return;
-  }
-  const due = cust.dueInfo || computeCustomerDueStatus(cust);
-  bar.classList.remove('hidden', 'is-overdue', 'is-due-today');
-  if (due.status === 'overdue' || due.status === 'stale_overdue') bar.classList.add('is-overdue');
-  else if (due.status === 'due_today') bar.classList.add('is-due-today');
-
-  let mainTxt = '📅 لم يُحدّد موعد تسديد لهذا الزبون';
-  let subTxt = 'أضف موعد تسديد ليذكّرك التطبيق عند حلوله';
-  if (due.status !== 'none') {
-    mainTxt = due.label;
-    if (due.note) subTxt = `ملاحظة الموعد: ${due.note}`;
-    else if (due.status === 'stale_overdue') subTxt = `آخر حركة كانت بتاريخ ${due.lastDate} (يمكنك تحديد موعد سداد محدد)`;
-    else if (due.dueDate) subTxt = `تاريخ التسديد المحدد: ${due.dueDate}`;
-  }
-
-  const hasManual = Boolean(getCustomerDueEntry(cust.name));
-  const remindBtn = due.isDueAlert
-    ? `<button type="button" class="btn btn-wa btn-sm" style="width:auto;" onclick="sendOverdueWhatsAppReminder()">تذكير واتساب</button>`
-    : '';
-  bar.innerHTML = `
-    <div class="detail-due-info">
-      <div>${escapeHtml(mainTxt)}</div>
-      <div class="detail-due-sub">${escapeHtml(subTxt)}</div>
-    </div>
-    <div class="detail-due-actions">
-      ${remindBtn}
-      <button type="button" class="btn btn-light btn-sm" style="width:auto;" onclick="openDueDateModal()">
-        ${hasManual ? 'تعديل الموعد' : 'تحديد موعد'}
-      </button>
-    </div>
-  `;
-}
-
 function renderCustomerDetail(name) {
   const cust = groupedCustomers.find(c => c.name === name);
   if (!cust) return closeDetailView();
@@ -1257,7 +1237,6 @@ function renderCustomerDetail(name) {
   document.getElementById('detailTxCount').textContent = `${cust.activeRecords.length} حركة`;
 
   renderDetailSummaryCards(cust);
-  renderDetailDueBar(cust);
 
   const showCurrChips = isDualCurrencyMode() || cust.hasDisabledOpenBalance || cust.hasMultipleCurrenciesHistory;
   const activeList = [...cust.activeRecords].reverse();
@@ -1462,9 +1441,7 @@ function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt',
   document.getElementById('txNote').value = '';
   document.getElementById('txDate').value = toInputDate(todayString());
   document.getElementById('txDateField').classList.add('hidden');
-  const existingDueAdd = prefillName ? getCustomerDueEntry(prefillName) : null;
-  const txDueEl = document.getElementById('txDueDate');
-  if (txDueEl) txDueEl.value = (existingDueAdd && existingDueAdd.date) ? toInputDate(existingDueAdd.date) : '';
+  clearDueControl('tx');
   checkDuplicateTxName();
 
   const initialCurr = (isDualCurrencyMode() || allowCurrSwitch)
@@ -1496,9 +1473,7 @@ function openEditTxModal(id) {
   document.getElementById('txNote').value = rec.note || '';
   document.getElementById('txDate').value = toInputDate(rec.date);
   document.getElementById('txDateField').classList.remove('hidden');
-  const existingDueEdit = getCustomerDueEntry(rec.name || '');
-  const txDueElEdit = document.getElementById('txDueDate');
-  if (txDueElEdit) txDueElEdit.value = (existingDueEdit && existingDueEdit.date) ? toInputDate(existingDueEdit.date) : '';
+  clearDueControl('tx');
   checkDuplicateTxName();
 
   const recCurr = getRecordCurrency(rec);
@@ -1542,8 +1517,8 @@ function setTxKind(k) {
   document.getElementById('btnKindPay').className = 'tog-btn' + (k === 'pay' ? ' on-pay' : '');
   const dueWrap = document.getElementById('txDueDateField');
   if (dueWrap) {
-    const hasDueVal = Boolean(document.getElementById('txDueDate')?.value);
-    dueWrap.classList.toggle('hidden', k === 'pay' && !hasDueVal);
+    // إظهار موعد التسديد عند تسجيل دين جديد فقط (أما تعديل الموعد ففي تعديل ملف الزبون فقط)
+    dueWrap.classList.toggle('hidden', Boolean(editingTxId) || k !== 'debt');
   }
 }
 
@@ -1578,10 +1553,6 @@ async function saveTransaction() {
   const curr = getCurr(chosenCurrCode);
   const typeLabel = (txKind === 'debt' ? 'دين' : 'دفعة') + ` (${curr.symbol})`;
 
-  const txDueInputVal = document.getElementById('txDueDate') ? document.getElementById('txDueDate').value : '';
-  const prevDueEntry = getCustomerDueEntry(name);
-  const formattedNewDue = txDueInputVal ? fromInputDate(txDueInputVal) : '';
-
   if (editingTxId) {
     const beforeRec = allRecords.find(r => String(r.id) === String(editingTxId));
     const beforeSnap = beforeRec ? {
@@ -1609,11 +1580,6 @@ async function saveTransaction() {
     });
     editingTxId = null;
     persistData();
-    if (formattedNewDue && (!prevDueEntry || prevDueEntry.date !== formattedNewDue)) {
-      await persistCustomerDueDateChange(name, formattedNewDue, prevDueEntry ? prevDueEntry.note : '');
-    } else if (!formattedNewDue && prevDueEntry && txKind === 'debt') {
-      await persistCustomerDueDateChange(name, null, '');
-    }
     processAndRender();
     closeModal('addModal');
     if (document.getElementById('detailView').classList.contains('open')) {
@@ -1622,6 +1588,10 @@ async function saveTransaction() {
     }
     triggerSyncOrOfflineToast('تم تعديل الحركة، جاري المزامنة...', 'تم التعديل محلياً (سيُزامن لاحقاً)');
   } else {
+    const txDueInputVal = (txKind === 'debt' && document.getElementById('txDueDate')) ? document.getElementById('txDueDate').value : '';
+    const txDueNoteVal = (txKind === 'debt' && document.getElementById('txDueNote')) ? document.getElementById('txDueNote').value.trim() : '';
+    const formattedNewDue = txDueInputVal ? fromInputDate(txDueInputVal) : '';
+
     const dateStr = todayString();
     const rec = toDbRecord({
       id: genId(),
@@ -1644,15 +1614,9 @@ async function saveTransaction() {
     }
     allRecords.push(rec);
     queueUpsertRecord(rec, { isNewCustomer: !existedLocally });
-    recordAuditEvent({
-      action_type: 'add_tx',
-      customer_name: name,
-      summary: `تسجيل ${txKind === 'debt' ? 'دين' : 'دفعة'} بقيمة ${formatNum(amount)} ${curr.symbol}${note ? ' — ' + note : ''}`,
-      after_data: { name: cleanDisplayCustomerName(name), type: typeLabel, amount, note, date: dateStr }
-    });
     persistData();
-    if (formattedNewDue && (!prevDueEntry || prevDueEntry.date !== formattedNewDue)) {
-      await persistCustomerDueDateChange(name, formattedNewDue, prevDueEntry ? prevDueEntry.note : '');
+    if (formattedNewDue) {
+      await persistCustomerDueDateChange(name, formattedNewDue, txDueNoteVal);
     }
     processAndRender();
     closeModal('addModal');
@@ -1666,6 +1630,15 @@ async function saveTransaction() {
 // ==================== تعديل وحذف ملف الزبون ====================
 let editingCustomerTargetName = null;
 
+function populateEditCustomerDueControl(cust) {
+  const existing = cust ? getCustomerDueEntry(cust.name) : null;
+  const dateEl = document.getElementById('editCustDueDate');
+  const noteEl = document.getElementById('editCustDueNote');
+  if (dateEl) dateEl.value = (existing && existing.date) ? toInputDate(existing.date) : '';
+  if (noteEl) noteEl.value = (existing && existing.note) ? existing.note : '';
+  updateDueControlUI('edit', null);
+}
+
 function openEditCustomerModalByName(encodedName) {
   const targetName = decodeURIComponent(encodedName || '');
   const cust = groupedCustomers.find(c => c.name === targetName);
@@ -1673,6 +1646,7 @@ function openEditCustomerModalByName(encodedName) {
   editingCustomerTargetName = cust.name;
   document.getElementById('editCustNameInput').value = cleanDisplayCustomerName(cust.name);
   document.getElementById('editCustPhoneInput').value = cust.phone || '';
+  populateEditCustomerDueControl(cust);
   checkDuplicateEditCustName();
   openModal('editCustomerModal');
   setTimeout(() => document.getElementById('editCustNameInput').focus(), 120);
@@ -1684,6 +1658,7 @@ function openEditCustomerModal() {
   editingCustomerTargetName = cust.name;
   document.getElementById('editCustNameInput').value = cleanDisplayCustomerName(cust.name);
   document.getElementById('editCustPhoneInput').value = cust.phone || '';
+  populateEditCustomerDueControl(cust);
   checkDuplicateEditCustName();
   openModal('editCustomerModal');
 }
@@ -1702,22 +1677,44 @@ async function saveCustomerEdit() {
 
   const oldCustObj = groupedCustomers.find(c => c.name === oldName);
   const oldPhoneSnap = oldCustObj ? (oldCustObj.phone || '') : '';
-  const affectedIds = allRecords.filter(r => String(r.name || '').trim() === oldName).map(r => r.id);
-  affectedIds.forEach(id => queueUpdateRecord(id, { name: newName, phone: newPhone }));
+  const oldDueEntry = getCustomerDueEntry(oldName);
+  const oldDueDate = (oldDueEntry && oldDueEntry.date) ? formatDate(oldDueEntry.date) : '';
+  const oldDueNote = (oldDueEntry && oldDueEntry.note) ? String(oldDueEntry.note).trim() : '';
 
-  if (oldName !== newName && settings.customerDueDates && settings.customerDueDates[oldName]) {
-    const movedDue = settings.customerDueDates[oldName];
-    await persistCustomerDueDateChange(oldName, null, '');
-    await persistCustomerDueDateChange(newName, movedDue.date, movedDue.note || '');
+  const rawEditDue = document.getElementById('editCustDueDate') ? document.getElementById('editCustDueDate').value : '';
+  const newDueDate = rawEditDue ? fromInputDate(rawEditDue) : '';
+  const newDueNote = newDueDate && document.getElementById('editCustDueNote')
+    ? document.getElementById('editCustDueNote').value.trim()
+    : '';
+
+  const nameOrPhoneChanged = (cleanDisplayCustomerName(oldName) !== cleanDisplayCustomerName(newName)) || (oldPhoneSnap !== newPhone);
+  const dueChanged = (oldDueDate !== newDueDate) || (oldDueNote !== newDueNote);
+
+  if (nameOrPhoneChanged) {
+    const affectedIds = allRecords.filter(r => String(r.name || '').trim() === oldName).map(r => r.id);
+    affectedIds.forEach(id => queueUpdateRecord(id, { name: newName, phone: newPhone }));
+    recordAuditEvent({
+      action_type: 'edit_customer',
+      customer_name: newName,
+      summary: `تعديل بيانات الزبون "${cleanDisplayCustomerName(oldName)}"`,
+      before_data: { name: cleanDisplayCustomerName(oldName), phone: oldPhoneSnap },
+      after_data: { name: cleanDisplayCustomerName(newName), phone: newPhone }
+    });
   }
 
-  recordAuditEvent({
-    action_type: 'edit_customer',
-    customer_name: newName,
-    summary: `تعديل بيانات الزبون "${cleanDisplayCustomerName(oldName)}"`,
-    before_data: { name: cleanDisplayCustomerName(oldName), phone: oldPhoneSnap },
-    after_data: { name: cleanDisplayCustomerName(newName), phone: newPhone }
-  });
+  if (oldName !== newName && settings.customerDueDates && settings.customerDueDates[oldName]) {
+    delete settings.customerDueDates[oldName];
+    if (!isFreeOfflineMode()) {
+      pendingDueDateQueue[oldName] = null;
+      persistAuditData();
+      if (navigator.onLine && ensureSupabaseClient()) {
+        try { await sb.rpc('set_customer_due_date', { p_customer_name: oldName, p_due_date: null, p_due_note: null }); } catch (e) {}
+      }
+    }
+  }
+  if (dueChanged || (oldName !== newName && newDueDate)) {
+    await persistCustomerDueDateChange(newName, newDueDate || null, newDueNote);
+  }
 
   // إذا كان هناك حساب وحيد متبقٍ من نفس التعارض يحمل فاصلاً داخلياً غير مرئي، ننظّف اسمه تلقائياً
   const oldBaseKey = getConflictBaseKey(oldName);
@@ -2587,7 +2584,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v24.0';
+  const ver = (APP_META && APP_META.version) || 'v25.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2618,7 +2615,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v24.0';
+  const ver = (APP_META && APP_META.version) || 'v25.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2650,7 +2647,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v24.0';
+  const ver = (APP_META && APP_META.version) || 'v25.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
@@ -2846,15 +2843,12 @@ async function loadAuditLogs(showRefreshToast = false) {
 
 function getAuditActionMeta(actionType) {
   switch (actionType) {
-    case 'add_tx': return { label: 'إضافة حركة', cls: 'add', group: 'add' };
     case 'edit_tx': return { label: 'تعديل حركة', cls: 'edit', group: 'edit' };
     case 'delete_tx': return { label: 'حذف حركة', cls: 'del', group: 'del' };
     case 'edit_customer': return { label: 'تعديل زبون', cls: 'edit', group: 'edit' };
     case 'delete_customer': return { label: 'حذف زبون', cls: 'del', group: 'del' };
-    case 'set_due_date': return { label: 'موعد تسديد', cls: 'sys', group: 'edit' };
-    case 'migrate_free': return { label: 'ترحيل للسحابة', cls: 'sys', group: 'add' };
-    case 'restore_backup': return { label: 'استعادة نسخة', cls: 'sys', group: 'add' };
-    default: return { label: 'عملية', cls: 'sys', group: 'all' };
+    case 'set_due_date': return { label: 'موعد تسديد', cls: 'sys', group: 'due' };
+    default: return null;
   }
 }
 
@@ -2881,6 +2875,7 @@ function renderAuditLogsList() {
   const q = normalizeDigits(document.getElementById('auditSearchInput')?.value || '').trim().toLowerCase();
   const list = (auditLogs || []).filter(item => {
     const meta = getAuditActionMeta(item.action_type);
+    if (!meta) return false;
     if (currentAuditFilter !== 'all' && meta.group !== currentAuditFilter) return false;
     if (!q) return true;
     const hay = `${item.customer_name || ''} ${item.actor_name || ''} ${item.summary || ''} ${meta.label}`.toLowerCase();

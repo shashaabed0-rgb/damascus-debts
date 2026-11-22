@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v24.0',
+  version: 'v25.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -302,8 +302,11 @@ function persistData() {
   persistAuditData();
 }
 
+const TRACKED_AUDIT_ACTIONS = new Set(['edit_tx', 'delete_tx', 'edit_customer', 'delete_customer', 'set_due_date']);
+
 function recordAuditEvent({ action_type, customer_name, summary, before_data = null, after_data = null }) {
   if (!currentProfile) return null;
+  if (!TRACKED_AUDIT_ACTIONS.has(String(action_type || ''))) return null;
   const entry = {
     id: 'aud_' + genId(),
     workshop_id: currentProfile.workshop_id,
@@ -1060,6 +1063,9 @@ async function handleLogout() {
     currentWorkshop = null;
     allRecords = [];
     pendingQueue = [];
+    auditLogs = [];
+    pendingAuditQueue = [];
+    pendingDueDateQueue = {};
     groupedCustomers = [];
     visibleCustomers = [];
     resetAllOpenLayersForLogout();
@@ -1097,6 +1103,9 @@ async function handleLogout() {
   currentWorkshop = null;
   allRecords = [];
   pendingQueue = [];
+  auditLogs = [];
+  pendingAuditQueue = [];
+  pendingDueDateQueue = {};
   resetAllOpenLayersForLogout();
   showLoginScreen();
   showToast('تم تسجيل الخروج');
@@ -1628,13 +1637,18 @@ async function syncData(silent) {
     persistData();
     processAndRender();
 
-    // 4. رفع سجل التدقيق المعلّق إلى Supabase بصمت (دون تعطيل المزامنة لو لم يُشغّل SQL v24 بعد)
+    // 4. رفع سجل التدقيق المعلّق إلى Supabase بصمت عبر INSERT فقط (متوافق مع جدول محمي بدون UPDATE)
     if (pendingAuditQueue.length > 0) {
       while (pendingAuditQueue.length > 0) {
         const aItem = pendingAuditQueue[0];
+        if (!TRACKED_AUDIT_ACTIONS.has(String(aItem.action_type || ''))) {
+          pendingAuditQueue.shift();
+          persistAuditData();
+          continue;
+        }
         const { error: audErr } = await client
           .from('audit_logs')
-          .upsert({
+          .insert({
             id: String(aItem.id),
             workshop_id: currentProfile.workshop_id,
             actor_user_id: aItem.actor_user_id || currentUser.id,
@@ -1645,9 +1659,16 @@ async function syncData(silent) {
             before_data: aItem.before_data || null,
             after_data: aItem.after_data || null,
             created_at: aItem.created_at || new Date().toISOString()
-          }, { onConflict: 'id' });
+          });
         if (audErr) {
           const aMsg = String(audErr.message || '');
+          if (audErr.code === '23505' || aMsg.includes('duplicate key')) {
+            // مرفوع مسبقاً بنجاح
+            auditTableMissingOnServer = false;
+            pendingAuditQueue.shift();
+            persistAuditData();
+            continue;
+          }
           if (aMsg.includes('audit_logs') || aMsg.includes('does not exist') || audErr.code === '42P01') {
             auditTableMissingOnServer = true;
           }
@@ -2686,13 +2707,18 @@ async function fetchAuditLogsFromServer() {
     return { fromServer: false, missingTable: false };
   }
   try {
-    // محاولة رفع المعلّق أولاً
+    // محاولة رفع المعلّق أولاً عبر INSERT فقط
     if (pendingAuditQueue.length > 0) {
       while (pendingAuditQueue.length > 0) {
         const aItem = pendingAuditQueue[0];
+        if (!TRACKED_AUDIT_ACTIONS.has(String(aItem.action_type || ''))) {
+          pendingAuditQueue.shift();
+          persistAuditData();
+          continue;
+        }
         const { error: upErr } = await sb
           .from('audit_logs')
-          .upsert({
+          .insert({
             id: String(aItem.id),
             workshop_id: currentProfile.workshop_id,
             actor_user_id: aItem.actor_user_id || currentUser.id,
@@ -2703,9 +2729,14 @@ async function fetchAuditLogsFromServer() {
             before_data: aItem.before_data || null,
             after_data: aItem.after_data || null,
             created_at: aItem.created_at || new Date().toISOString()
-          }, { onConflict: 'id' });
+          });
         if (upErr) {
           const msg = String(upErr.message || '');
+          if (upErr.code === '23505' || msg.includes('duplicate key')) {
+            pendingAuditQueue.shift();
+            persistAuditData();
+            continue;
+          }
           if (msg.includes('audit_logs') || msg.includes('does not exist') || upErr.code === '42P01') {
             auditTableMissingOnServer = true;
             return { fromServer: false, missingTable: true };
@@ -2735,8 +2766,12 @@ async function fetchAuditLogsFromServer() {
 
     auditTableMissingOnServer = false;
     const mergedMap = new Map();
-    (data || []).forEach(r => mergedMap.set(String(r.id), r));
-    (pendingAuditQueue || []).forEach(r => mergedMap.set(String(r.id), r));
+    (data || []).forEach(r => {
+      if (TRACKED_AUDIT_ACTIONS.has(String(r.action_type || ''))) mergedMap.set(String(r.id), r);
+    });
+    (pendingAuditQueue || []).forEach(r => {
+      if (TRACKED_AUDIT_ACTIONS.has(String(r.action_type || ''))) mergedMap.set(String(r.id), r);
+    });
     auditLogs = Array.from(mergedMap.values()).sort((a, b) =>
       String(b.created_at || '').localeCompare(String(a.created_at || ''))
     );
