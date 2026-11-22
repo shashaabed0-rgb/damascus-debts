@@ -797,7 +797,8 @@ function renderCustomers() {
   visibleCustomers = groupedCustomers.filter(c => {
     if (showConflictsOnly && !c.isDuplicateConflict) return false;
     const normPhone = normalizeDigits(c.phone || '').toLowerCase();
-    const matches = !q || c.name.toLowerCase().includes(q) || normPhone.includes(q);
+    const dispName = cleanDisplayCustomerName(c.name);
+    const matches = !q || dispName.toLowerCase().includes(q) || normPhone.includes(q);
     if (!matches) return false;
     if (currentFilter === 'debt') return c.hasDebt;
     if (currentFilter === 'zero') return c.isAllZero;
@@ -811,7 +812,8 @@ function renderCustomers() {
   }
 
   listEl.innerHTML = visibleCustomers.map((c, idx) => {
-    const initial = c.name.charAt(0);
+    const dispName = cleanDisplayCustomerName(c.name);
+    const initial = dispName.charAt(0) || c.name.charAt(0);
     const pendMark = c.records.some(r => r.pending) ? ' • محلي' : '';
     const metaParts = [c.phone, `${c.activeRecords.length} حركة حالية`];
     if (c.archivedCount > 0) metaParts.push(`${c.archivedCount} بالأرشيف`);
@@ -829,7 +831,7 @@ function renderCustomers() {
         <div class="cust-left">
           <div class="avatar">${escapeHtml(initial)}</div>
           <div style="min-width:0;">
-            <div class="cust-name">${escapeHtml(c.name)}</div>
+            <div class="cust-name">${escapeHtml(dispName)}</div>
             <div class="cust-meta">${escapeHtml(meta)}</div>
             ${dupRowHtml}
           </div>
@@ -955,13 +957,13 @@ function renderCustomerDetail(name) {
   const cust = groupedCustomers.find(c => c.name === name);
   if (!cust) return closeDetailView();
 
-  document.getElementById('detailName').textContent = cust.name;
+  document.getElementById('detailName').textContent = cleanDisplayCustomerName(cust.name);
   document.getElementById('detailPhone').textContent = cust.phone ? cust.phone : 'بدون رقم هاتف';
 
   const detDupBanner = document.getElementById('detailDupBanner');
   if (detDupBanner) {
     if (cust.isDuplicateConflict) {
-      const peersTxt = (cust.conflictPeers || []).map(escapeHtml).join('، ');
+      const peersTxt = (cust.conflictPeers || []).map(p => escapeHtml(cleanDisplayCustomerName(p))).join('، ');
       detDupBanner.classList.remove('hidden');
       detDupBanner.innerHTML = `
         <div>⚠️ هذا الاسم مطابق/مشابه لـ «<strong>${peersTxt}</strong>» — يرجى تعديل أحد الاسمين للتمييز بينهما.</div>
@@ -1032,6 +1034,7 @@ function updateTxCurrencyPickerVisibility(forceShow = false) {
 }
 
 let txOriginCustomerName = '';
+let txOriginDisplayName = '';
 let txOriginCustomerPhone = '';
 
 function normalizeArabicNameForCompare(str) {
@@ -1089,9 +1092,10 @@ function checkDuplicateTxName() {
   const match = findSimilarCustomer(val, txOriginCustomerName || null);
   if (match) {
     const enc = encodeURIComponent(match.name);
+    const matchDisp = cleanDisplayCustomerName(match.name);
     warnEl.innerHTML = `
-      <div><strong>لا يمكن التثبيت:</strong> يوجد زبون باسم مطابق أو مشابه «<strong>${escapeHtml(match.name)}</strong>». يرجى تعديل الاسم للتمييز بينهما.</div>
-      ${!editingTxId ? `<button type="button" class="btn btn-light btn-sm" style="margin-top:6px;width:auto;" onclick="openExistingCustomerFromDup('${enc}')">فتح ملف «${escapeHtml(match.name)}» بدلاً من ذلك</button>` : ''}
+      <div><strong>لا يمكن التثبيت:</strong> يوجد زبون باسم مطابق أو مشابه «<strong>${escapeHtml(matchDisp)}</strong>». يرجى تعديل الاسم للتمييز بينهما.</div>
+      ${!editingTxId ? `<button type="button" class="btn btn-light btn-sm" style="margin-top:6px;width:auto;" onclick="openExistingCustomerFromDup('${enc}')">فتح ملف «${escapeHtml(matchDisp)}» بدلاً من ذلك</button>` : ''}
     `;
     warnEl.classList.remove('hidden');
     inp.style.borderColor = 'var(--danger)';
@@ -1106,11 +1110,11 @@ function checkDuplicateTxName() {
 
 function onTxNameInput() {
   // عدم جلب رقم الهاتف أو أي بيانات من أي اسم قديم عند التكرار أو تغيير الاسم
-  const nameVal = document.getElementById('txName').value.trim();
+  const nameVal = cleanCustomerNameInput(document.getElementById('txName').value);
   const phoneEl = document.getElementById('txPhone');
   if (txOriginCustomerName && phoneEl) {
     const curPhone = normalizeLocalPhoneInput(phoneEl.value);
-    if (nameVal !== txOriginCustomerName && txOriginCustomerPhone && curPhone === txOriginCustomerPhone) {
+    if (nameVal !== txOriginDisplayName && txOriginCustomerPhone && curPhone === txOriginCustomerPhone) {
       phoneEl.value = '';
     }
   }
@@ -1125,7 +1129,7 @@ function checkDuplicateEditCustName() {
   const val = inp.value.trim();
   const match = findSimilarCustomer(val, editingCustomerTargetName || currentCustomerName || null);
   if (match) {
-    warnEl.innerHTML = `<strong>لا يمكن التثبيت:</strong> يوجد زبون آخر باسم مطابق أو مشابه «<strong>${escapeHtml(match.name)}</strong>». يرجى تغيير الاسم أولاً.`;
+    warnEl.innerHTML = `<strong>لا يمكن التثبيت:</strong> يوجد زبون آخر باسم مطابق أو مشابه «<strong>${escapeHtml(cleanDisplayCustomerName(match.name))}</strong>». يرجى تغيير الاسم أولاً.`;
     warnEl.classList.remove('hidden');
     inp.style.borderColor = 'var(--danger)';
     return match;
@@ -1140,10 +1144,11 @@ function checkDuplicateEditCustName() {
 function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt', preferredCurrency = null, allowCurrSwitch = false) {
   editingTxId = null;
   txOriginCustomerName = String(prefillName || '').trim();
+  txOriginDisplayName = cleanDisplayCustomerName(txOriginCustomerName);
   txOriginCustomerPhone = txOriginCustomerName ? normalizeLocalPhoneInput(prefillPhone) : '';
   document.getElementById('txModalTitle').textContent = 'تسجيل عملية جديدة';
   document.getElementById('saveTxBtn').textContent = 'حفظ العملية';
-  document.getElementById('txName').value = prefillName;
+  document.getElementById('txName').value = txOriginDisplayName;
   document.getElementById('txPhone').value = txOriginCustomerPhone;
   document.getElementById('txAmount').value = '';
   document.getElementById('txNote').value = '';
@@ -1170,10 +1175,11 @@ function openEditTxModal(id) {
   if (!rec) return;
   editingTxId = String(rec.id);
   txOriginCustomerName = String(rec.name || '').trim();
+  txOriginDisplayName = cleanDisplayCustomerName(txOriginCustomerName);
   txOriginCustomerPhone = normalizeLocalPhoneInput(rec.phone || '');
   document.getElementById('txModalTitle').textContent = 'تعديل الحركة';
   document.getElementById('saveTxBtn').textContent = 'حفظ التعديل';
-  document.getElementById('txName').value = rec.name || '';
+  document.getElementById('txName').value = txOriginDisplayName;
   document.getElementById('txPhone').value = txOriginCustomerPhone;
   document.getElementById('txAmount').value = rec.amount || '';
   document.getElementById('txNote').value = rec.note || '';
@@ -1223,16 +1229,21 @@ function setTxKind(k) {
 }
 
 function saveTransaction() {
-  const name = document.getElementById('txName').value.trim();
+  const rawInputName = cleanCustomerNameInput(document.getElementById('txName').value);
   const phone = normalizeLocalPhoneInput(document.getElementById('txPhone').value);
   const amount = parseFloat(document.getElementById('txAmount').value);
   const note = document.getElementById('txNote').value.trim();
 
-  if (!name) return showToast('يرجى كتابة اسم الزبون');
-  const dupMatch = checkDuplicateTxName();
-  if (dupMatch) {
-    document.getElementById('txName').focus();
-    return showToast(`الاسم مشابه لزبون موجود (${dupMatch.name}) — عدّل الاسم قبل التثبيت`);
+  if (!rawInputName) return showToast('يرجى كتابة اسم الزبون');
+  const isKeepingOrigin = Boolean(txOriginCustomerName && rawInputName === txOriginDisplayName);
+  const name = isKeepingOrigin ? txOriginCustomerName : rawInputName;
+
+  if (!isKeepingOrigin) {
+    const dupMatch = checkDuplicateTxName();
+    if (dupMatch) {
+      document.getElementById('txName').focus();
+      return showToast(`الاسم مشابه لزبون موجود (${cleanDisplayCustomerName(dupMatch.name)}) — عدّل الاسم قبل التثبيت`);
+    }
   }
   if (!amount || amount <= 0) return showToast('يرجى إدخال مبلغ صحيح');
 
@@ -1290,7 +1301,7 @@ function openEditCustomerModalByName(encodedName) {
   const cust = groupedCustomers.find(c => c.name === targetName);
   if (!cust) return;
   editingCustomerTargetName = cust.name;
-  document.getElementById('editCustNameInput').value = cust.name;
+  document.getElementById('editCustNameInput').value = cleanDisplayCustomerName(cust.name);
   document.getElementById('editCustPhoneInput').value = cust.phone || '';
   checkDuplicateEditCustName();
   openModal('editCustomerModal');
@@ -1301,7 +1312,7 @@ function openEditCustomerModal() {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
   editingCustomerTargetName = cust.name;
-  document.getElementById('editCustNameInput').value = cust.name;
+  document.getElementById('editCustNameInput').value = cleanDisplayCustomerName(cust.name);
   document.getElementById('editCustPhoneInput').value = cust.phone || '';
   checkDuplicateEditCustName();
   openModal('editCustomerModal');
@@ -1310,17 +1321,31 @@ function openEditCustomerModal() {
 function saveCustomerEdit() {
   const oldName = editingCustomerTargetName || currentCustomerName;
   if (!oldName) return;
-  const newName = document.getElementById('editCustNameInput').value.trim();
+  const newName = cleanCustomerNameInput(document.getElementById('editCustNameInput').value);
   const newPhone = normalizeLocalPhoneInput(document.getElementById('editCustPhoneInput').value);
   if (!newName) return showToast('يرجى كتابة اسم الزبون');
   const dupCust = checkDuplicateEditCustName();
   if (dupCust) {
     document.getElementById('editCustNameInput').focus();
-    return showToast(`الاسم مشابه لزبون آخر (${dupCust.name}) — عدّل الاسم أولاً`);
+    return showToast(`الاسم مشابه لزبون آخر (${cleanDisplayCustomerName(dupCust.name)}) — عدّل الاسم أولاً`);
   }
 
   const affectedIds = allRecords.filter(r => String(r.name || '').trim() === oldName).map(r => r.id);
   affectedIds.forEach(id => queueUpdateRecord(id, { name: newName, phone: newPhone }));
+
+  // إذا كان هناك حساب وحيد متبقٍ من نفس التعارض يحمل فاصلاً داخلياً غير مرئي، ننظّف اسمه تلقائياً
+  const oldBaseKey = getConflictBaseKey(oldName);
+  const remainingSameBase = groupedCustomers.filter(
+    c => c.name !== oldName && getConflictBaseKey(c.name) === oldBaseKey
+  );
+  if (remainingSameBase.length === 1 && getConflictBaseKey(newName) !== oldBaseKey) {
+    const peer = remainingSameBase[0];
+    const cleanPeer = cleanDisplayCustomerName(peer.name);
+    if (cleanPeer && cleanPeer !== peer.name) {
+      const peerIds = allRecords.filter(r => String(r.name || '').trim() === peer.name).map(r => r.id);
+      peerIds.forEach(id => queueUpdateRecord(id, { name: cleanPeer }));
+    }
+  }
 
   editingCustomerTargetName = null;
   const detailOpen = document.getElementById('detailView').classList.contains('open');
@@ -1350,7 +1375,7 @@ function askDeleteCustomer() {
   if (!cust) return;
   confirmAction = { type: 'customer', name: cust.name };
   document.getElementById('confirmTitle').textContent = 'حذف ملف الزبون بالكامل';
-  document.getElementById('confirmMsg').textContent = `هل أنت متأكد من حذف ملف "${cust.name}" مع جميع حركاته (${cust.records.length} حركة) نهائياً؟`;
+  document.getElementById('confirmMsg').textContent = `هل أنت متأكد من حذف ملف "${cleanDisplayCustomerName(cust.name)}" مع جميع حركاته (${cust.records.length} حركة) نهائياً؟`;
   openModal('confirmModal');
 }
 
@@ -1781,7 +1806,7 @@ function buildBackupCsvText(recordsArr) {
   const rows = (recordsArr || []).map(r => [
     r.id,
     formatDate(r.date),
-    r.name || '',
+    cleanDisplayCustomerName(r.name || ''),
     r.phone || '',
     r.type || '',
     r.amount || 0,
@@ -2020,7 +2045,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v18.0';
+  const ver = (APP_META && APP_META.version) || 'v19.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2051,7 +2076,7 @@ function openAboutModal() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v18.0';
+  const ver = (APP_META && APP_META.version) || 'v19.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;

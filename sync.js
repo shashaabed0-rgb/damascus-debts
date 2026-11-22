@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v18.0',
+  version: 'v19.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '' // ضع رقم التواصل هنا لتثبيته لجميع الورشات (أو يُؤخذ تلقائياً من هاتف المحل)
@@ -374,8 +374,23 @@ function formatIsoDateTimeShort(isoStr) {
   return formatDateTimeDisplay(d);
 }
 
+function stripZeroWidthChars(str) {
+  return String(str == null ? '' : str).replace(/[\u200B\uFEFF]/g, '');
+}
+
 function stripDuplicateConflictTag(name) {
-  return String(name || '').trim().replace(/\s*\(مكرر(?:\s*[-–]\s*[^)]*|\s*\d+)?\)\s*$/, '').trim();
+  return stripZeroWidthChars(name)
+    .trim()
+    .replace(/\s*\(مكرر(?:\s*[-–]\s*[^)]*|\s*\d+)?\)\s*$/, '')
+    .trim();
+}
+
+function cleanDisplayCustomerName(name) {
+  return stripDuplicateConflictTag(name);
+}
+
+function cleanCustomerNameInput(name) {
+  return stripZeroWidthChars(name).trim();
 }
 
 function getConflictBaseKey(name) {
@@ -1085,14 +1100,10 @@ async function syncData(silent) {
           if (!origName) return;
           const baseKey = getConflictBaseKey(origName);
           if (serverExactNames.has(origName)) {
-            const firstItem = offlineNewCustItems.find(q => String(q.payload.name || '').trim() === origName);
-            const rawBy = String((firstItem && firstItem.payload && firstItem.payload.created_by) || currentProfile.display_name || '').trim();
-            const shortBy = rawBy.split(/\s+/)[0] || 'جهاز';
-            let cand = `${origName} (مكرر - ${shortBy})`;
-            let n = 2;
+            // فصل داخلي غير مرئي دون إضافة أي كلمة بجانب اسم الزبون
+            let cand = origName + '\u200B';
             while (serverExactNames.has(cand)) {
-              cand = `${origName} (مكرر - ${shortBy} ${n})`;
-              n++;
+              cand += '\u200B';
             }
             collisionRenameMap.set(origName, cand);
             serverExactNames.add(cand);
@@ -1185,14 +1196,11 @@ async function syncData(silent) {
         if (otherRows.length > 0 && myRows.length > 0) {
           const earliestOtherId = otherRows.map(r => String(r.id)).sort()[0];
           const earliestMyId = myRows.map(r => String(r.id)).sort()[0];
-          // الجهاز الأحدث يفصل حركاته باسم مكرر مستقل (برقم هاتفه وحركاته فقط)
+          // الجهاز الأحدث يفصل حركاته بفاصل داخلي غير مرئي دون إضافة أي كلمة بجانب الاسم
           if (earliestMyId > earliestOtherId) {
-            const shortBy = (info.createdBy || '').split(/\s+/)[0] || 'جهاز';
-            let cand = `${origName} (مكرر - ${shortBy})`;
-            let n = 2;
+            let cand = origName + '\u200B';
             while (allServerNamesNow.has(cand)) {
-              cand = `${origName} (مكرر - ${shortBy} ${n})`;
-              n++;
+              cand += '\u200B';
             }
             allServerNamesNow.add(cand);
             detectedOfflineCollisions.push(origName);

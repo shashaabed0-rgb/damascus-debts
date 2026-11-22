@@ -63,7 +63,7 @@ function buildWhatsAppMessageText(cust, specificTx = null, waCfgOverride = null)
 
   if (cfg.showGreeting) {
     const greet = (cfg.greetingText || 'السلام عليكم').trim();
-    lines.push(`${greet} ${cust.name}،`);
+    lines.push(`${greet} ${cleanDisplayCustomerName(cust.name)}،`);
   }
 
   if (cfg.showLatestTx && latestTx) {
@@ -376,7 +376,7 @@ async function exportCustomerPDF(includeArchive = false) {
         <div style="border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;background:#ffffff;">
           <div>
             <span style="font-size:11.5px;color:#64748b;margin-left:6px;">اسم الزبون:</span>
-            <span style="font-size:16px;font-weight:800;color:#0f172a;">${formatPdfTextHtml(cust.name)}</span>
+            <span style="font-size:16px;font-weight:800;color:#0f172a;">${formatPdfTextHtml(cleanDisplayCustomerName(cust.name))}</span>
           </div>
           <div style="text-align:left;">
             <span style="font-size:11.5px;color:#64748b;margin-left:6px;">الهاتف:</span>
@@ -591,13 +591,14 @@ async function exportCustomerPDF(includeArchive = false) {
       });
     }
 
-    const safeName = cust.name.replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '').trim() || 'كشف_حساب';
+    const displayCustName = cleanDisplayCustomerName(cust.name);
+    const safeName = displayCustName.replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '').trim() || 'كشف_حساب';
     const dateSlug = todayString().replace(/\//g, '-');
     const fileName = `${safeName}_${dateSlug}.pdf`;
     const pdfBlob = doc.output('blob');
     const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
-    const shareLabel = `${cust.name} - ${todayString()}`;
+    const shareLabel = `${displayCustName} - ${todayString()}`;
 
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       await navigator.share({
