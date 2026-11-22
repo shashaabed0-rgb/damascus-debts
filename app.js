@@ -27,15 +27,16 @@ async function copyQuickCodeNow(isAuto = false) {
     } catch (e) {}
   }
 
-  if (!copied && !isAuto) {
+  if (!copied) {
     try {
       const ta = document.createElement('textarea');
       ta.value = code;
       ta.setAttribute('readonly', '');
-      ta.style.cssText = 'position:fixed;opacity:0;left:-9999px;';
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0.01;font-size:16px;';
       document.body.appendChild(ta);
+      ta.focus();
       ta.select();
-      ta.setSelectionRange(0, code.length);
+      ta.setSelectionRange(0, 99999);
       copied = document.execCommand('copy');
       document.body.removeChild(ta);
     } catch (e) {}
@@ -514,8 +515,8 @@ function finalizeCustomerCurrencies(rawRecords) {
     SYP: buildCurrencyCycles(split.SYP, 'SYP')
   };
 
-  // هل يوجد رصيد مفتوح في أي عملة مفعّلة؟
-  const anyOpenBalance = enabledCodes.some(c => rawByCurr[c].openRecords.length > 0);
+  // هل يوجد رصيد مفتوح غير مسدّد في أي عملة (حتى لو تم إلغاؤها من الضبط)؟
+  const anyOpenBalance = ['USD', 'SYP'].some(c => rawByCurr[c].openRecords.length > 0);
 
   const byCurrency = {};
   const mergedActiveRecords = [];
@@ -523,6 +524,7 @@ function finalizeCustomerCurrencies(rawRecords) {
 
   ['USD', 'SYP'].forEach(code => {
     const cData = rawByCurr[code];
+    const isEnabled = enabledCodes.includes(code);
     let activeRecords = [];
     let archivedCycles = [];
     let totalDebt = 0;
@@ -530,18 +532,23 @@ function finalizeCustomerCurrencies(rawRecords) {
     let balance = 0;
 
     if (cData.openRecords.length > 0) {
+      // عملة فيها رصيد مفتوح (مفعّلة أو ملغاة): لا تُخفى أبداً لحين تسديد كامل المبلغ
       activeRecords = cData.openRecords;
       archivedCycles = cData.settledCycles;
       totalDebt = cData.openDebt;
       totalPay = cData.openPay;
       balance = cData.openBalance;
     } else if (cData.settledCycles.length > 0) {
-      if (anyOpenBalance) {
-        // العملة الأخرى مفتوحة، لذلك تُطوى كل الدورات المسددة لهذه العملة في الأرشيف
+      if (!isEnabled) {
+        // عملة ملغاة وتم تسديد كامل مبلغها: تُنقل جميع دوراتها للأرشيف لتبقى ظاهرة في كشوف الأرشيف
+        activeRecords = [];
+        archivedCycles = cData.settledCycles;
+      } else if (anyOpenBalance) {
+        // العملة الأخرى مفتوحة، لذلك تُطوى كل الدورات المسدّدة لهذه العملة في الأرشيف
         activeRecords = [];
         archivedCycles = cData.settledCycles;
       } else {
-        // العميل خالص بالكامل: نعرض آخر دورة مسددة كحركات حالية ونطوي الأقدم
+        // العميل خالص بالكامل: نعرض آخر دورة مسدّدة بالعملة المفعّلة ونطوي الأقدم بالأرشيف
         const lastCyc = cData.settledCycles[cData.settledCycles.length - 1];
         activeRecords = lastCyc.records;
         archivedCycles = cData.settledCycles.slice(0, -1);
@@ -554,6 +561,7 @@ function finalizeCustomerCurrencies(rawRecords) {
     const archivedCount = archivedCycles.reduce((acc, cyc) => acc + cyc.records.length, 0);
     byCurrency[code] = {
       currency: code,
+      enabled: isEnabled,
       allRecords: cData.allRecords,
       activeRecords,
       archivedCycles,
@@ -563,25 +571,24 @@ function finalizeCustomerCurrencies(rawRecords) {
       balance
     };
 
-    if (enabledCodes.includes(code)) {
-      activeRecords.forEach(r => mergedActiveRecords.push(r));
-      archivedCycles.forEach(cyc => mergedArchivedCycles.push(cyc));
-    }
+    // دمج الحركات النشطة (المفعّلة + الملغاة غير المسدّدة) والأرشيف (لجميع العملات)
+    activeRecords.forEach(r => mergedActiveRecords.push(r));
+    archivedCycles.forEach(cyc => mergedArchivedCycles.push(cyc));
   });
 
-  // ترتيب الحركات النشطة المدمجة زمنياً (الأقدم أولاً، وعند العرض نعكسها للأحدث أولاً)
   mergedActiveRecords.sort((a, b) => {
     if (a._normDate !== b._normDate) return a._normDate.localeCompare(b._normDate);
     return String(a.id).localeCompare(String(b.id));
   });
 
-  // ترتيب الدورات المؤرشفة زمنياً حسب تاريخ الإغلاق
   mergedArchivedCycles.sort((a, b) => a.endDate.localeCompare(b.endDate));
 
   const archivedCount = mergedArchivedCycles.reduce((acc, c) => acc + c.records.length, 0);
-  const hasDebt = enabledCodes.some(c => byCurrency[c].balance > 0.001);
-  const hasCredit = enabledCodes.some(c => byCurrency[c].balance < -0.001);
-  const isAllZero = enabledCodes.every(c => Math.abs(byCurrency[c].balance) < 0.001);
+  const hasDebt = ['USD', 'SYP'].some(c => byCurrency[c].balance > 0.001);
+  const hasCredit = ['USD', 'SYP'].some(c => byCurrency[c].balance < -0.001);
+  const isAllZero = ['USD', 'SYP'].every(c => Math.abs(byCurrency[c].balance) < 0.001);
+  const hasDisabledOpenBalance = ['USD', 'SYP'].some(c => !enabledCodes.includes(c) && Math.abs(byCurrency[c].balance) >= 0.001);
+  const hasMultipleCurrenciesHistory = ['USD', 'SYP'].filter(c => byCurrency[c].allRecords.length > 0).length > 1;
 
   return {
     byCurrency,
@@ -590,7 +597,9 @@ function finalizeCustomerCurrencies(rawRecords) {
     archivedCount,
     hasDebt,
     hasCredit,
-    isAllZero
+    isAllZero,
+    hasDisabledOpenBalance,
+    hasMultipleCurrenciesHistory
   };
 }
 
@@ -609,7 +618,7 @@ function processAndRender() {
     if (!name) return;
     if (!map[name]) map[name] = { name, phone: '', rawRecords: [] };
     if (r.phone && String(r.phone).trim()) {
-      map[name].phone = String(r.phone).replace(/^'/, '').trim();
+      map[name].phone = normalizeLocalPhoneInput(r.phone);
     }
     const kind = isPayType(r.type) ? 'pay' : 'debt';
     const currency = getRecordCurrency(r);
@@ -623,8 +632,6 @@ function processAndRender() {
     });
   });
 
-  const enabledCodes = getEnabledCurrencyCodes();
-
   groupedCustomers = Object.values(map).map(entry => {
     const summary = finalizeCustomerCurrencies(entry.rawRecords);
     return {
@@ -633,10 +640,6 @@ function processAndRender() {
       records: entry.rawRecords,
       ...summary
     };
-  }).filter(c => {
-    // في وضع العملة الواحدة نظهر فقط من لديه سجل في تلك العملة (أو لو الكل لديه سجلات)
-    if (dual) return true;
-    return c.byCurrency[enabledCodes[0]].allRecords.length > 0;
   }).sort((a, b) => {
     const aHas = a.hasDebt ? 1 : 0;
     const bHas = b.hasDebt ? 1 : 0;
@@ -654,8 +657,12 @@ function processAndRender() {
     if (c.hasDebt) indebtedCount++;
   });
 
-  if (dual) {
-    document.getElementById('activeCurrName').textContent = 'العملتين';
+  // إذا كانت العملة الملغاة ما زال عليها ديون غير مسدّدة، نظهرها في الإجمالي لحين تسديدها
+  const disabledHasDebt = (!dual) && ((settings.currency === 'USD' && grandSyp > 0.001) || (settings.currency === 'SYP' && grandUsd > 0.001));
+  const showDualSummary = dual || disabledHasDebt;
+
+  if (showDualSummary) {
+    document.getElementById('activeCurrName').textContent = dual ? 'العملتين' : `${singleCurr.name} + أرصدة قيد التسديد`;
     document.getElementById('totalDebtVal').classList.add('hidden');
     document.getElementById('totalDebtDual').classList.remove('hidden');
     document.getElementById('totalDebtUsd').textContent = `${formatNum(grandUsd)} $`;
@@ -683,16 +690,15 @@ function setFilter(f, btn) {
 }
 
 function buildCustomerBalancePillsHtml(c) {
-  const enabled = getEnabledCurrencyCodes();
   const pills = [];
 
-  enabled.forEach(code => {
+  ['USD', 'SYP'].forEach(code => {
     const bal = c.byCurrency[code].balance;
     const unit = code === 'USD' ? 'دولار' : 'ليرة سوري';
     if (bal > 0.001) {
-      pills.push(`<span class="bal-pill bal-debt">${formatNum(bal)} ${unit}</span>`);
+      pills.push(`<span class="bal-pill bal-debt"><span class="num-ltr">${formatNum(bal)}</span><span>${unit}</span></span>`);
     } else if (bal < -0.001) {
-      pills.push(`<span class="bal-pill bal-credit">له ${formatNum(Math.abs(bal))} ${unit}</span>`);
+      pills.push(`<span class="bal-pill bal-credit"><span>له</span><span class="num-ltr">${formatNum(Math.abs(bal))}</span><span>${unit}</span></span>`);
     }
   });
 
@@ -704,10 +710,11 @@ function buildCustomerBalancePillsHtml(c) {
 }
 
 function renderCustomers() {
-  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const q = normalizeDigits(document.getElementById('searchInput').value).trim().toLowerCase();
 
   visibleCustomers = groupedCustomers.filter(c => {
-    const matches = !q || c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q);
+    const normPhone = normalizeDigits(c.phone || '').toLowerCase();
+    const matches = !q || c.name.toLowerCase().includes(q) || normPhone.includes(q);
     if (!matches) return false;
     if (currentFilter === 'debt') return c.hasDebt;
     if (currentFilter === 'zero') return c.isAllZero;
@@ -774,7 +781,7 @@ function formatDetailBalanceHtml(balance, symbol) {
 function renderDetailSummaryCards(cust) {
   const wrap = document.getElementById('detailStatsWrap');
   const enabled = getEnabledCurrencyCodes();
-  const displayCodes = enabled.filter(code => cust.byCurrency[code].activeRecords.length > 0);
+  const displayCodes = ['USD', 'SYP'].filter(code => cust.byCurrency[code].activeRecords.length > 0);
   const codesToShow = displayCodes.length > 0 ? displayCodes : [enabled[0]];
 
   const rowsHtml = codesToShow.map(code => {
@@ -843,7 +850,7 @@ function renderTxCardHtml(r, isArchived = false, showCurrencyChip = false) {
         ${r.note ? `<div class="tx-note">${escapeHtml(r.note)}</div>` : ''}
       </div>
       <div class="tx-right">
-        <div class="tx-amt" style="color:${r.kind === 'debt' ? 'var(--danger)' : 'var(--success)'};">${sign}${formatNum(r.amount)} ${curr.symbol}</div>
+        <div class="tx-amt" style="color:${r.kind === 'debt' ? 'var(--danger)' : 'var(--success)'};"><span class="num-ltr">${sign}${formatNum(r.amount)}</span><span>${curr.symbol}</span></div>
         <button class="tx-btn edit" title="تعديل" onclick="openEditTxModal('${safeId}')">
           <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
         </button>
@@ -865,7 +872,7 @@ function renderCustomerDetail(name) {
 
   renderDetailSummaryCards(cust);
 
-  const showCurrChips = isDualCurrencyMode();
+  const showCurrChips = isDualCurrencyMode() || cust.hasDisabledOpenBalance || cust.hasMultipleCurrenciesHistory;
   const activeList = [...cust.activeRecords].reverse();
   document.getElementById('detailTxList').innerHTML = activeList.length > 0
     ? activeList.map(r => renderTxCardHtml(r, false, showCurrChips)).join('')
@@ -918,22 +925,22 @@ function updateTxCurrencyPickerVisibility(forceShow = false) {
   document.getElementById('txCurrSwitch').classList.toggle('hidden', !show);
 }
 
-function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt', preferredCurrency = null) {
+function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt', preferredCurrency = null, allowCurrSwitch = false) {
   editingTxId = null;
   document.getElementById('txModalTitle').textContent = 'تسجيل عملية جديدة';
   document.getElementById('saveTxBtn').textContent = 'حفظ العملية';
   document.getElementById('txName').value = prefillName;
-  document.getElementById('txPhone').value = prefillPhone;
+  document.getElementById('txPhone').value = normalizeLocalPhoneInput(prefillPhone);
   document.getElementById('txAmount').value = '';
   document.getElementById('txNote').value = '';
   document.getElementById('txDate').value = toInputDate(todayString());
   document.getElementById('txDateField').classList.add('hidden');
 
-  const initialCurr = isDualCurrencyMode()
-    ? (preferredCurrency || lastUsedTxCurrency || 'USD')
+  const initialCurr = (isDualCurrencyMode() || allowCurrSwitch)
+    ? (preferredCurrency || lastUsedTxCurrency || (settings.currency === 'SYP' ? 'SYP' : 'USD'))
     : (settings.currency === 'SYP' ? 'SYP' : 'USD');
   setTxCurrency(initialCurr);
-  updateTxCurrencyPickerVisibility(false);
+  updateTxCurrencyPickerVisibility(allowCurrSwitch);
 
   setTxKind(defaultKind);
   openModal('addModal');
@@ -968,19 +975,36 @@ function quickAddForCurrent(kind) {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
   let prefCurr = null;
-  if (isDualCurrencyMode()) {
-    const hasUsd = cust.byCurrency.USD.balance > 0.001;
-    const hasSyp = cust.byCurrency.SYP.balance > 0.001;
-    if (hasSyp && !hasUsd) prefCurr = 'SYP';
-    else if (hasUsd && !hasSyp) prefCurr = 'USD';
+  const hasUsd = Math.abs(cust.byCurrency.USD.balance) > 0.001;
+  const hasSyp = Math.abs(cust.byCurrency.SYP.balance) > 0.001;
+  // إذا كان على الزبون رصيد غير مسدّد بالعملة الملغاة، نسمح باختيار العملة لتسديد المبلغ
+  const allowSwitch = isDualCurrencyMode() || cust.hasDisabledOpenBalance;
+  if (allowSwitch) {
+    if (kind === 'pay') {
+      if (hasSyp && !hasUsd) prefCurr = 'SYP';
+      else if (hasUsd && !hasSyp) prefCurr = 'USD';
+      else if (cust.hasDisabledOpenBalance) prefCurr = settings.currency === 'USD' ? 'SYP' : 'USD';
+    } else {
+      if (isDualCurrencyMode()) {
+        if (hasSyp && !hasUsd) prefCurr = 'SYP';
+        else if (hasUsd && !hasSyp) prefCurr = 'USD';
+      } else {
+        prefCurr = settings.currency === 'SYP' ? 'SYP' : 'USD';
+      }
+    }
   }
-  openAddModal(cust.name, cust.phone, kind, prefCurr);
+  openAddModal(cust.name, cust.phone, kind, prefCurr, allowSwitch);
 }
 
 function autoFillPhone() {
   const val = document.getElementById('txName').value.trim();
   const found = groupedCustomers.find(c => c.name === val);
-  if (found && found.phone) document.getElementById('txPhone').value = found.phone;
+  if (found) {
+    if (found.phone) document.getElementById('txPhone').value = normalizeLocalPhoneInput(found.phone);
+    if (!editingTxId && !isDualCurrencyMode() && found.hasDisabledOpenBalance) {
+      updateTxCurrencyPickerVisibility(true);
+    }
+  }
 }
 
 function setTxKind(k) {
@@ -991,14 +1015,17 @@ function setTxKind(k) {
 
 function saveTransaction() {
   const name = document.getElementById('txName').value.trim();
-  const phone = document.getElementById('txPhone').value.trim();
+  const phone = normalizeLocalPhoneInput(document.getElementById('txPhone').value);
   const amount = parseFloat(document.getElementById('txAmount').value);
   const note = document.getElementById('txNote').value.trim();
 
   if (!name) return showToast('يرجى كتابة اسم الزبون');
   if (!amount || amount <= 0) return showToast('يرجى إدخال مبلغ صحيح');
 
-  const chosenCurrCode = isDualCurrencyMode() ? txCurrency : (editingTxId ? txCurrency : (settings.currency === 'SYP' ? 'SYP' : 'USD'));
+  const pickerVisible = !document.getElementById('txCurrSwitch').classList.contains('hidden');
+  const chosenCurrCode = (isDualCurrencyMode() || pickerVisible || editingTxId)
+    ? txCurrency
+    : (settings.currency === 'SYP' ? 'SYP' : 'USD');
   const curr = getCurr(chosenCurrCode);
   const typeLabel = (txKind === 'debt' ? 'دين' : 'دفعة') + ` (${curr.symbol})`;
 
@@ -1050,7 +1077,7 @@ function openEditCustomerModal() {
 function saveCustomerEdit() {
   const oldName = currentCustomerName;
   const newName = document.getElementById('editCustNameInput').value.trim();
-  const newPhone = document.getElementById('editCustPhoneInput').value.trim();
+  const newPhone = normalizeLocalPhoneInput(document.getElementById('editCustPhoneInput').value);
   if (!newName) return showToast('يرجى كتابة اسم الزبون');
 
   const affectedIds = allRecords.filter(r => String(r.name || '').trim() === oldName).map(r => r.id);
@@ -1152,7 +1179,7 @@ function removeShopPhoneRow(btn) {
 
 function collectShopPhonesInputs() {
   return Array.from(document.querySelectorAll('.shop-phone-input'))
-    .map(inp => inp.value.trim())
+    .map(inp => normalizeLocalPhoneInput(inp.value))
     .filter(Boolean);
 }
 
@@ -1474,7 +1501,7 @@ function getLocalSnapshots() {
 
 function saveLocalSnapshots(list) {
   try {
-    localStorage.setItem(getLocalSnapshotsKey(), JSON.stringify(list.slice(0, 7)));
+    localStorage.setItem(getLocalSnapshotsKey(), JSON.stringify(list.slice(0, 14)));
   } catch (e) {}
 }
 
@@ -1611,8 +1638,9 @@ function updateBackupStatusUI() {
   const snaps = getLocalSnapshots();
   const lastSnapTxt = snaps.length > 0 ? `${snaps[0].date} (${snaps[0].savedAt}) — ${snaps[0].count} حركة` : 'لا توجد بعد';
   box.innerHTML = `
+    <div><strong>موعد النسخ التلقائي:</strong> <span class="midnight-pill">12:00 ليلاً يومياً</span></div>
     <div><strong>إجمالي السجلات الحالية:</strong> ${allRecords.length} حركة (${groupedCustomers.length} زبون)</div>
-    <div><strong>آخر نسخة يومية على الجهاز:</strong> ${escapeHtml(lastSnapTxt)}</div>
+    <div><strong>آخر نسخة محفوظة على الجهاز:</strong> ${escapeHtml(lastSnapTxt)}</div>
   `;
 }
 
@@ -1706,13 +1734,36 @@ async function restoreRecordsArray(recs) {
   );
 }
 
+let midnightBackupTimer = null;
+
+function scheduleMidnightBackupTimer() {
+  clearTimeout(midnightBackupTimer);
+  const now = new Date();
+  const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5, 0);
+  const delayMs = Math.max(5000, nextMidnight.getTime() - now.getTime());
+  midnightBackupTimer = setTimeout(() => {
+    if (isUnlocked && currentProfile && allRecords.length > 0) {
+      saveDailyLocalSnapshot(true);
+      updateBackupStatusUI();
+      renderLocalSnapshotsUI();
+    }
+    scheduleMidnightBackupTimer();
+  }, delayMs);
+}
+
 function checkAndRunDailyBackups() {
   if (!currentProfile || !isUnlocked) return;
   if (allRecords.length > 0) {
-    saveDailyLocalSnapshot(false);
+    const saved = saveDailyLocalSnapshot(false);
+    if (saved) {
+      updateBackupStatusUI();
+      renderLocalSnapshotsUI();
+    }
   }
+  if (!midnightBackupTimer) scheduleMidnightBackupTimer();
 }
 
+scheduleMidnightBackupTimer();
 setInterval(() => {
   if (isUnlocked && currentProfile) checkAndRunDailyBackups();
 }, 10 * 60 * 1000);
@@ -1721,7 +1772,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v12.0';
+  const ver = (APP_META && APP_META.version) || 'v13.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -1752,7 +1803,7 @@ function openAboutModal() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v12.0';
+  const ver = (APP_META && APP_META.version) || 'v13.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
@@ -1771,13 +1822,6 @@ function resolveEffectiveTheme(mode) {
 
 function updateThemeButtonsUI() {
   const mode = settings.themeMode || 'auto';
-  const setAuto = document.getElementById('setThemeAuto');
-  const setLight = document.getElementById('setThemeLight');
-  const setDark = document.getElementById('setThemeDark');
-  if (setAuto) setAuto.className = 'tog-btn' + (mode === 'auto' ? ' on-opt' : '');
-  if (setLight) setLight.className = 'tog-btn' + (mode === 'light' ? ' on-opt' : '');
-  if (setDark) setDark.className = 'tog-btn' + (mode === 'dark' ? ' on-opt' : '');
-
   const dAuto = document.getElementById('drawerThemeAuto');
   const dLight = document.getElementById('drawerThemeLight');
   const dDark = document.getElementById('drawerThemeDark');

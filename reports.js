@@ -1,8 +1,19 @@
 // ==================== واتساب (عادي أو أعمال) حسب تخصيص المستخدم ====================
 function formatPhoneForWa(rawPhone) {
-  let p = String(rawPhone || '').replace(/[^\d]/g, '');
+  let p = normalizeDigits(rawPhone || '').replace(/[^\d]/g, '');
+  if (!p) return '';
   if (p.startsWith('00')) p = p.slice(2);
-  else if (p.startsWith('09') && p.length === 10) p = '963' + p.slice(1);
+  if (p.startsWith('9630')) {
+    p = '963' + p.slice(4);
+  } else if (p.startsWith('963')) {
+    // جاهز بالرمز الدولي السوري
+  } else if (p.startsWith('09') && p.length === 10) {
+    p = '963' + p.slice(1);
+  } else if (p.startsWith('9') && p.length === 9) {
+    p = '963' + p;
+  } else if (p.startsWith('0') && p.length >= 9 && p.length <= 10) {
+    p = '963' + p.slice(1);
+  }
   return p;
 }
 
@@ -18,14 +29,19 @@ function formatBalanceWaLine(balance, code) {
 }
 
 function getActiveCurrenciesForReport(cust, includeArchive = false) {
+  const allCodes = ['USD', 'SYP'];
   const enabled = getEnabledCurrencyCodes();
   if (includeArchive) {
-    const withAny = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].allRecords.length > 0);
+    // في الكشف الشامل / الأرشيف نظهر كل العملات التي فيها حركات (بما فيها العملة الملغاة)
+    const withAny = allCodes.filter(code => cust.byCurrency[code] && cust.byCurrency[code].allRecords.length > 0);
     return withAny.length > 0 ? withAny : [enabled[0]];
   }
-  const list = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].activeRecords.length > 0);
-  if (list.length > 0) return list;
-  const withAny = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].allRecords.length > 0);
+  // في الكشف الحالي نظهر كل عملة فيها حركات نشطة (تشمل العملة الملغاة طالما لم يتسدد رصيدها بالكامل)
+  const activeList = allCodes.filter(code => cust.byCurrency[code] && cust.byCurrency[code].activeRecords.length > 0);
+  if (activeList.length > 0) return activeList;
+  const withEnabled = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].allRecords.length > 0);
+  if (withEnabled.length > 0) return [withEnabled[0]];
+  const withAny = allCodes.filter(code => cust.byCurrency[code] && cust.byCurrency[code].allRecords.length > 0);
   return withAny.length > 0 ? [withAny[0]] : [enabled[0]];
 }
 
@@ -166,6 +182,20 @@ function extractCopyableAscii(rawText) {
   return m ? m.join(' ') : '';
 }
 
+function formatPdfMoneyHtml(amount, unit, opts = {}) {
+  const numStr = formatNum(amount);
+  const numColor = opts.color || '#0f172a';
+  const unitColor = opts.unitColor || '#475569';
+  const weight = opts.weight || '800';
+  const prefixHtml = opts.prefix
+    ? `<span style="display:inline-block;color:${numColor};font-weight:${weight};">${escapeHtml(opts.prefix)}</span><span style="display:inline-block;width:5px;"></span>`
+    : '';
+  const suffixHtml = opts.suffix
+    ? `<span style="display:inline-block;width:5px;"></span><span style="display:inline-block;color:#475569;font-size:11px;font-weight:700;">${escapeHtml(opts.suffix)}</span>`
+    : '';
+  return `<span dir="rtl" style="display:inline-block;white-space:nowrap;letter-spacing:0;">${prefixHtml}<span dir="ltr" style="display:inline-block;unicode-bidi:isolate;color:${numColor};font-weight:${weight};">${numStr}</span><span style="display:inline-block;width:5px;"></span><span style="display:inline-block;color:${unitColor};font-weight:700;">${escapeHtml(unit)}</span>${suffixHtml}</span>`;
+}
+
 async function exportCustomerPDF(includeArchive = false) {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
@@ -182,7 +212,7 @@ async function exportCustomerPDF(includeArchive = false) {
 
   const prevScrollY = window.scrollY;
   const stage = document.createElement('div');
-  stage.style.cssText = 'position:absolute;top:0;left:0;width:740px;background:#ffffff;color:#111827;z-index:99990;direction:rtl;font-family:"Segoe UI",Tahoma,Arial,sans-serif;padding:0;margin:0;';
+  stage.style.cssText = 'position:absolute;top:0;left:0;width:740px;background:#ffffff;color:#111827;z-index:99990;direction:rtl;font-family:"Segoe UI",Tahoma,Arial,sans-serif;letter-spacing:0;word-spacing:normal;font-variant-ligatures:normal;padding:0;margin:0;';
 
   try {
     const logoHtml = settings.shopLogo
@@ -216,15 +246,20 @@ async function exportCustomerPDF(includeArchive = false) {
         balance = totalDebt - totalPay;
       }
 
-      const balText = Math.abs(balance) < 0.001
-        ? `0 ${unit} (خالص)`
-        : (balance > 0 ? `${formatNum(balance)} ${unit}` : `له ${formatNum(Math.abs(balance))} ${unit}`);
+      let balCellHtml;
+      if (Math.abs(balance) < 0.001) {
+        balCellHtml = formatPdfMoneyHtml(0, unit, { color: '#334155', suffix: '(خالص)' });
+      } else if (balance > 0) {
+        balCellHtml = formatPdfMoneyHtml(balance, unit, { color: '#0f172a' });
+      } else {
+        balCellHtml = formatPdfMoneyHtml(Math.abs(balance), unit, { color: '#166534', prefix: 'له' });
+      }
       return `
         <tr>
           <td style="padding:9px 10px;border:1px solid #cbd5e1;font-weight:800;color:#1e293b;text-align:right;background:#f8fafc;width:110px;">${unit}</td>
-          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(totalDebt)} ${unit}</td>
-          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(totalPay)} ${unit}</td>
-          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:800;color:#0f172a;direction:ltr;background:#fcfdff;">${balText}</td>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;direction:rtl;">${formatPdfMoneyHtml(totalDebt, unit, { color: '#1f2937', weight: '700' })}</td>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;direction:rtl;">${formatPdfMoneyHtml(totalPay, unit, { color: '#1f2937', weight: '700' })}</td>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;direction:rtl;background:#fcfdff;">${balCellHtml}</td>
         </tr>
       `;
     }).join('');
@@ -257,11 +292,11 @@ async function exportCustomerPDF(includeArchive = false) {
         : '';
       return `
         <tr style="background:${i % 2 === 1 ? '#fafafa' : '#ffffff'};">
-          <td style="padding:8px 7px;border:1px solid #cbd5e1;text-align:center;color:#475569;font-weight:700;">${i + 1}</td>
-          <td style="padding:8px 7px;border:1px solid #cbd5e1;white-space:nowrap;color:#334155;text-align:center;">${escapeHtml(formatDate(r.date))}</td>
-          <td style="padding:8px 7px;border:1px solid #cbd5e1;font-weight:700;color:${isDebt ? '#334155' : '#475569'};white-space:nowrap;text-align:center;">${isDebt ? 'دين (+)' : 'دفعة (−)'}${archBadge}</td>
-          <td style="padding:8px 7px;border:1px solid #cbd5e1;direction:ltr;text-align:center;font-weight:800;color:#0f172a;white-space:nowrap;">${formatNum(r.amount)} ${unit}</td>
-          <td style="padding:8px 8px;border:1px solid #cbd5e1;color:#334155;">${escapeHtml(r.note || '—')}</td>
+          <td style="padding:8px 6px;border:1px solid #cbd5e1;text-align:center;color:#475569;font-weight:700;">${i + 1}</td>
+          <td style="padding:8px 6px;border:1px solid #cbd5e1;white-space:nowrap;color:#334155;text-align:center;"><span dir="ltr" style="display:inline-block;">${escapeHtml(formatDate(r.date))}</span></td>
+          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-weight:700;color:${isDebt ? '#1e293b' : '#334155'};white-space:nowrap;text-align:center;">${isDebt ? 'دين (+)' : 'دفعة (−)'}${archBadge}</td>
+          <td style="padding:8px 7px;border:1px solid #cbd5e1;direction:rtl;text-align:center;white-space:nowrap;">${formatPdfMoneyHtml(r.amount, unit, { color: '#0f172a', weight: '800' })}</td>
+          <td style="padding:8px 9px;border:1px solid #cbd5e1;color:#334155;line-height:1.5;">${escapeHtml(r.note || '—')}</td>
         </tr>
       `;
     }).join('');
@@ -354,16 +389,16 @@ async function exportCustomerPDF(includeArchive = false) {
     let shamCopyBtnEl = null;
     if (shamEnabled) {
       shamLabelEl = document.createElement('div');
-      shamLabelEl.style.cssText = 'width:210px;background:#f9fafb;padding:6px 4px;text-align:center;line-height:1.35;';
+      shamLabelEl.style.cssText = 'width:215px;background:#f9fafb;padding:6px 4px;text-align:center;line-height:1.4;letter-spacing:0;';
       shamLabelEl.innerHTML = `
         <div style="color:#111827;font-size:15.5px;font-weight:800;">شام كاش</div>
-        <div style="color:#4b5563;font-size:11.5px;font-weight:700;margin-top:3px;">يمكنك نسخ الرمز للدفع</div>
+        <div style="color:#4b5563;font-size:11px;font-weight:700;margin-top:3px;">اضغط نسخ أو حدّد الرمز للدفع</div>
       `;
       stage.appendChild(shamLabelEl);
 
       shamCopyBtnEl = document.createElement('div');
-      shamCopyBtnEl.style.cssText = 'width:104px;height:46px;background:#ffffff;color:#111827;font-size:15.5px;font-weight:800;border-radius:9px;display:flex;align-items:center;justify-content:center;border:2px solid #374151;';
-      shamCopyBtnEl.innerHTML = `<span>نسخ</span>`;
+      shamCopyBtnEl.style.cssText = 'width:122px;height:48px;background:#ffffff;color:#111827;font-size:14.5px;font-weight:800;border-radius:9px;display:flex;align-items:center;justify-content:center;border:2px solid #374151;letter-spacing:0;';
+      shamCopyBtnEl.innerHTML = `<span>نسخ الرمز</span>`;
       stage.appendChild(shamCopyBtnEl);
     }
 
@@ -389,13 +424,13 @@ async function exportCustomerPDF(includeArchive = false) {
     if (shamLabelEl) {
       shamLabelCanvas = await html2canvas(shamLabelEl, {
         scale: 2, useCORS: true, backgroundColor: '#f9fafb',
-        width: 210, windowWidth: 210, scrollX: 0, scrollY: 0
+        width: 215, windowWidth: 215, scrollX: 0, scrollY: 0
       });
     }
     if (shamCopyBtnEl) {
       shamCopyBtnCanvas = await html2canvas(shamCopyBtnEl, {
         scale: 2, useCORS: true, backgroundColor: '#f9fafb',
-        width: 104, windowWidth: 104, scrollX: 0, scrollY: 0
+        width: 122, windowWidth: 122, scrollX: 0, scrollY: 0
       });
     }
 
@@ -445,10 +480,10 @@ async function exportCustomerPDF(includeArchive = false) {
       const boxX = marginX + innerMargin;
       const boxW = usableW - innerMargin * 2;
 
-      const lblW = 46;
+      const lblW = 48;
       const lblH = shamLabelCanvas ? (shamLabelCanvas.height / shamLabelCanvas.width) * lblW : 13;
-      const copyBtnW = 22;
-      const copyBtnH = shamCopyBtnCanvas ? (shamCopyBtnCanvas.height / shamCopyBtnCanvas.width) * copyBtnW : 10;
+      const copyBtnW = 28;
+      const copyBtnH = shamCopyBtnCanvas ? (shamCopyBtnCanvas.height / shamCopyBtnCanvas.width) * copyBtnW : 11;
 
       const lblX = boxX + boxW - lblW - 3;
       const copyBtnX = lblX - copyBtnW - 2.5;
@@ -456,7 +491,7 @@ async function exportCustomerPDF(includeArchive = false) {
       const codeBoxW = copyBtnX - codeBoxX - 3.5;
 
       const codeLines = doc.splitTextToSize(codeToWrite, codeBoxW - 6);
-      const boxH = Math.max(20, lblH + 4, copyBtnH + 6, codeLines.length * 6.0 + 8);
+      const boxH = Math.max(22, lblH + 4, copyBtnH + 6, codeLines.length * 6.2 + 8);
 
       if (curY + boxH + 7 > 286) {
         doc.addPage();
@@ -511,11 +546,18 @@ async function exportCustomerPDF(includeArchive = false) {
     const pdfBlob = doc.output('blob');
     const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
+    const shareLines = [
+      `${isFullReport ? 'كشف حساب شامل (مطابقة)' : 'كشف حساب'} ${cust.name} - ${settings.shopName}`
+    ];
+    if (shamEnabled) {
+      shareLines.push(`شام كاش (للنسخ المباشر): ${shamAscii || shamRaw}`);
+    }
+
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       await navigator.share({
         files: [pdfFile],
         title: `${isFullReport ? 'كشف حساب شامل' : 'كشف حساب'} ${cust.name}`,
-        text: `${isFullReport ? 'كشف حساب شامل (مطابقة)' : 'كشف حساب'} ${cust.name} - ${settings.shopName}`
+        text: shareLines.join('\n')
       });
     } else {
       const url = URL.createObjectURL(pdfBlob);

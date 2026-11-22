@@ -20,7 +20,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v12.0',
+  version: 'v13.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '' // ضع رقم التواصل هنا لتثبيته لجميع الورشات (أو يُؤخذ تلقائياً من هاتف المحل)
@@ -221,6 +221,31 @@ function getEnabledCurrencyCodes() {
   if (settings.currency === 'SYP') return ['SYP'];
   return ['USD', 'SYP'];
 }
+function normalizeDigits(str) {
+  return String(str == null ? '' : str)
+    .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06F0));
+}
+
+function normalizeLocalPhoneInput(rawPhone) {
+  let s = normalizeDigits(rawPhone).trim().replace(/^'/, '');
+  if (!s) return '';
+  // إزالة الفراغات والرموز الزائدة مع الإبقاء على الصيغة المحلية السورية بدون رمز دولي
+  const digits = s.replace(/[^\d]/g, '');
+  if (digits.startsWith('00963') && digits.length >= 13) {
+    const rest = digits.slice(5);
+    return rest.startsWith('0') ? rest : ('0' + rest);
+  }
+  if (digits.startsWith('963') && digits.length >= 11) {
+    const rest = digits.slice(3);
+    return rest.startsWith('0') ? rest : ('0' + rest);
+  }
+  if (digits.startsWith('9') && digits.length === 9) {
+    return '0' + digits;
+  }
+  return digits || s;
+}
+
 function genId(salt = 0) { return String(Date.now()) + '_' + salt + '_' + Math.floor(Math.random() * 10000); }
 
 function toDbRecord(rec) {
@@ -229,7 +254,7 @@ function toDbRecord(rec) {
     workshop_id: currentProfile.workshop_id,
     date: String(rec.date || todayString()),
     name: String(rec.name || '').trim(),
-    phone: String(rec.phone || '').trim(),
+    phone: normalizeLocalPhoneInput(rec.phone || ''),
     type: String(rec.type || 'دين ($)'),
     amount: Number(rec.amount) || 0,
     note: String(rec.note || '').trim(),

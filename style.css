@@ -259,7 +259,8 @@ button, input, textarea, select { font-family: inherit; }
 .cust-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .bal-pill {
   padding: 6px 11px; border-radius: 10px; font-size: 13.5px; font-weight: 800;
-  direction: ltr; white-space: nowrap; flex-shrink: 0;
+  direction: rtl; white-space: nowrap; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 4px;
 }
 .bal-debt { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-border); }
 .bal-credit { background: var(--success-soft); color: var(--success); border: 1px solid var(--success-border); }
@@ -382,7 +383,7 @@ button, input, textarea, select { font-family: inherit; }
 .tx-date { font-size: 12px; color: var(--muted); }
 .tx-note { font-size: 13px; color: #334155; margin-top: 4px; word-break: break-word; }
 .tx-right { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
-.tx-amt { font-size: 15px; font-weight: 800; direction: ltr; white-space: nowrap; }
+.tx-amt { font-size: 15px; font-weight: 800; direction: rtl; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
 .tx-btn {
   width: 32px; height: 32px; border-radius: 9px; border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -1792,4 +1793,35 @@ html[data-theme="dark"] .about-settings-btn {
 html[data-theme="dark"] .about-app-icon {
   background: #f1f5f9;
   border-color: var(--border);
+}
+
+/* ==================== تحسينات v13 (النسخ السريع + أرقام وعملات واضحة + نسخ 12 ليلاً) ==================== */
+.num-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+}
+.qc-code-box {
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease;
+}
+.qc-code-box:active {
+  transform: scale(0.985);
+}
+.midnight-pill {
+  display: inline-block;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 8px;
+  margin-right: 4px;
+}
+.legacy-curr-note {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-right: 4px;
 }

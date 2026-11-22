@@ -38,7 +38,7 @@
       </div>
       <h2 id="qcShopName" style="color:#92400e;">شام كاش</h2>
       <p id="qcSubtitle" style="margin-bottom:14px;">يمكنك نسخ الرمز للدفع</p>
-      <div id="qcCodeBox" class="qc-code-box" dir="ltr"></div>
+      <div id="qcCodeBox" class="qc-code-box" dir="ltr" title="اضغط للنسخ" onclick="copyQuickCodeNow(false)"></div>
       <div id="qcStatusMsg" class="qc-status-msg"></div>
       <button type="button" id="qcCopyBtn" class="btn btn-primary" style="background:#d97706;" onclick="copyQuickCodeNow()">
         <svg class="ic ic-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -134,7 +134,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v12.0</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v13.0</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -578,20 +578,6 @@
         </div>
       </div>
 
-      <!-- مظهر التطبيق (ليلي / نهاري / تلقائي) -->
-      <div class="set-card">
-        <h4 class="set-title">مظهر التطبيق (خاص بهذا الجهاز)</h4>
-        <div class="field" style="margin-bottom:0;">
-          <label>وضع العرض</label>
-          <div class="toggle-3">
-            <button type="button" id="setThemeAuto" class="tog-btn" onclick="selectThemeMode('auto')">تلقائي</button>
-            <button type="button" id="setThemeLight" class="tog-btn" onclick="selectThemeMode('light')">نهاري</button>
-            <button type="button" id="setThemeDark" class="tog-btn" onclick="selectThemeMode('dark')">ليلي</button>
-          </div>
-          <div class="field-hint">في الوضع «تلقائي» يتكيّف التطبيق تلقائياً مع الوضع الليلي أو النهاري في جهازك.</div>
-        </div>
-      </div>
-
       <!-- العملة والواتساب -->
       <div class="set-card">
         <h4 class="set-title">العملة وتطبيق واتساب</h4>
@@ -645,7 +631,7 @@
             </span>
             <div>
               <div class="settings-drawer-title">النسخ الاحتياطي (على الجهاز)</div>
-              <div class="settings-drawer-sub">حفظ نسخة احتياطية على الجهاز أو تصدير Excel واستعادتها</div>
+              <div class="settings-drawer-sub">نسخ تلقائي يومياً الساعة 12:00 ليلاً + حفظ ومشاركة على الجهاز</div>
             </div>
           </span>
           <svg class="ic ic-sm settings-drawer-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
@@ -672,7 +658,7 @@
           </div>
 
           <div class="section-head" style="margin-top:10px;">
-            <span>النسخ اليومية المحفوظة تلقائياً على هذا الجهاز</span>
+            <span>النسخ اليومية التلقائية (12:00 ليلاً)</span>
             <span id="localSnapsCount">0</span>
           </div>
           <div id="localSnapsList"></div>
@@ -713,7 +699,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v12.0</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v13.0</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -737,7 +723,7 @@
 
       <div class="field">
         <label>رقم الهاتف (اختياري)</label>
-        <input type="tel" id="txPhone" class="input" inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="cust_phone_tx" placeholder="09xxxxxxxx" />
+        <input type="tel" id="txPhone" class="input" inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="cust_phone_tx" placeholder="09xxxxxxxx (بدون رمز دولي)" />
       </div>
 
       <div class="field">
@@ -786,7 +772,7 @@
       </div>
       <div class="field">
         <label>رقم الهاتف</label>
-        <input type="tel" id="editCustPhoneInput" class="input" inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="cust_phone_edit" placeholder="09xxxxxxxx" />
+        <input type="tel" id="editCustPhoneInput" class="input" inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="cust_phone_edit" placeholder="09xxxxxxxx (بدون رمز دولي)" />
       </div>
       <button class="btn btn-primary" onclick="saveCustomerEdit()">حفظ التعديل</button>
     </div>
@@ -844,7 +830,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v12.0</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v13.0</span>
         <p class="about-desc">نظام متكامل لإدارة ديون ودفعات الزبائن بالعملتين مع مزامنة سحابية فورية وكشوفات حساب PDF.</p>
       </div>
 
