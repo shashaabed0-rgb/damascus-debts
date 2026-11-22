@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v22.0',
+  version: 'v23.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -348,12 +348,35 @@ function getOrCreateDeviceId() {
   }
 }
 
+let resolvedDeviceModelName = '';
+
+function initHighEntropyDeviceModel() {
+  try {
+    if (navigator.userAgentData && typeof navigator.userAgentData.getHighEntropyValues === 'function') {
+      navigator.userAgentData.getHighEntropyValues(['model']).then((vals) => {
+        const mdl = vals && vals.model ? String(vals.model).trim() : '';
+        if (mdl && mdl.length >= 2 && mdl.length <= 28 && !/^(K|Mobile|Android|Linux)$/i.test(mdl)) {
+          const changed = resolvedDeviceModelName !== mdl;
+          resolvedDeviceModelName = mdl;
+          if (changed && presenceChannel && currentUser && currentProfile && !isFreeOfflineMode()) {
+            presenceChannel.track(buildPresenceTrackPayload()).catch(() => {});
+          }
+        }
+      }).catch(() => {});
+    }
+  } catch (e) {}
+}
+
 function getFriendlyDeviceLabel() {
   const ua = navigator.userAgent || '';
   if (/Android/i.test(ua)) {
+    if (resolvedDeviceModelName) {
+      return `أندرويد (${resolvedDeviceModelName})`;
+    }
     const m = ua.match(/Android[^;]*;\s*([^;)]+)/i);
-    const model = m && m[1] ? m[1].replace(/Build\/.*/i, '').trim() : '';
-    return model && model.length <= 24 ? `أندرويد (${model})` : 'هاتف أندرويد';
+    const rawModel = m && m[1] ? m[1].replace(/Build\/.*/i, '').trim() : '';
+    const isGeneric = !rawModel || rawModel.length < 2 || /^(K|Mobile|wv|Linux|Android|U)$/i.test(rawModel);
+    return (!isGeneric && rawModel.length <= 24) ? `أندرويد (${rawModel})` : 'هاتف أندرويد';
   }
   if (/iPhone/i.test(ua)) return 'هاتف آيفون';
   if (/iPad/i.test(ua)) return 'جهاز آيباد';
@@ -362,6 +385,102 @@ function getFriendlyDeviceLabel() {
   if (/Linux/i.test(ua)) return 'كمبيوتر Linux';
   return 'جهاز آخر';
 }
+
+function formatArabicDeviceCount(n) {
+  const num = Number(n) || 0;
+  if (num <= 0) return '0 أجهزة';
+  if (num === 1) return 'جهاز واحد';
+  if (num === 2) return 'جهازين';
+  if (num >= 3 && num <= 10) return `${num} أجهزة`;
+  return `${num} جهازاً`;
+}
+
+function getDeviceIconEmoji(label) {
+  const s = String(label || '');
+  if (s.includes('كمبيوتر') || /Windows|Mac|Linux/i.test(s)) return '💻';
+  return '📱';
+}
+
+function getLiveDevicesForUser(userId, fallbackProfile = null) {
+  const myDevId = getOrCreateDeviceId();
+  const rawList = onlineUsersMap.get(userId) || [];
+  const list = rawList.map(d => ({
+    ...d,
+    isCurrentDevice: Boolean(currentUser && userId === currentUser.id && d.device_id === myDevId)
+  }));
+
+  if (currentUser && userId === currentUser.id && navigator.onLine && !isFreeOfflineMode()) {
+    if (!list.some(d => d.device_id === myDevId)) {
+      list.unshift({
+        user_id: currentUser.id,
+        workshop_id: currentProfile ? currentProfile.workshop_id : '',
+        display_name: (currentProfile && currentProfile.display_name) || '',
+        email: (currentProfile && currentProfile.email) || '',
+        role: (currentProfile && currentProfile.role) || '',
+        device_id: myDevId,
+        device_label: getFriendlyDeviceLabel(),
+        online_at: new Date().toISOString(),
+        isCurrentDevice: true
+      });
+    }
+  }
+
+  list.sort((a, b) => (b.isCurrentDevice ? 1 : 0) - (a.isCurrentDevice ? 1 : 0));
+  return list;
+}
+
+function buildLiveDevicesChipsHtml(devices) {
+  if (!devices || devices.length === 0) return '';
+  const labelTotals = {};
+  devices.forEach(d => {
+    const lbl = d.device_label || 'جهاز متصل';
+    labelTotals[lbl] = (labelTotals[lbl] || 0) + 1;
+  });
+  const labelSeen = {};
+  const chips = devices.map(d => {
+    const baseLbl = d.device_label || 'جهاز متصل';
+    labelSeen[baseLbl] = (labelSeen[baseLbl] || 0) + 1;
+    const numberedLbl = labelTotals[baseLbl] > 1 ? `${baseLbl} #${labelSeen[baseLbl]}` : baseLbl;
+    const icon = getDeviceIconEmoji(baseLbl);
+    const selfTag = d.isCurrentDevice ? ' <span class="live-dev-self">(هذا الجهاز)</span>' : '';
+    return `<span class="live-dev-chip${d.isCurrentDevice ? ' is-self' : ''}">${icon} ${escapeHtml(numberedLbl)}${selfTag}</span>`;
+  }).join('');
+
+  return `
+    <div class="live-devices-box">
+      <div class="live-devices-head">
+        <span class="presence-dot online"></span>
+        <span>الأجهزة المتصلة الآن (${formatArabicDeviceCount(devices.length)}):</span>
+      </div>
+      <div class="live-devices-list">${chips}</div>
+    </div>
+  `;
+}
+
+function updateSettingsLiveDevicesSummary() {
+  const el = document.getElementById('setAccountLiveDevices');
+  if (!el || !currentUser || isFreeOfflineMode()) return;
+  if (!navigator.onLine) {
+    el.textContent = 'غير متصل (أوفلاين)';
+    return;
+  }
+  const devs = getLiveDevicesForUser(currentUser.id);
+  const labelTotals = {};
+  devs.forEach(d => {
+    const lbl = d.device_label || 'جهاز متصل';
+    labelTotals[lbl] = (labelTotals[lbl] || 0) + 1;
+  });
+  const labelSeen = {};
+  const names = devs.map(d => {
+    const base = d.device_label || 'جهاز متصل';
+    labelSeen[base] = (labelSeen[base] || 0) + 1;
+    const numLbl = labelTotals[base] > 1 ? `${base} #${labelSeen[base]}` : base;
+    return d.isCurrentDevice ? `${numLbl} (هذا الجهاز)` : numLbl;
+  });
+  el.textContent = `${formatArabicDeviceCount(devs.length)}${names.length ? ' — ' + names.join('، ') : ''}`;
+}
+
+initHighEntropyDeviceModel();
 
 function getSavedForceLogoutVersion(uid) {
   if (!uid) return null;
@@ -956,25 +1075,61 @@ async function changeMyPassword() {
 }
 
 // ==================== المزامنة مع Supabase والعمل أوفلاين ====================
+function buildPresenceTrackPayload() {
+  return {
+    user_id: currentUser.id,
+    workshop_id: currentProfile.workshop_id,
+    display_name: currentProfile.display_name || currentProfile.email || '',
+    email: currentProfile.email || '',
+    role: currentProfile.role,
+    device_id: getOrCreateDeviceId(),
+    device_label: getFriendlyDeviceLabel(),
+    online_at: new Date().toISOString()
+  };
+}
+
 function rebuildOnlineMapsFromPresence() {
   onlineUsersMap.clear();
   onlineWorkshopsMap.clear();
   if (!presenceChannel) return;
   const state = presenceChannel.presenceState() || {};
-  Object.values(state).forEach(entries => {
-    (entries || []).forEach(p => {
+  Object.entries(state).forEach(([presenceKey, entries]) => {
+    (entries || []).forEach((p, idx) => {
       if (!p || !p.user_id) return;
-      onlineUsersMap.set(p.user_id, p);
+      const devId = String(p.device_id || p.presence_ref || `${presenceKey}_${idx}`);
+      const devLabel = String(p.device_label || '').trim() || 'جهاز متصل';
+      const normalized = {
+        user_id: p.user_id,
+        workshop_id: p.workshop_id || '',
+        display_name: p.display_name || p.email || '',
+        email: p.email || '',
+        role: p.role || '',
+        device_id: devId,
+        device_label: devLabel,
+        online_at: p.online_at || ''
+      };
+
+      if (!onlineUsersMap.has(p.user_id)) onlineUsersMap.set(p.user_id, []);
+      const userDevs = onlineUsersMap.get(p.user_id);
+      const uExistingIdx = userDevs.findIndex(d => d.device_id === devId);
+      if (uExistingIdx === -1) userDevs.push(normalized);
+      else userDevs[uExistingIdx] = normalized;
+
       if (p.workshop_id) {
         if (!onlineWorkshopsMap.has(p.workshop_id)) onlineWorkshopsMap.set(p.workshop_id, []);
-        const arr = onlineWorkshopsMap.get(p.workshop_id);
-        if (!arr.some(u => u.user_id === p.user_id)) arr.push(p);
+        const wsDevs = onlineWorkshopsMap.get(p.workshop_id);
+        const wExistingIdx = wsDevs.findIndex(d => d.user_id === p.user_id && d.device_id === devId);
+        if (wExistingIdx === -1) wsDevs.push(normalized);
+        else wsDevs[wExistingIdx] = normalized;
       }
     });
   });
 }
 
 function refreshOnlineIndicatorsUI() {
+  if (document.getElementById('settingsView')?.classList.contains('open')) {
+    updateSettingsLiveDevicesSummary();
+  }
   const accOpen = document.getElementById('accountsView')?.classList.contains('open');
   if (!accOpen) return;
   const staffVisible = !document.getElementById('accStaffPanel').classList.contains('hidden');
@@ -994,8 +1149,9 @@ function subscribePresence() {
   }
   if (!currentUser || !currentProfile || isFreeOfflineMode() || !ensureSupabaseClient() || !navigator.onLine) return;
 
+  const myDeviceId = getOrCreateDeviceId();
   presenceChannel = sb.channel('damascus-online-presence', {
-    config: { presence: { key: currentUser.id } }
+    config: { presence: { key: `${currentUser.id}::${myDeviceId}` } }
   });
 
   presenceChannel
@@ -1006,12 +1162,18 @@ function subscribePresence() {
     .on('presence', { event: 'join' }, ({ newPresences }) => {
       rebuildOnlineMapsFromPresence();
       refreshOnlineIndicatorsUI();
-      // إشعار أخضر فوري عند فتح صفحة الحسابات ودخول أحد الموظفين/المدراء أو الورشات على النت
+      // إشعار فوري عند فتح صفحة الحسابات ودخول جهاز جديد (حتى لو على نفس حساب المدير من جهاز آخر)
       if (document.getElementById('accountsView')?.classList.contains('open')) {
         (newPresences || []).forEach(p => {
-          if (!p || p.user_id === currentUser.id) return;
+          if (!p || !p.user_id) return;
+          if (p.user_id === currentUser.id && p.device_id === myDeviceId) return;
           if (p.workshop_id === currentProfile.workshop_id || isSuperAdmin()) {
-            showToast(`🟢 ${p.display_name || p.email} متصل الآن على الإنترنت`);
+            const devLbl = p.device_label ? ` — ${p.device_label}` : '';
+            if (p.user_id === currentUser.id) {
+              showToast(`🟢 تم فتح حسابك على جهاز إضافي${devLbl}`);
+            } else {
+              showToast(`🟢 ${p.display_name || p.email} متصل الآن${devLbl}`);
+            }
           }
         });
       }
@@ -1023,14 +1185,7 @@ function subscribePresence() {
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         try {
-          await presenceChannel.track({
-            user_id: currentUser.id,
-            workshop_id: currentProfile.workshop_id,
-            display_name: currentProfile.display_name || currentProfile.email || '',
-            email: currentProfile.email || '',
-            role: currentProfile.role,
-            online_at: new Date().toISOString()
-          });
+          await presenceChannel.track(buildPresenceTrackPayload());
         } catch (e) {}
       }
     });
@@ -1525,10 +1680,20 @@ function renderWorkshopMembersList(list) {
   const banner = document.getElementById('onlineMembersBanner');
   document.getElementById('membersCountLbl').textContent = `${list.length} حساب`;
 
-  const onlineOthers = list.filter(m => m.user_id !== currentUser.id && onlineUsersMap.has(m.user_id));
-  if (onlineOthers.length > 0) {
-    const names = onlineOthers.map(m => escapeHtml(m.display_name || m.email)).join('، ');
-    banner.innerHTML = `<span class="presence-dot online"></span><span>متصل الآن على الإنترنت: ${names}</span>`;
+  // حساب إجمالي الأجهزة المتصلة الآن على مستوى الورشة (بما فيها أجهزة المدير والحسابات الفرعية)
+  let totalWorkshopLiveDevices = 0;
+  const onlineSummaryParts = [];
+  list.forEach(m => {
+    const devs = getLiveDevicesForUser(m.user_id, m);
+    if (devs.length > 0) {
+      totalWorkshopLiveDevices += devs.length;
+      const who = escapeHtml(m.display_name || m.email || 'حساب');
+      onlineSummaryParts.push(`${who}: ${formatArabicDeviceCount(devs.length)}`);
+    }
+  });
+
+  if (totalWorkshopLiveDevices > 0) {
+    banner.innerHTML = `<span class="presence-dot online"></span><span>إجمالي الأجهزة المتصلة الآن: <strong>${formatArabicDeviceCount(totalWorkshopLiveDevices)}</strong> (${onlineSummaryParts.join(' • ')})</span>`;
     banner.classList.remove('hidden');
   } else {
     banner.classList.add('hidden');
@@ -1538,7 +1703,9 @@ function renderWorkshopMembersList(list) {
   box.innerHTML = list.map(m => {
     const isSelf = m.user_id === currentUser.id;
     const isSuper = m.role === 'super_admin';
-    const isOnline = (isSelf && navigator.onLine) || onlineUsersMap.has(m.user_id);
+    const liveDevices = getLiveDevicesForUser(m.user_id, m);
+    const liveCount = liveDevices.length;
+    const isOnline = liveCount > 0;
     const safeUid = escapeHtml(m.user_id);
     const memEmail = String(m.email || '').trim();
     const memPass = String(m.login_password || '').trim();
@@ -1550,16 +1717,18 @@ function renderWorkshopMembersList(list) {
     });
 
     const presenceBadge = isOnline
-      ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصل الآن</span>`
+      ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصل الآن (${formatArabicDeviceCount(liveCount)})</span>`
       : `<span class="m-badge m-offline"><span class="presence-dot offline"></span>غير متصل</span>`;
 
     const isBound = Boolean(m.active_device_id);
     const devLabel = String(m.active_device_label || 'جهاز واحد');
     const isSingleLocked = !isSuper && m.single_device_only !== false;
     const deviceBadge = !isSuper
-      ? (isBound
-          ? `<span class="m-badge m-dev-on">📱 مفتوح: ${escapeHtml(devLabel)}</span>`
-          : `<span class="m-badge m-neutral">غير مرتبط بجهاز</span>`)
+      ? (isSingleLocked
+          ? (isBound
+              ? `<span class="m-badge m-dev-on">🔒 مقيد: ${escapeHtml(devLabel)}</span>`
+              : `<span class="m-badge m-neutral">بانتظار أول جهاز</span>`)
+          : `<span class="m-badge m-neutral">متعدد الأجهزة</span>`)
       : '';
 
     const secondAttemptHtml = m.second_device_attempt_at
@@ -1569,9 +1738,7 @@ function renderWorkshopMembersList(list) {
          </div>`
       : '';
 
-    const onlineNotice = (!isSelf && isOnline)
-      ? `<div class="member-online-note"><span class="presence-dot online"></span><span>${escapeHtml(m.display_name || m.email)} موجود الآن على الإنترنت</span></div>`
-      : '';
+    const liveDevicesBoxHtml = isOnline ? buildLiveDevicesChipsHtml(liveDevices) : '';
 
     const credsBoxHtml = `
       <div class="ws-creds-box">
@@ -1610,7 +1777,7 @@ function renderWorkshopMembersList(list) {
       </div>` : '';
 
     return `
-      <div class="member-card ${isOnline && !isSelf ? 'is-online-card' : ''}">
+      <div class="member-card ${isOnline ? 'is-online-card' : ''}">
         <div class="member-top">
           <div>
             <div class="member-name">${escapeHtml(m.display_name || 'بدون اسم')} ${isSelf ? '(أنت)' : ''}</div>
@@ -1624,9 +1791,9 @@ function renderWorkshopMembersList(list) {
             ${m.role === 'staff' ? `<span class="m-badge m-neutral">${m.can_delete ? 'يحذف' : 'بدون حذف'}</span>` : ''}
           </div>
         </div>
+        ${liveDevicesBoxHtml}
         ${secondAttemptHtml}
         ${credsBoxHtml}
-        ${onlineNotice}
         ${controls}
       </div>
     `;
@@ -1925,21 +2092,48 @@ function renderIsolatedWorkshopsList(list) {
   box.innerHTML = list.map(w => {
     const isOwnWs = w.id === currentProfile.workshop_id;
     const isFrozen = Boolean(w.settings && w.settings.frozen === true);
-    const onlineArr = onlineWorkshopsMap.get(w.id) || [];
-    const isOnline = (isOwnWs && navigator.onLine) || onlineArr.length > 0;
+    const myDevId = getOrCreateDeviceId();
+    const onlineArr = (onlineWorkshopsMap.get(w.id) || []).map(d => ({
+      ...d,
+      isCurrentDevice: Boolean(currentUser && d.user_id === currentUser.id && d.device_id === myDevId)
+    }));
+    if (isOwnWs && navigator.onLine && currentUser && !onlineArr.some(d => d.user_id === currentUser.id && d.device_id === myDevId)) {
+      onlineArr.unshift({
+        user_id: currentUser.id,
+        workshop_id: w.id,
+        display_name: currentProfile.display_name || currentProfile.email || '',
+        email: currentProfile.email || '',
+        device_id: myDevId,
+        device_label: getFriendlyDeviceLabel(),
+        isCurrentDevice: true
+      });
+    }
+    const liveDevCount = onlineArr.length;
+    const isOnline = liveDevCount > 0;
     const { adminMember, wsMembers, email: mgrEmail, password: mgrPass } = getWorkshopManagerInfo(w);
 
     const onlineBadge = isOnline
-      ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصلة (${Math.max(1, onlineArr.length)})</span>`
+      ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصلة (${formatArabicDeviceCount(liveDevCount)})</span>`
       : `<span class="m-badge m-offline"><span class="presence-dot offline"></span>غير متصلة</span>`;
 
     const stateBadge = isFrozen
       ? `<span class="m-badge m-frozen">مجمّدة</span>`
       : `<span class="m-badge m-on">شغّالة</span>`;
 
-    const onlineNamesList = onlineArr.map(u => escapeHtml(u.display_name || u.email)).filter(Boolean);
-    const onlineNoteHtml = (isOnline && onlineNamesList.length > 0)
-      ? `<div class="member-online-note"><span class="presence-dot online"></span><span>متصل الآن: ${onlineNamesList.join('، ')}</span></div>`
+    const wsDeviceChips = onlineArr.map(d => {
+      const icon = getDeviceIconEmoji(d.device_label);
+      const who = d.display_name || d.email || 'حساب';
+      const selfTag = d.isCurrentDevice ? ' <span class="live-dev-self">(هذا الجهاز)</span>' : '';
+      return `<span class="live-dev-chip${d.isCurrentDevice ? ' is-self' : ''}">${icon} ${escapeHtml(who)}: ${escapeHtml(d.device_label || 'جهاز متصل')}${selfTag}</span>`;
+    }).join('');
+    const onlineNoteHtml = isOnline
+      ? `<div class="live-devices-box">
+           <div class="live-devices-head">
+             <span class="presence-dot online"></span>
+             <span>الأجهزة المتصلة الآن (${formatArabicDeviceCount(liveDevCount)}):</span>
+           </div>
+           <div class="live-devices-list">${wsDeviceChips}</div>
+         </div>`
       : '';
 
     const adminInfoHtml = adminMember
