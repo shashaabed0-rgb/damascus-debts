@@ -1,5 +1,5 @@
-const APP_CACHE = 'damascus-debts-app-v12';
-const CDN_CACHE = 'damascus-debts-cdn-v1';
+const APP_CACHE = 'damascus-debts-app-v13';
+const CDN_CACHE = 'damascus-debts-cdn-v2';
 
 const APP_SHELL = [
   './',
@@ -13,20 +13,37 @@ const APP_SHELL = [
   './icon-512.png'
 ];
 
-// التثبيت: حفظ ملفات التطبيق للعمل أوفلاين وتفعيل النسخة الجديدة فوراً
+const CDN_PRECACHE = [
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
+];
+
+// التثبيت: حفظ ملفات التطبيق + مكتبة Supabase للعمل أوفلاين وتفعيل النسخة الجديدة فوراً
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(APP_CACHE).then((cache) =>
-      Promise.all(
-        APP_SHELL.map((url) =>
-          fetch(url, { cache: 'no-cache' })
-            .then((res) => {
-              if (res && res.ok) return cache.put(url, res);
-            })
-            .catch(() => {})
+    Promise.all([
+      caches.open(APP_CACHE).then((cache) =>
+        Promise.all(
+          APP_SHELL.map((url) =>
+            fetch(url, { cache: 'no-cache' })
+              .then((res) => {
+                if (res && res.ok) return cache.put(url, res);
+              })
+              .catch(() => {})
+          )
+        )
+      ),
+      caches.open(CDN_CACHE).then((cache) =>
+        Promise.all(
+          CDN_PRECACHE.map((url) =>
+            fetch(url)
+              .then((res) => {
+                if (res && res.ok) return cache.put(url, res);
+              })
+              .catch(() => {})
+          )
         )
       )
-    )
+    ])
   );
   self.skipWaiting();
 });
@@ -44,20 +61,35 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// استراتيجية الشبكة أولاً (Network-First) لملفات التطبيق لضمان ظهور أي تعديل بالكود فوراً
+function fetchWithTimeout(reqUrl, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    fetch(reqUrl, { cache: 'no-cache' })
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
+// استراتيجية الشبكة أولاً مع مهلة سريعة (3.5 ثانية) لضمان الفتح الفوري أوفلاين أو مع إنترنت ضعيف
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
 
-  // لا نتدخل بطلبات Supabase أبداً
+  // لا نتدخل بطلبات Supabase API أبداً
   if (url.hostname.includes('supabase.co')) return;
 
   // ملفات التطبيق المحلية على نفس النطاق (GitHub Pages)
   if (url.origin === self.location.origin) {
     event.respondWith(
-      fetch(req.url, { cache: 'no-cache' })
+      fetchWithTimeout(req.url, 3500)
         .then((networkRes) => {
           if (networkRes && networkRes.ok) {
             const copy = networkRes.clone();
@@ -66,7 +98,7 @@ self.addEventListener('fetch', (event) => {
           return networkRes;
         })
         .catch(() =>
-          caches.match(req).then((cached) => {
+          caches.match(req, { ignoreSearch: true }).then((cached) => {
             if (cached) return cached;
             if (req.mode === 'navigate') return caches.match('./index.html');
           })

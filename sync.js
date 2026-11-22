@@ -2,11 +2,25 @@
 const SUPABASE_URL = 'https://oeojvcikwiyiwmenozew.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Qescc0we7OizukGkCGc29w_kIiBhUHU';
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
-});
+let sb = (window.supabase && typeof window.supabase.createClient === 'function')
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+    })
+  : null;
+
+function ensureSupabaseClient() {
+  if (!sb && window.supabase && typeof window.supabase.createClient === 'function') {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+    });
+  }
+  return sb;
+}
 
 function createIsolatedAuthClient() {
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    throw new Error('مكتبة الاتصال غير جاهزة، يرجى تحديث الصفحة مع توفر الإنترنت.');
+  }
   return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: {
       persistSession: false,
@@ -20,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v15.0',
+  version: 'v16.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '' // ضع رقم التواصل هنا لتثبيته لجميع الورشات (أو يُؤخذ تلقائياً من هاتف المحل)
@@ -32,6 +46,10 @@ const CURRENCIES = {
 };
 
 const DEVICE_SETTINGS_KEY = 'debt_device_settings_sb_v1';
+const LAST_SESSION_KEY = 'debt_last_session_sb_v1';
+let lastSyncMeta = { syncedAt: '', localUpdatedAt: '', lastAction: '' };
+const memberCredsMap = new Map();
+const workshopCredsMap = new Map();
 
 const DEFAULT_WA_CONFIG = {
   showShopName: true,
@@ -187,13 +205,38 @@ function applyWorkshopSettingsToState(ws) {
   settings.currency = (s.currency === 'USD' || s.currency === 'SYP' || s.currency === 'BOTH') ? s.currency : 'BOTH';
 }
 
+function formatDateTimeDisplay(d = new Date()) {
+  const datePart = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+  const timePart = d.toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' });
+  return `${datePart} - ${timePart}`;
+}
+
+function getLastUpdateDisplayText() {
+  const bestTime = lastSyncMeta.localUpdatedAt || lastSyncMeta.syncedAt || '';
+  if (!bestTime) return '';
+  if (lastSyncMeta.syncedAt && lastSyncMeta.localUpdatedAt && lastSyncMeta.localUpdatedAt !== lastSyncMeta.syncedAt && pendingQueue.length > 0) {
+    return `آخر تعديل محلي: ${lastSyncMeta.localUpdatedAt}`;
+  }
+  return `آخر تحديث: ${lastSyncMeta.syncedAt || lastSyncMeta.localUpdatedAt}`;
+}
+
+function saveLastSyncMeta(patch = {}) {
+  if (!currentProfile) return;
+  lastSyncMeta = { ...lastSyncMeta, ...patch };
+  try {
+    localStorage.setItem(wsKey('last_sync_meta'), JSON.stringify(lastSyncMeta));
+  } catch (e) {}
+}
+
 function loadWorkshopLocalData() {
   try {
     allRecords = JSON.parse(localStorage.getItem(wsKey('records')) || '[]');
     pendingQueue = JSON.parse(localStorage.getItem(wsKey('queue')) || '[]');
+    lastSyncMeta = JSON.parse(localStorage.getItem(wsKey('last_sync_meta')) || '{"syncedAt":"","localUpdatedAt":"","lastAction":""}');
   } catch (e) {
     allRecords = [];
     pendingQueue = [];
+    lastSyncMeta = { syncedAt: '', localUpdatedAt: '', lastAction: '' };
   }
 }
 
@@ -265,7 +308,34 @@ function toDbRecord(rec) {
   };
 }
 
-// ==================== المصادقة وتسجيل الدخول ====================
+// ==================== المصادقة وتسجيل الدخول (أوفلاين أولاً) ====================
+function getSavedLastUser() {
+  try {
+    const raw = localStorage.getItem(LAST_SESSION_KEY);
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    return (u && u.id) ? u : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveLastUser(user) {
+  if (!user || !user.id) return;
+  try {
+    localStorage.setItem(LAST_SESSION_KEY, JSON.stringify({ id: user.id, email: user.email || '' }));
+  } catch (e) {}
+}
+
+function clearSavedLastUser() {
+  try { localStorage.removeItem(LAST_SESSION_KEY); } catch (e) {}
+}
+
+function isSupabaseNotFoundError(err) {
+  if (!err) return false;
+  return err.code === 'PGRST116' || err.status === 406;
+}
+
 async function initApp() {
   const params = new URLSearchParams(window.location.search);
   const copyParam = params.get('copy');
@@ -274,12 +344,37 @@ async function initApp() {
     return;
   }
   loadDeviceSettings();
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session || !session.user) {
+
+  let activeUser = null;
+  const client = ensureSupabaseClient();
+  if (client) {
+    try {
+      const sessionRes = await Promise.race([
+        client.auth.getSession(),
+        new Promise((resolve) => setTimeout(() => resolve({ data: { session: null }, timedOut: true }), 2500))
+      ]);
+      if (sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.user) {
+        activeUser = sessionRes.data.session.user;
+        saveLastUser(activeUser);
+      }
+    } catch (e) {
+      console.warn('Offline getSession fallback:', e);
+    }
+  }
+
+  // عند فتح التطبيق بدون شبكة أو انتهاء صلاحية الجلسة مؤقتاً، نستعيد آخر مستخدم محفوظ محلياً
+  if (!activeUser) {
+    const saved = getSavedLastUser();
+    if (saved && localStorage.getItem('debt_ctx_sb_' + saved.id)) {
+      activeUser = saved;
+    }
+  }
+
+  if (!activeUser) {
     showLoginScreen();
     return;
   }
-  await loadUserWorkspace(session.user);
+  await loadUserWorkspace(activeUser);
 }
 
 function showLoginScreen(errMsg = '') {
@@ -297,12 +392,19 @@ async function handleLogin(ev) {
   const btn = document.getElementById('loginBtn');
   document.getElementById('loginErr').textContent = '';
 
+  const client = ensureSupabaseClient();
+  if (!client || !navigator.onLine) {
+    document.getElementById('loginErr').textContent = 'يلزم الاتصال بالإنترنت لتسجيل الدخول لأول مرة.';
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'جاري التحقق...';
   try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    await loadUserWorkspace(data.user);
+    saveLastUser(data.user);
+    await loadUserWorkspace(data.user, true);
   } catch (err) {
     document.getElementById('loginErr').textContent = 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
   } finally {
@@ -311,68 +413,81 @@ async function handleLogin(ev) {
   }
 }
 
-async function loadUserWorkspace(user) {
+async function loadUserWorkspace(user, forceNetworkCheck = false) {
   currentUser = user;
+  saveLastUser(user);
   const ctxCacheKey = 'debt_ctx_sb_' + user.id;
   let profile = null;
   let workshop = null;
 
-  if (navigator.onLine) {
+  // 1. تحميل فوري من الكاش المحلي أولاً لفتح البيانات مباشرة حتى بدون شبكة أو مع شبكة ضعيفة
+  let hasCachedCtx = false;
+  try {
+    const cachedRaw = localStorage.getItem(ctxCacheKey);
+    if (cachedRaw) {
+      const parsed = JSON.parse(cachedRaw);
+      if (parsed && parsed.profile && parsed.workshop) {
+        profile = parsed.profile;
+        workshop = parsed.workshop;
+        hasCachedCtx = true;
+      }
+    }
+  } catch (e) {}
+
+  // 2. إذا كان تسجيل دخول جديد (أو لا يوجد كاش)، نتحقق من السيرفر أولاً
+  const client = ensureSupabaseClient();
+  if ((!hasCachedCtx || forceNetworkCheck) && navigator.onLine && client) {
     try {
-      const { data: mem, error: memErr } = await sb
+      const { data: mem, error: memErr } = await client
         .from('workshop_members')
         .select('*')
         .eq('user_id', user.id)
         .single();
 
-      if (memErr || !mem) {
-        await sb.auth.signOut();
+      if (isSupabaseNotFoundError(memErr)) {
+        clearSavedLastUser();
+        await client.auth.signOut({ scope: 'local' });
         showLoginScreen('هذا الحساب غير مرتبط بأي ورشة مفعّلة.');
         return;
       }
+      if (memErr) throw memErr;
+      if (!mem) throw new Error('تعذّر قراءة بيانات الحساب');
       if (!mem.active) {
-        await sb.auth.signOut();
+        clearSavedLastUser();
+        await client.auth.signOut({ scope: 'local' });
         showLoginScreen('تم إيقاف هذا الحساب من قبل مدير الورشة.');
         return;
       }
 
-      const { data: ws, error: wsErr } = await sb
+      const { data: ws, error: wsErr } = await client
         .from('workshops')
         .select('*')
         .eq('id', mem.workshop_id)
         .single();
 
-      if (wsErr || !ws) throw wsErr;
+      if (wsErr || !ws) throw wsErr || new Error('تعذّر قراءة بيانات الورشة');
       if (ws.settings && ws.settings.frozen === true && mem.role !== 'super_admin') {
-        await sb.auth.signOut({ scope: 'local' });
+        clearSavedLastUser();
+        await client.auth.signOut({ scope: 'local' });
         showLoginScreen('تم تجميد حساب هذه الورشة من قبل الإدارة.');
         return;
       }
 
       profile = mem;
       workshop = ws;
+      hasCachedCtx = true;
       localStorage.setItem(ctxCacheKey, JSON.stringify({ profile, workshop }));
     } catch (err) {
-      const cached = localStorage.getItem(ctxCacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        profile = parsed.profile;
-        workshop = parsed.workshop;
-      } else {
+      if (!hasCachedCtx) {
         showLoginScreen('تعذّر الاتصال بالخادم، تحقق من الإنترنت وحاول مجدداً.');
         return;
       }
     }
-  } else {
-    const cached = localStorage.getItem(ctxCacheKey);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      profile = parsed.profile;
-      workshop = parsed.workshop;
-    } else {
-      showLoginScreen('يلزم الاتصال بالإنترنت لتسجيل الدخول لأول مرة على هذا الجهاز.');
-      return;
-    }
+  }
+
+  if (!hasCachedCtx) {
+    showLoginScreen('يلزم الاتصال بالإنترنت لتسجيل الدخول لأول مرة على هذا الجهاز.');
+    return;
   }
 
   currentProfile = profile;
@@ -411,8 +526,10 @@ async function handleLogout() {
   } catch (e) {}
   onlineUsersMap.clear();
   onlineWorkshopsMap.clear();
+  clearSavedLastUser();
   try {
-    await sb.auth.signOut({ scope: 'local' });
+    const client = ensureSupabaseClient();
+    if (client) await client.auth.signOut({ scope: 'local' });
   } catch (e) {
     console.warn('SignOut warning:', e);
   }
@@ -498,7 +615,7 @@ function subscribePresence() {
     try { sb.removeChannel(presenceChannel); } catch (e) {}
     presenceChannel = null;
   }
-  if (!currentUser || !currentProfile) return;
+  if (!currentUser || !currentProfile || !ensureSupabaseClient() || !navigator.onLine) return;
 
   presenceChannel = sb.channel('damascus-online-presence', {
     config: { presence: { key: currentUser.id } }
@@ -543,15 +660,16 @@ function subscribePresence() {
 }
 
 function subscribeRealtime() {
-  if (realtimeChannel) {
-    sb.removeChannel(realtimeChannel);
+  const client = ensureSupabaseClient();
+  if (realtimeChannel && client) {
+    client.removeChannel(realtimeChannel);
     realtimeChannel = null;
   }
-  if (workshopStatusChannel) {
-    sb.removeChannel(workshopStatusChannel);
+  if (workshopStatusChannel && client) {
+    client.removeChannel(workshopStatusChannel);
     workshopStatusChannel = null;
   }
-  if (!currentProfile) return;
+  if (!currentProfile || !client || !navigator.onLine) return;
 
   realtimeChannel = sb
     .channel('debt-live-' + currentProfile.workshop_id)
@@ -580,12 +698,19 @@ function subscribeRealtime() {
   subscribePresence();
 }
 
+function showOfflineStatusBanner(prefix = 'بدون شبكة (وضع أوفلاين)') {
+  const lastTxt = getLastUpdateDisplayText();
+  const full = lastTxt ? `${prefix} • ${lastTxt}` : `${prefix} • الحفظ المحلي نشط`;
+  updateSyncStatusUI(full, 'off');
+}
+
 async function syncData(silent) {
   if (isSyncing || !currentProfile) return;
   const syncBtn = document.getElementById('syncBtn');
+  const client = ensureSupabaseClient();
 
-  if (!navigator.onLine) {
-    updateSyncStatusUI('وضع أوفلاين (الحفظ المحلي نشط)', 'off');
+  if (!navigator.onLine || !client) {
+    showOfflineStatusBanner('بدون شبكة (بياناتك محفوظة)');
     return;
   }
 
@@ -596,33 +721,50 @@ async function syncData(silent) {
   }
 
   try {
-    // 1. التحقق من أن الحساب ما زال مفعّلاً وتحديث صلاحياته وإعدادات الورشة
-    const { data: memCheck } = await sb
+    // 1. التحقق من أن الحساب ما زال مفعّلاً وتحديث صلاحياته وإعدادات الورشة (دون تسجيل خروج عند انقطاع الشبكة)
+    const { data: memCheck, error: memCheckErr } = await client
       .from('workshop_members')
       .select('*')
       .eq('user_id', currentUser.id)
       .single();
 
-    if (!memCheck || !memCheck.active) {
+    if (isSupabaseNotFoundError(memCheckErr)) {
       isSyncing = false;
       syncBtn.classList.remove('spinning');
-      await sb.auth.signOut();
+      clearSavedLastUser();
+      await client.auth.signOut({ scope: 'local' });
+      resetAllOpenLayersForLogout();
+      showLoginScreen('تمت إزالة هذا الحساب من الورشة.');
+      return;
+    }
+    if (memCheckErr) throw memCheckErr;
+    if (memCheck && memCheck.active === false) {
+      isSyncing = false;
+      syncBtn.classList.remove('spinning');
+      clearSavedLastUser();
+      await client.auth.signOut({ scope: 'local' });
+      resetAllOpenLayersForLogout();
       showLoginScreen('تم إيقاف هذا الحساب من قبل مدير الورشة.');
       return;
     }
-    currentProfile = memCheck;
-    applyPermissionsUI();
+    if (memCheck) {
+      currentProfile = memCheck;
+      applyPermissionsUI();
+    }
 
-    const { data: wsFresh } = await sb
+    const { data: wsFresh, error: wsFreshErr } = await client
       .from('workshops')
       .select('*')
       .eq('id', currentProfile.workshop_id)
       .single();
 
+    if (wsFreshErr && !isSupabaseNotFoundError(wsFreshErr)) throw wsFreshErr;
+
     if (wsFresh && wsFresh.settings && wsFresh.settings.frozen === true && currentProfile.role !== 'super_admin') {
       isSyncing = false;
       syncBtn.classList.remove('spinning');
-      await sb.auth.signOut({ scope: 'local' });
+      clearSavedLastUser();
+      await client.auth.signOut({ scope: 'local' });
       resetAllOpenLayersForLogout();
       showLoginScreen('تم تجميد حساب هذه الورشة من قبل الإدارة.');
       return;
@@ -642,12 +784,12 @@ async function syncData(silent) {
     while (pendingQueue.length > 0) {
       const item = pendingQueue[0];
       if (item.action === 'upsert' || item.action === 'add') {
-        const { error } = await sb
+        const { error } = await client
           .from('debt_records')
           .upsert(toDbRecord(item.payload), { onConflict: 'id' });
         if (error) throw error;
       } else if (item.action === 'delete') {
-        const { error } = await sb
+        const { error } = await client
           .from('debt_records')
           .delete()
           .eq('id', String(item.id))
@@ -659,7 +801,7 @@ async function syncData(silent) {
     }
 
     // 3. سحب أحدث السجلات للورشة فقط
-    const { data: rows, error: fetchErr } = await sb
+    const { data: rows, error: fetchErr } = await client
       .from('debt_records')
       .select('*')
       .eq('workshop_id', currentProfile.workshop_id)
@@ -677,11 +819,12 @@ async function syncData(silent) {
     });
 
     allRecords = Array.from(serverMap.values());
+    const nowStamp = formatDateTimeDisplay(new Date());
+    saveLastSyncMeta({ syncedAt: nowStamp, localUpdatedAt: nowStamp });
     persistData();
     processAndRender();
 
-    const now = new Date().toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' });
-    updateSyncStatusUI(`متصل ومُزامن (${now})`, 'ok');
+    updateSyncStatusUI(`متصل ومُزامن • آخر تحديث: ${nowStamp}`, 'ok');
     if (typeof checkAndRunDailyBackups === 'function') checkAndRunDailyBackups();
 
     if (currentCustomerName && document.getElementById('detailView').classList.contains('open')) {
@@ -689,7 +832,8 @@ async function syncData(silent) {
     }
   } catch (err) {
     console.error('Sync error:', err);
-    updateSyncStatusUI('محفوظ على الجهاز (سيُزامن عند عودة الاتصال)', 'err');
+    const lastTxt = getLastUpdateDisplayText();
+    updateSyncStatusUI(lastTxt ? `محفوظ على الجهاز • ${lastTxt}` : 'محفوظ على الجهاز (سيُزامن عند عودة الاتصال)', 'err');
     if (!silent) showToast('محفوظ على الجهاز، وتعذّر الوصول للخادم حالياً');
   } finally {
     isSyncing = false;
@@ -723,21 +867,27 @@ function queueUpdateRecord(oldId, updatedFields) {
 }
 
 function triggerSyncOrOfflineToast(onlineMsg, offlineMsg) {
-  if (navigator.onLine) {
+  saveLastSyncMeta({ localUpdatedAt: formatDateTimeDisplay(new Date()) });
+  if (navigator.onLine && ensureSupabaseClient()) {
     showToast(onlineMsg);
     syncData(false);
   } else {
     showToast(offlineMsg);
-    updateSyncStatusUI('وضع أوفلاين (الحفظ المحلي نشط)', 'off');
+    showOfflineStatusBanner('بدون شبكة (محفوظ محلياً)');
   }
 }
 
 window.addEventListener('online', () => {
   showToast('عاد الإنترنت، جاري المزامنة التلقائية...');
+  if (!ensureSupabaseClient()) {
+    window.location.reload();
+    return;
+  }
+  subscribeRealtime();
   syncData(false);
 });
 window.addEventListener('offline', () => {
-  updateSyncStatusUI('انقطع الإنترنت (الحفظ المحلي نشط)', 'off');
+  showOfflineStatusBanner('انقطع الإنترنت (بياناتك محفوظة)');
 });
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && isUnlocked && navigator.onLine) syncData(true);
@@ -808,10 +958,20 @@ function renderWorkshopMembersList(list) {
     banner.classList.add('hidden');
   }
 
+  memberCredsMap.clear();
   box.innerHTML = list.map(m => {
     const isSelf = m.user_id === currentUser.id;
     const isSuper = m.role === 'super_admin';
     const isOnline = (isSelf && navigator.onLine) || onlineUsersMap.has(m.user_id);
+    const safeUid = escapeHtml(m.user_id);
+    const memEmail = String(m.email || '').trim();
+    const memPass = String(m.login_password || '').trim();
+
+    memberCredsMap.set(m.user_id, {
+      display_name: m.display_name || '',
+      email: memEmail,
+      password: memPass
+    });
 
     const presenceBadge = isOnline
       ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصل الآن</span>`
@@ -821,16 +981,36 @@ function renderWorkshopMembersList(list) {
       ? `<div class="member-online-note"><span class="presence-dot online"></span><span>${escapeHtml(m.display_name || m.email)} موجود الآن على الإنترنت</span></div>`
       : '';
 
+    const credsBoxHtml = `
+      <div class="ws-creds-box">
+        <div class="ws-cred-row">
+          <span class="ws-cred-lbl">اسم المستخدم:</span>
+          <span class="ws-cred-val">${escapeHtml(memEmail || '—')}</span>
+          ${memEmail ? `<button type="button" class="ws-cred-mini-btn" onclick="copyMemberCred('${safeUid}', 'email')">نسخ</button>` : ''}
+        </div>
+        <div class="ws-cred-row">
+          <span class="ws-cred-lbl">كلمة المرور:</span>
+          ${memPass
+            ? `<span class="ws-cred-val" id="memPassVal_${safeUid}" data-shown="0">••••••••</span>
+               <button type="button" class="ws-cred-mini-btn" onclick="toggleMemberCardPass(this, '${safeUid}')">إظهار</button>
+               <button type="button" class="ws-cred-mini-btn" onclick="copyMemberCred('${safeUid}', 'pass')">نسخ</button>`
+            : `<span class="ws-cred-val unset">غير محفوظة بعد</span>
+               ${(!isSelf && !isSuper) ? `<button type="button" class="ws-cred-mini-btn" onclick="promptUpdateMemberPassword('${safeUid}')">تعيين</button>` : ''}`
+          }
+        </div>
+      </div>`;
+
     const controls = (!isSelf && !isSuper) ? `
       <div class="member-actions">
-        <button class="btn btn-light btn-sm" onclick="toggleMemberActive('${escapeHtml(m.user_id)}', ${!!m.active})">
+        <button class="btn btn-light btn-sm" onclick="toggleMemberActive('${safeUid}', ${!!m.active})">
           ${m.active ? 'إيقاف الحساب' : 'تفعيل الحساب'}
         </button>
         ${m.role === 'staff' ? `
-          <button class="btn btn-light btn-sm" onclick="toggleMemberCanDelete('${escapeHtml(m.user_id)}', ${!!m.can_delete})">
+          <button class="btn btn-light btn-sm" onclick="toggleMemberCanDelete('${safeUid}', ${!!m.can_delete})">
             ${m.can_delete ? 'منع الحذف' : 'السماح بالحذف'}
           </button>` : ''}
-        <button class="btn btn-danger btn-sm" onclick="removeWorkshopMember('${escapeHtml(m.user_id)}', '${escapeHtml(m.display_name || m.email)}')">إزالة</button>
+        <button class="btn btn-light btn-sm" onclick="promptUpdateMemberPassword('${safeUid}')">تغيير كلمة السر</button>
+        <button class="btn btn-danger btn-sm" onclick="removeWorkshopMember('${safeUid}')">إزالة نهائية</button>
       </div>` : '';
 
     return `
@@ -838,7 +1018,7 @@ function renderWorkshopMembersList(list) {
         <div class="member-top">
           <div>
             <div class="member-name">${escapeHtml(m.display_name || 'بدون اسم')} ${isSelf ? '(أنت)' : ''}</div>
-            <div class="member-email">${escapeHtml(m.email)}</div>
+            <div class="member-email">${escapeHtml(memEmail)}</div>
           </div>
           <div class="member-badges">
             ${presenceBadge}
@@ -847,6 +1027,7 @@ function renderWorkshopMembersList(list) {
             ${m.role === 'staff' ? `<span class="m-badge m-neutral">${m.can_delete ? 'يحذف' : 'بدون حذف'}</span>` : ''}
           </div>
         </div>
+        ${credsBoxHtml}
         ${onlineNotice}
         ${controls}
       </div>
@@ -946,11 +1127,72 @@ async function toggleMemberCanDelete(uid, currentVal) {
   loadWorkshopMembers();
 }
 
-async function removeWorkshopMember(uid, name) {
-  if (!confirm(`هل تريد إزالة حساب "${name}" من الورشة؟ لن يتمكن من الوصول لبيانات الورشة بعد الآن.`)) return;
-  const { error } = await sb.from('workshop_members').delete().eq('user_id', uid);
-  if (error) return showToast(error.message);
-  showToast('تمت إزالة الحساب');
+function copyMemberCred(uid, kind) {
+  const rec = memberCredsMap.get(uid);
+  if (!rec) return;
+  if (kind === 'email') copyCredentialValue(rec.email, 'اسم المستخدم');
+  else if (kind === 'pass') copyCredentialValue(rec.password, 'كلمة المرور');
+}
+
+function toggleMemberCardPass(btn, uid) {
+  const rec = memberCredsMap.get(uid);
+  const el = document.getElementById('memPassVal_' + uid);
+  if (!rec || !rec.password || !el) return;
+  const shown = el.getAttribute('data-shown') === '1';
+  if (shown) {
+    el.textContent = '••••••••';
+    el.setAttribute('data-shown', '0');
+    btn.textContent = 'إظهار';
+  } else {
+    el.textContent = rec.password;
+    el.setAttribute('data-shown', '1');
+    btn.textContent = 'إخفاء';
+  }
+}
+
+async function promptUpdateMemberPassword(uid) {
+  const rec = memberCredsMap.get(uid);
+  const label = (rec && (rec.display_name || rec.email)) || 'هذا المستخدم';
+  const newPass = prompt(`أدخل كلمة المرور الجديدة لـ "${label}" (6 أحرف أو أرقام على الأقل):`, (rec && rec.password) || '');
+  if (newPass === null) return;
+  const cleanPass = String(newPass).trim();
+  if (cleanPass.length < 6) return showToast('كلمة المرور يجب أن تكون 6 أحرف أو أرقام على الأقل');
+
+  const { error } = await sb.rpc('admin_update_member_password', {
+    target_user_id: uid,
+    new_password: cleanPass
+  });
+  if (error) {
+    const msg = String(error.message || '');
+    if (msg.includes('admin_update_member_password') || msg.includes('does not exist')) {
+      showAccAlert('يرجى تشغيل كود SQL الخاص بالتحديث (v16) في Supabase لتفعيل تعديل وحذف حسابات المستخدمين بالكامل.');
+      return;
+    }
+    return showAccAlert('تعذّر تحديث كلمة المرور: ' + msg);
+  }
+  showAccAlert(`تم تحديث كلمة مرور "${label}" وحفظها بنجاح ✓`, true);
+  loadWorkshopMembers();
+}
+
+async function removeWorkshopMember(uid) {
+  const rec = memberCredsMap.get(uid);
+  const name = (rec && (rec.display_name || rec.email)) || 'هذا المستخدم';
+  if (!confirm(`هل تريد حذف حساب "${name}" ومسح بيانات دخوله نهائياً من السيرفر؟`)) return;
+
+  showAccAlert('');
+  const { error: rpcErr } = await sb.rpc('admin_delete_member_account', { target_user_id: uid });
+  if (rpcErr) {
+    const msg = String(rpcErr.message || '');
+    if (msg.includes('admin_delete_member_account') || msg.includes('does not exist')) {
+      showAccAlert('لم يتم تفعيل دالة الحذف النهائي من السيرفر بعد — يرجى تشغيل كود SQL المرفق في Supabase SQL Editor ثم إعادة المحاولة.');
+      return;
+    }
+    showAccAlert('تعذّر مسح الحساب من السيرفر: ' + msg);
+    return;
+  }
+
+  showAccAlert(`تم حذف حساب "${name}" ومسح جميع بياناته من السيرفر نهائياً ✓`, true);
+  showToast('تم مسح الحساب من السيرفر نهائياً ✓');
   loadWorkshopMembers();
 }
 
@@ -976,11 +1218,18 @@ function fallbackCopyText(val, label) {
   } catch (e) {}
 }
 
+function copyWorkshopCred(wsId, kind) {
+  const rec = workshopCredsMap.get(wsId);
+  if (!rec) return;
+  if (kind === 'email') copyCredentialValue(rec.email, 'اسم المستخدم');
+  else if (kind === 'pass') copyCredentialValue(rec.password, 'كلمة المرور');
+}
+
 function toggleWsCardPass(btn, wsId) {
+  const rec = workshopCredsMap.get(wsId);
   const el = document.getElementById('wsPassVal_' + wsId);
-  if (!el) return;
-  const realPass = el.getAttribute('data-pass') || '';
-  if (!realPass) return;
+  const realPass = (rec && rec.password) || (el && el.getAttribute('data-pass')) || '';
+  if (!el || !realPass) return;
   const shown = el.getAttribute('data-shown') === '1';
   if (shown) {
     el.textContent = '••••••••';
@@ -1051,19 +1300,20 @@ function renderIsolatedWorkshopsList(list) {
       : '';
 
     const safeWsId = escapeHtml(w.id);
+    workshopCredsMap.set(w.id, { email: mgrEmail || '', password: mgrPass || '' });
     const credsBoxHtml = !isOwnWs ? `
       <div class="ws-creds-box">
         <div class="ws-cred-row">
-          <span class="ws-cred-lbl">الإيميل:</span>
+          <span class="ws-cred-lbl">اسم المستخدم:</span>
           <span class="ws-cred-val">${escapeHtml(mgrEmail || '—')}</span>
-          ${mgrEmail ? `<button type="button" class="ws-cred-mini-btn" onclick="copyCredentialValue('${escapeHtml(mgrEmail)}', 'الإيميل')">نسخ</button>` : ''}
+          ${mgrEmail ? `<button type="button" class="ws-cred-mini-btn" onclick="copyWorkshopCred('${safeWsId}', 'email')">نسخ</button>` : ''}
         </div>
         <div class="ws-cred-row">
-          <span class="ws-cred-lbl">كلمة السر:</span>
+          <span class="ws-cred-lbl">كلمة المرور:</span>
           ${mgrPass
-            ? `<span class="ws-cred-val" id="wsPassVal_${safeWsId}" data-pass="${escapeHtml(mgrPass)}" data-shown="0">••••••••</span>
+            ? `<span class="ws-cred-val" id="wsPassVal_${safeWsId}" data-shown="0">••••••••</span>
                <button type="button" class="ws-cred-mini-btn" onclick="toggleWsCardPass(this, '${safeWsId}')">إظهار</button>
-               <button type="button" class="ws-cred-mini-btn" onclick="copyCredentialValue('${escapeHtml(mgrPass)}', 'كلمة السر')">نسخ</button>`
+               <button type="button" class="ws-cred-mini-btn" onclick="copyWorkshopCred('${safeWsId}', 'pass')">نسخ</button>`
             : `<span class="ws-cred-val unset">غير محفوظة بعد — اضغط تعديل لتعيينها</span>`
           }
         </div>
@@ -1264,22 +1514,22 @@ async function deleteIsolatedWorkshop(wsId) {
   const ws = cachedWorkshopsList.find(w => w.id === wsId);
   if (!ws || wsId === currentProfile.workshop_id) return;
 
-  if (!confirm(`تحذير: هل أنت متأكد من إزالة ورشة "${ws.name}" نهائياً مع جميع حساباتها وديونها؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+  if (!confirm(`تحذير: هل أنت متأكد من إزالة ورشة "${ws.name}" ومسح جميع حساباتها ومستخدميها وديونها نهائياً من السيرفر؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
 
   showAccAlert('');
-  await sb.from('debt_records').delete().eq('workshop_id', wsId);
-  const { error: memDelErr } = await sb.from('workshop_members').delete().eq('workshop_id', wsId);
-  if (memDelErr) {
-    showAccAlert('تعذّر إزالة حسابات الورشة: ' + memDelErr.message);
-    return;
-  }
-  const { error: wsDelErr } = await sb.from('workshops').delete().eq('id', wsId);
-  if (wsDelErr) {
-    showAccAlert('تعذّر إزالة الورشة: ' + wsDelErr.message);
+  const { error: rpcErr } = await sb.rpc('super_admin_delete_workshop_completely', { target_workshop_id: wsId });
+  if (rpcErr) {
+    const msg = String(rpcErr.message || '');
+    if (msg.includes('super_admin_delete_workshop_completely') || msg.includes('does not exist')) {
+      showAccAlert('يرجى تشغيل كود SQL الخاص بالتحديث (v16) في Supabase لحذف الورشة وجميع مستخدميها من السيرفر بالكامل.');
+      return;
+    }
+    showAccAlert('تعذّر مسح الورشة من السيرفر: ' + msg);
     return;
   }
 
-  showToast(`تمت إزالة ورشة "${ws.name}" بنجاح`);
+  showAccAlert(`تم مسح ورشة "${ws.name}" وجميع مستخدميها وبياناتها من السيرفر نهائياً ✓`, true);
+  showToast(`تم مسح ورشة "${ws.name}" من السيرفر نهائياً ✓`);
   loadIsolatedWorkshops();
 }
 
