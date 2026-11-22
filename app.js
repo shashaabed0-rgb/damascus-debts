@@ -736,8 +736,8 @@ function getDueControlIds(prefix) {
       dateId: 'editCustDueDate',
       noteId: 'editCustDueNote',
       noteWrapId: 'editDueNoteWrap',
-      pillId: 'editDueSelectedPill',
-      pillTextId: 'editDueSelectedText',
+      textId: 'editDueSelectedText',
+      clearBtnId: 'editDueClearBtn',
       chipsId: 'editDueChips',
       calBtnId: 'editDueCalBtn'
     };
@@ -746,28 +746,54 @@ function getDueControlIds(prefix) {
     dateId: 'txDueDate',
     noteId: 'txDueNote',
     noteWrapId: 'txDueNoteWrap',
-    pillId: 'txDueSelectedPill',
-    pillTextId: 'txDueSelectedText',
+    textId: 'txDueSelectedText',
+    clearBtnId: 'txDueClearBtn',
     chipsId: 'txDueChips',
     calBtnId: 'txDueCalBtn'
   };
+}
+
+function openNativeDatePickerEl(inputEl) {
+  if (!inputEl) return;
+  try {
+    if (typeof inputEl.showPicker === 'function') {
+      inputEl.showPicker();
+    }
+  } catch (e) {}
+}
+
+function openDueCalendarByPrefix(prefix) {
+  const ids = getDueControlIds(prefix);
+  const dateEl = document.getElementById(ids.dateId);
+  if (!dateEl) return;
+  try {
+    if (typeof dateEl.showPicker === 'function') {
+      dateEl.showPicker();
+      return;
+    }
+  } catch (e) {}
+  try {
+    dateEl.focus();
+    dateEl.click();
+  } catch (e) {}
 }
 
 function updateDueControlUI(prefix, activeDays = null) {
   const ids = getDueControlIds(prefix);
   const dateEl = document.getElementById(ids.dateId);
   const noteWrap = document.getElementById(ids.noteWrapId);
-  const pill = document.getElementById(ids.pillId);
-  const pillTxt = document.getElementById(ids.pillTextId);
+  const textEl = document.getElementById(ids.textId);
+  const clearBtn = document.getElementById(ids.clearBtnId);
   const calBtn = document.getElementById(ids.calBtnId);
   const chipsWrap = document.getElementById(ids.chipsId);
 
   const val = dateEl ? String(dateEl.value || '').trim() : '';
   const hasVal = Boolean(val);
-  if (pill && pillTxt) {
-    pill.classList.toggle('hidden', !hasVal);
-    pillTxt.textContent = hasVal ? fromInputDate(val) : '';
+  if (textEl) {
+    textEl.textContent = hasVal ? fromInputDate(val) : 'بدون موعد محدد';
+    textEl.classList.toggle('is-empty', !hasVal);
   }
+  if (clearBtn) clearBtn.classList.toggle('hidden', !hasVal);
   if (calBtn) calBtn.classList.toggle('has-date', hasVal);
   if (noteWrap) noteWrap.classList.toggle('hidden', !hasVal);
   if (chipsWrap) {
@@ -779,6 +805,10 @@ function updateDueControlUI(prefix, activeDays = null) {
 }
 
 function selectQuickDueChip(prefix, daysToAdd, btn) {
+  if (btn && btn.classList.contains('active')) {
+    clearDueControl(prefix);
+    return;
+  }
   const ids = getDueControlIds(prefix);
   const dateEl = document.getElementById(ids.dateId);
   if (!dateEl) return;
@@ -2584,7 +2614,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v25.0';
+  const ver = (APP_META && APP_META.version) || 'v26.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2615,7 +2645,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v25.0';
+  const ver = (APP_META && APP_META.version) || 'v26.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2647,7 +2677,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v25.0';
+  const ver = (APP_META && APP_META.version) || 'v26.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
@@ -2800,10 +2830,11 @@ function openAuditLogView() {
   document.getElementById('auditWorkshopSub').textContent = settings.shopName || 'سجل محمي للتعديلات والحذف';
   document.getElementById('auditSearchInput').value = '';
   currentAuditFilter = 'all';
-  document.querySelectorAll('#auditFilterTabs .seg-btn').forEach((b, idx) => b.classList.toggle('active', idx === 0));
+  document.querySelectorAll('#auditFilterTabs .audit-filter-btn').forEach((b, idx) => b.classList.toggle('active', idx === 0));
   document.getElementById('auditServerWarn').classList.add('hidden');
   document.getElementById('auditLogView').classList.add('open');
-  document.getElementById('auditLogView').scrollTop = 0;
+  const bodyEl = document.getElementById('auditLogBody');
+  if (bodyEl) bodyEl.scrollTop = 0;
   updateBodyScrollLock();
   pushLayerHistory('auditLogView');
   loadAuditLogs(false);
@@ -2816,7 +2847,7 @@ function closeAuditLogView(keepHistory = false) {
 
 function setAuditFilter(f, btn) {
   currentAuditFilter = f;
-  document.querySelectorAll('#auditFilterTabs .seg-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#auditFilterTabs .audit-filter-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderAuditLogsList();
 }
