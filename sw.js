@@ -1,5 +1,5 @@
-const APP_CACHE = 'damascus-debts-app-v16';
-const CDN_CACHE = 'damascus-debts-cdn-v2';
+const APP_CACHE = 'damascus-debts-app-v17';
+const CDN_CACHE = 'damascus-debts-cdn-v3';
 
 const APP_SHELL = [
   './',
@@ -14,10 +14,12 @@ const APP_SHELL = [
 ];
 
 const CDN_PRECACHE = [
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
 ];
 
-// التثبيت: حفظ ملفات التطبيق + مكتبة Supabase للعمل أوفلاين وتفعيل النسخة الجديدة فوراً
+// التثبيت: حفظ ملفات التطبيق + مكتبة Supabase ومحرك PDF (html2canvas و jsPDF) للعمل أوفلاين فوراً
 self.addEventListener('install', (event) => {
   event.waitUntil(
     Promise.all([
@@ -107,21 +109,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // المكتبات الخارجية (Supabase SDK / html2canvas / jsPDF): كاش للعمل أوفلاين مع تحديث بالخلفية
+  // المكتبات الخارجية (Supabase SDK / html2canvas / jsPDF): كاش أولاً للعمل أوفلاين فوراً مع تحديث بالخلفية
   if (url.hostname.includes('cdn.jsdelivr.net') || url.hostname.includes('cdnjs.cloudflare.com')) {
     event.respondWith(
-      caches.match(req).then((cached) => {
-        const netPromise = fetch(req)
-          .then((res) => {
-            if (res && res.ok) {
-              const copy = res.clone();
-              caches.open(CDN_CACHE).then((cache) => cache.put(req, copy));
-            }
-            return res;
-          })
-          .catch(() => cached);
-        return cached || netPromise;
-      })
+      caches.open(CDN_CACHE).then((cache) =>
+        cache.match(req.url).then((cached) => {
+          const netPromise = fetch(req)
+            .then((res) => {
+              if (res && (res.ok || res.type === 'opaque')) {
+                cache.put(req.url, res.clone());
+              }
+              return res;
+            })
+            .catch(() => cached);
+          return cached || netPromise;
+        })
+      )
     );
   }
 });

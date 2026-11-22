@@ -34,10 +34,10 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v19.0',
+  version: 'v20.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
-  developerPhone: '' // ضع رقم التواصل هنا لتثبيته لجميع الورشات (أو يُؤخذ تلقائياً من هاتف المحل)
+  developerPhone: '0994373742'
 };
 
 const CURRENCIES = {
