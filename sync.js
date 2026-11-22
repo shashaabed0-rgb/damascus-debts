@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v21.0',
+  version: 'v22.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -53,6 +53,13 @@ const FREE_OFFLINE_MAX_CUSTOMERS = 25;
 const FREE_OFFLINE_WORKSHOP_ID = 'free_offline_local';
 const FREE_OFFLINE_MODE_KEY = 'debt_free_offline_mode_v1';
 const FREE_OFFLINE_WS_SETTINGS_KEY = 'debt_free_offline_ws_settings_v1';
+const CUSTOMER_STUB_TYPE = 'ملف_عميل';
+
+function isCustomerStubRecord(rec) {
+  if (!rec) return false;
+  const t = String(typeof rec === 'string' ? rec : (rec.type || '')).trim();
+  return t === CUSTOMER_STUB_TYPE;
+}
 let lastSyncMeta = { syncedAt: '', localUpdatedAt: '', lastAction: '' };
 const memberCredsMap = new Map();
 const workshopCredsMap = new Map();

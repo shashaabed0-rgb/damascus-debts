@@ -627,9 +627,13 @@ function processAndRender() {
   allRecords.forEach(r => {
     const name = String(r.name || '').trim();
     if (!name) return;
-    if (!map[name]) map[name] = { name, phone: '', rawRecords: [] };
+    if (!map[name]) map[name] = { name, phone: '', rawRecords: [], hasStubPending: false };
     if (r.phone && String(r.phone).trim()) {
       map[name].phone = normalizeLocalPhoneInput(r.phone);
+    }
+    if (isCustomerStubRecord(r)) {
+      if (pendingAddIds.has(String(r.id))) map[name].hasStubPending = true;
+      return;
     }
     const kind = isPayType(r.type) ? 'pay' : 'debt';
     const currency = getRecordCurrency(r);
@@ -649,6 +653,8 @@ function processAndRender() {
       name: entry.name,
       phone: entry.phone,
       records: entry.rawRecords,
+      hasNoTransactions: entry.rawRecords.length === 0,
+      hasStubPending: entry.hasStubPending,
       conflictGroupKey: getConflictBaseKey(entry.name),
       isDuplicateConflict: false,
       conflictPeers: [],
@@ -764,7 +770,9 @@ function buildCustomerBalancePillsHtml(c) {
   });
 
   if (pills.length === 0) {
-    return `<span class="bal-pill bal-zero">خالص</span>`;
+    return c.hasNoTransactions
+      ? `<span class="bal-pill bal-zero">بدون حركات</span>`
+      : `<span class="bal-pill bal-zero">خالص</span>`;
   }
   if (pills.length === 1) return pills[0];
   return `<div class="bal-stack">${pills.join('')}</div>`;
@@ -820,8 +828,10 @@ function renderCustomers() {
   listEl.innerHTML = visibleCustomers.map((c, idx) => {
     const dispName = cleanDisplayCustomerName(c.name);
     const initial = dispName.charAt(0) || c.name.charAt(0);
-    const pendMark = c.records.some(r => r.pending) ? ' • محلي' : '';
-    const metaParts = [c.phone, `${c.activeRecords.length} حركة حالية`];
+    const pendMark = (c.records.some(r => r.pending) || c.hasStubPending) ? ' • محلي' : '';
+    const metaParts = c.hasNoTransactions
+      ? [c.phone, 'بدون حركات']
+      : [c.phone, `${c.activeRecords.length} حركة حالية`];
     if (c.archivedCount > 0) metaParts.push(`${c.archivedCount} بالأرشيف`);
     const meta = metaParts.filter(Boolean).join(' • ') + pendMark;
     const encName = encodeURIComponent(c.name);
@@ -990,7 +1000,7 @@ function renderCustomerDetail(name) {
   const activeList = [...cust.activeRecords].reverse();
   document.getElementById('detailTxList').innerHTML = activeList.length > 0
     ? activeList.map(r => renderTxCardHtml(r, false, showCurrChips)).join('')
-    : '<div class="empty-box" style="padding:24px;">لا توجد حركات نشطة حالياً.</div>';
+    : '<div class="empty-box" style="padding:24px;">لا توجد حركات لهذا الزبون حالياً.<br><small>يمكنك تسجيل دين أو دفعة جديدة من الأزرار أعلاه.</small></div>';
 
   const drawer = document.getElementById('archiveDrawer');
   if (cust.archivedCycles.length > 0) {
@@ -1321,6 +1331,12 @@ function saveTransaction() {
     // إذا كانت عملية جديدة من الواجهة الرئيسية (أو تم تغيير الاسم عن الزبون الأصلي)، يُعامل كزبون جديد معزول تماماً
     const isSameOriginCustomer = Boolean(txOriginCustomerName && name === txOriginCustomerName);
     const existedLocally = isSameOriginCustomer && groupedCustomers.some(c => c.name === name);
+    // إزالة سجل «ملف_عميل» المؤقت تلقائياً عند إضافة أول حركة فعلية للزبون
+    const oldStubs = allRecords.filter(r => isCustomerStubRecord(r) && String(r.name || '').trim() === name);
+    if (oldStubs.length > 0) {
+      oldStubs.forEach(st => queueDeleteRecord(st.id));
+      allRecords = allRecords.filter(r => !(isCustomerStubRecord(r) && String(r.name || '').trim() === name));
+    }
     allRecords.push(rec);
     queueUpsertRecord(rec, { isNewCustomer: !existedLocally });
     persistData();
@@ -1401,11 +1417,35 @@ function saveCustomerEdit() {
   triggerSyncOrOfflineToast('تم تعديل ملف الزبون، جاري المزامنة...', 'تم التعديل محلياً (سيُزامن لاحقاً)');
 }
 
+function setConfirmModalMode(isLastTxPrompt) {
+  document.getElementById('confirmActionsStandard')?.classList.toggle('hidden', !!isLastTxPrompt);
+  document.getElementById('confirmActionsLastTx')?.classList.toggle('hidden', !isLastTxPrompt);
+}
+
 function askDeleteTx(id) {
   if (!canDeleteRecords()) return showToast('ليس لديك صلاحية الحذف');
-  confirmAction = { type: 'tx', id: String(id) };
-  document.getElementById('confirmTitle').textContent = 'حذف الحركة';
-  document.getElementById('confirmMsg').textContent = 'هل أنت متأكد من حذف هذه الحركة من الجهاز والسحابة؟';
+  const rec = allRecords.find(r => String(r.id) === String(id));
+  if (!rec) return;
+  const recName = String(rec.name || '').trim();
+  const realCustomerTxs = allRecords.filter(
+    r => !isCustomerStubRecord(r) && String(r.name || '').trim() === recName
+  );
+  const isLastTx = realCustomerTxs.length <= 1;
+
+  if (isLastTx) {
+    confirmAction = { type: 'last_tx', id: String(id), customerName: recName };
+    document.getElementById('confirmTitle').textContent = 'حذف آخر حركة للزبون';
+    document.getElementById('confirmMsg').textContent =
+      `هذه آخر حركة في ملف "${cleanDisplayCustomerName(recName)}". هل تريد إبقاء اسم الزبون بدون حركات أم إزالة ملف الزبون بالكامل؟`;
+    setConfirmModalMode(true);
+  } else {
+    confirmAction = { type: 'tx', id: String(id), customerName: recName };
+    document.getElementById('confirmTitle').textContent = 'حذف الحركة';
+    document.getElementById('confirmMsg').textContent = isFreeOfflineMode()
+      ? 'هل أنت متأكد من حذف هذه الحركة من الجهاز؟'
+      : 'هل أنت متأكد من حذف هذه الحركة من الجهاز والسحابة؟';
+    setConfirmModalMode(false);
+  }
   openModal('confirmModal');
 }
 
@@ -1415,14 +1455,51 @@ function askDeleteCustomer() {
   if (!cust) return;
   confirmAction = { type: 'customer', name: cust.name };
   document.getElementById('confirmTitle').textContent = 'حذف ملف الزبون بالكامل';
-  document.getElementById('confirmMsg').textContent = `هل أنت متأكد من حذف ملف "${cleanDisplayCustomerName(cust.name)}" مع جميع حركاته (${cust.records.length} حركة) نهائياً؟`;
+  document.getElementById('confirmMsg').textContent = cust.records.length > 0
+    ? `هل أنت متأكد من حذف ملف "${cleanDisplayCustomerName(cust.name)}" مع جميع حركاته (${cust.records.length} حركة) نهائياً؟`
+    : `هل أنت متأكد من حذف ملف "${cleanDisplayCustomerName(cust.name)}" نهائياً؟`;
+  setConfirmModalMode(false);
   openModal('confirmModal');
 }
 
-function executeConfirmedDelete() {
+function executeConfirmedDelete(choice = null) {
   if (!confirmAction) return;
   const act = confirmAction;
   confirmAction = null;
+
+  if (act.type === 'last_tx') {
+    if (choice === 'keep_customer') {
+      // تحويل آخر حركة إلى ملف عميل فارغ لإبقاء الاسم ورقم الهاتف بدون أي حركات (مع المزامنة)
+      queueUpdateRecord(act.id, {
+        type: CUSTOMER_STUB_TYPE,
+        amount: 0,
+        note: '',
+        date: todayString()
+      });
+      persistData();
+      closeModal('confirmModal');
+      processAndRender();
+      if (currentCustomerName) renderCustomerDetail(currentCustomerName);
+      triggerSyncOrOfflineToast('تم حذف الحركة وإبقاء اسم الزبون بدون حركات...', 'تم حذف الحركة وإبقاء اسم الزبون محلياً');
+      return;
+    }
+    // choice === 'remove_customer': حذف الحركة وإزالة ملف الزبون بالكامل
+    const targetName = act.customerName || currentCustomerName;
+    const toDelete = allRecords.filter(r => String(r.name || '').trim() === targetName || String(r.id) === act.id);
+    toDelete.forEach(r => queueDeleteRecord(r.id));
+    allRecords = allRecords.filter(r => String(r.name || '').trim() !== targetName && String(r.id) !== act.id);
+    persistData();
+    const backSteps = (layerStack.includes('confirmModal') ? 1 : 0) + (layerStack.includes('detailView') ? 1 : 0);
+    closeModal('confirmModal', true);
+    closeDetailView(true);
+    if (backSteps > 0 && history.state && history.state.appState === 'layer') {
+      ignoreNextPopstate++;
+      try { history.go(-backSteps); } catch (e) { ignoreNextPopstate = Math.max(0, ignoreNextPopstate - 1); }
+    }
+    processAndRender();
+    triggerSyncOrOfflineToast('تم حذف الحركة وإزالة ملف الزبون، جاري المزامنة...', 'تم حذف ملف الزبون محلياً');
+    return;
+  }
 
   if (act.type === 'tx') {
     allRecords = allRecords.filter(r => String(r.id) !== act.id);
@@ -1840,7 +1917,7 @@ function buildBackupPayloadObject() {
     backupDate: todayString(),
     workshopId: currentProfile ? currentProfile.workshop_id : '',
     shopName: settings.shopName || 'دفتر الديون',
-    totalRecords: allRecords.length,
+    totalRecords: allRecords.filter(r => !isCustomerStubRecord(r)).length,
     totalCustomers: groupedCustomers.length,
     records: allRecords.map(r => ({
       id: String(r.id),
@@ -1863,7 +1940,7 @@ function buildBackupCsvText(recordsArr) {
     formatDate(r.date),
     cleanDisplayCustomerName(r.name || ''),
     r.phone || '',
-    r.type || '',
+    isCustomerStubRecord(r) ? 'ملف عميل (بدون حركات)' : (r.type || ''),
     r.amount || 0,
     r.note || '',
     r.created_by || ''
@@ -1944,7 +2021,7 @@ function saveDailyLocalSnapshot(force = false) {
   const snapEntry = {
     date: today,
     savedAt: new Date().toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' }),
-    count: allRecords.length,
+    count: allRecords.filter(r => !isCustomerStubRecord(r)).length,
     records: buildBackupPayloadObject().records
   };
 
@@ -1967,7 +2044,7 @@ function updateBackupStatusUI() {
   const lastSnapTxt = snaps.length > 0 ? `${snaps[0].date} (${snaps[0].savedAt}) — ${snaps[0].count} حركة` : 'لا توجد بعد';
   box.innerHTML = `
     <div><strong>موعد النسخ التلقائي:</strong> <span class="midnight-pill">12:00 ليلاً يومياً</span></div>
-    <div><strong>إجمالي السجلات الحالية:</strong> ${allRecords.length} حركة (${groupedCustomers.length} زبون)</div>
+    <div><strong>إجمالي السجلات الحالية:</strong> ${allRecords.filter(r => !isCustomerStubRecord(r)).length} حركة (${groupedCustomers.length} زبون)</div>
     <div><strong>آخر نسخة محفوظة على الجهاز:</strong> ${escapeHtml(lastSnapTxt)}</div>
   `;
 }
@@ -2110,7 +2187,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v21.0';
+  const ver = (APP_META && APP_META.version) || 'v22.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2141,7 +2218,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v21.0';
+  const ver = (APP_META && APP_META.version) || 'v22.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2173,7 +2250,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v21.0';
+  const ver = (APP_META && APP_META.version) || 'v22.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;

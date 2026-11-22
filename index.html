@@ -323,6 +323,14 @@
     #aboutModal.open, #freeLimitModal.open {
       z-index: 99995 !important;
     }
+    .confirm-stack-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .confirm-stack-actions.hidden {
+      display: none !important;
+    }
     #toast {
       z-index: 99999 !important;
     }
@@ -382,7 +390,7 @@
       <div class="login-dev-card">
         <div class="login-dev-head">
           <span class="login-dev-title">معلومات المطور والدعم الفني</span>
-          <span class="login-dev-ver" id="loginVersionBadge">v21.0</span>
+          <span class="login-dev-ver" id="loginVersionBadge">v22.0</span>
         </div>
         <div class="about-info-box" style="margin-top:0;">
           <div class="about-info-row">
@@ -482,7 +490,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v21.0</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v22.0</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -1090,7 +1098,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v21.0</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v22.0</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -1199,15 +1207,20 @@
 
   <!-- ==================== نافذة تأكيد الحذف ==================== -->
   <div class="modal-backdrop" id="confirmModal">
-    <div class="modal-sheet" style="max-width:390px;">
+    <div class="modal-sheet" style="max-width:405px;">
       <div class="sheet-head">
         <h3 id="confirmTitle">تأكيد الحذف</h3>
         <button class="close-btn" onclick="closeModal('confirmModal')">✕</button>
       </div>
-      <p id="confirmMsg" style="margin:0 0 18px;color:var(--muted);font-size:14.5px;line-height:1.6;"></p>
-      <div class="toggle-2">
-        <button class="btn btn-danger" onclick="executeConfirmedDelete()">نعم، احذف</button>
-        <button class="btn btn-light" onclick="closeModal('confirmModal')">إلغاء</button>
+      <p id="confirmMsg" style="margin:0 0 18px;color:var(--muted);font-size:14.5px;line-height:1.65;"></p>
+      <div id="confirmActionsStandard" class="toggle-2">
+        <button type="button" class="btn btn-danger" onclick="executeConfirmedDelete()">نعم، احذف</button>
+        <button type="button" class="btn btn-light" onclick="closeModal('confirmModal')">إلغاء</button>
+      </div>
+      <div id="confirmActionsLastTx" class="confirm-stack-actions hidden">
+        <button type="button" class="btn btn-primary" onclick="executeConfirmedDelete('keep_customer')">حذف الحركة وإبقاء اسم الزبون</button>
+        <button type="button" class="btn btn-danger" onclick="executeConfirmedDelete('remove_customer')">حذف الحركة وإزالة الزبون بالكامل</button>
+        <button type="button" class="btn btn-light" onclick="closeModal('confirmModal')">إلغاء</button>
       </div>
     </div>
   </div>
@@ -1247,7 +1260,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v21.0</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v22.0</span>
         <p class="about-desc">نظام عملي ومتكامل لإدارة ديون ودفعات الزبائن بالعملتين، يعمل بدون إنترنت وبمزامنة سحابية فورية مع كشوفات PDF وواتساب.</p>
       </div>
 
