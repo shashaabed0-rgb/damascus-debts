@@ -1,0 +1,24 @@
+name: Keep Supabase Alive Daily
+
+on:
+  schedule:
+    # يعمل تلقائياً كل يوم الساعة 09:00 UTC (12:00 ظهراً بتوقيت دمشق)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # يسمح بتجربته يدوياً بضغطة زر من تبويب Actions
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database to Prevent 7-Day Pause
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: sb_publishable_Qescc0we7OizukGkCGc29w_kIiBhUHU" \
+            "https://oeojvcikwiyiwmenozew.supabase.co/rest/v1/workshops?select=id&limit=1")
+          echo "Supabase HTTP Status: $STATUS"
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+            echo "Supabase is active and awake!"
+          else
+            echo "Ping returned status $STATUS"
+            exit 1
+          fi
