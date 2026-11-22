@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v23.0',
+  version: 'v24.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -99,6 +99,8 @@ let settings = {
   shamCashCode: '',
   waConfig: { ...DEFAULT_WA_CONFIG },
   currency: 'BOTH',
+  overdueDays: 30,
+  customerDueDates: {},
   whatsappApp: 'normal',
   themeMode: 'auto',
   showMainFilters: false,
@@ -126,6 +128,11 @@ let editingWorkshopOldPass = '';
 
 let allRecords = [];
 let pendingQueue = [];
+let auditLogs = [];
+let pendingAuditQueue = [];
+let pendingDueDateQueue = {};
+let auditTableMissingOnServer = false;
+let pendingAutoFreeMigrateCheck = false;
 let groupedCustomers = [];
 let visibleCustomers = [];
 let currentFilter = 'all';
@@ -225,6 +232,11 @@ function applyWorkshopSettingsToState(ws) {
   settings.shamCashCode = s.shamCashCode || '';
   settings.waConfig = { ...DEFAULT_WA_CONFIG, ...(s.waConfig && typeof s.waConfig === 'object' ? s.waConfig : {}) };
   settings.currency = (s.currency === 'USD' || s.currency === 'SYP' || s.currency === 'BOTH') ? s.currency : 'BOTH';
+  const parsedOverdue = Number(s.overdueDays);
+  settings.overdueDays = (Number.isFinite(parsedOverdue) && parsedOverdue >= 0) ? Math.floor(parsedOverdue) : 30;
+  settings.customerDueDates = (s.customerDueDates && typeof s.customerDueDates === 'object' && !Array.isArray(s.customerDueDates))
+    ? { ...s.customerDueDates }
+    : {};
 }
 
 function formatDateTimeDisplay(d = new Date()) {
@@ -254,18 +266,63 @@ function loadWorkshopLocalData() {
   try {
     allRecords = JSON.parse(localStorage.getItem(wsKey('records')) || '[]');
     pendingQueue = JSON.parse(localStorage.getItem(wsKey('queue')) || '[]');
+    auditLogs = JSON.parse(localStorage.getItem(wsKey('audit_logs')) || '[]');
+    pendingAuditQueue = JSON.parse(localStorage.getItem(wsKey('audit_queue')) || '[]');
+    pendingDueDateQueue = JSON.parse(localStorage.getItem(wsKey('due_queue')) || '{}');
+    if (pendingDueDateQueue && typeof pendingDueDateQueue === 'object') {
+      Object.entries(pendingDueDateQueue).forEach(([k, v]) => {
+        if (v && v.date) settings.customerDueDates[k] = { date: v.date, note: v.note || '' };
+        else delete settings.customerDueDates[k];
+      });
+    }
     lastSyncMeta = JSON.parse(localStorage.getItem(wsKey('last_sync_meta')) || '{"syncedAt":"","localUpdatedAt":"","lastAction":""}');
   } catch (e) {
     allRecords = [];
     pendingQueue = [];
+    auditLogs = [];
+    pendingAuditQueue = [];
+    pendingDueDateQueue = {};
     lastSyncMeta = { syncedAt: '', localUpdatedAt: '', lastAction: '' };
   }
+}
+
+function persistAuditData() {
+  if (!currentProfile) return;
+  try {
+    localStorage.setItem(wsKey('audit_logs'), JSON.stringify((auditLogs || []).slice(0, 500)));
+    localStorage.setItem(wsKey('audit_queue'), JSON.stringify((pendingAuditQueue || []).slice(0, 300)));
+    localStorage.setItem(wsKey('due_queue'), JSON.stringify(pendingDueDateQueue || {}));
+  } catch (e) {}
 }
 
 function persistData() {
   if (!currentProfile) return;
   localStorage.setItem(wsKey('records'), JSON.stringify(allRecords));
   localStorage.setItem(wsKey('queue'), JSON.stringify(pendingQueue));
+  persistAuditData();
+}
+
+function recordAuditEvent({ action_type, customer_name, summary, before_data = null, after_data = null }) {
+  if (!currentProfile) return null;
+  const entry = {
+    id: 'aud_' + genId(),
+    workshop_id: currentProfile.workshop_id,
+    actor_user_id: currentUser && currentUser.id && !isFreeOfflineMode() ? currentUser.id : null,
+    actor_name: String(currentProfile.display_name || currentProfile.email || 'المستخدم'),
+    action_type: String(action_type || 'edit_tx'),
+    customer_name: cleanDisplayCustomerName(customer_name || ''),
+    summary: String(summary || ''),
+    before_data: before_data || null,
+    after_data: after_data || null,
+    created_at: new Date().toISOString()
+  };
+  auditLogs.unshift(entry);
+  if (auditLogs.length > 500) auditLogs = auditLogs.slice(0, 500);
+  if (!isFreeOfflineMode()) {
+    pendingAuditQueue.push(entry);
+  }
+  persistAuditData();
+  return entry;
 }
 
 function isDualCurrencyMode() {
@@ -554,6 +611,8 @@ function wipeLocalWorkshopDataForSecurity(uid, wid) {
       localStorage.removeItem(`debt_sb_queue_${wid}`);
       localStorage.removeItem(`debt_sb_last_sync_meta_${wid}`);
       localStorage.removeItem(`debt_sb_daily_snaps_v1_${wid}`);
+      localStorage.removeItem(`debt_sb_audit_logs_${wid}`);
+      localStorage.removeItem(`debt_sb_audit_queue_${wid}`);
     }
   } catch (e) {}
 }
@@ -866,6 +925,7 @@ async function handleLogin(ev) {
     }
 
     try { localStorage.removeItem(FREE_OFFLINE_MODE_KEY); } catch (e) {}
+    pendingAutoFreeMigrateCheck = true;
     saveLastUser(data.user);
     await loadUserWorkspace(data.user, true);
   } catch (err) {
@@ -972,7 +1032,9 @@ async function loadUserWorkspace(user, forceNetworkCheck = false) {
 function applyPermissionsUI() {
   const freeMode = isFreeOfflineMode();
   document.getElementById('drawerAccountsBtn').classList.toggle('hidden', !canManageAccounts());
+  document.getElementById('drawerAuditBtn')?.classList.toggle('hidden', !isAdmin());
   document.getElementById('settingsAccountsShortcut').classList.toggle('hidden', !canManageAccounts());
+  document.getElementById('migrateFreeManualWrap')?.classList.toggle('hidden', isFreeOfflineMode() || !isAdmin());
   document.getElementById('detailDeleteCustomerBtn').classList.toggle('hidden', !canDeleteRecords());
   document.getElementById('workshopAdminSettingsWrap').classList.toggle('hidden', !isAdmin());
   document.getElementById('currencySettingField').classList.toggle('hidden', !isAdmin());
@@ -1335,6 +1397,35 @@ async function syncData(silent) {
       applyPermissionsUI();
     }
 
+    // رفع مواعيد التسديد المحفوظة أثناء الأوفلاين قبل سحب إعدادات الورشة
+    if (pendingDueDateQueue && Object.keys(pendingDueDateQueue).length > 0) {
+      const entries = Object.entries(pendingDueDateQueue);
+      for (const [cName, val] of entries) {
+        try {
+          const { error: dErr } = await client.rpc('set_customer_due_date', {
+            p_customer_name: cName,
+            p_due_date: val && val.date ? val.date : null,
+            p_due_note: val && val.date ? (val.note || '') : null
+          });
+          if (!dErr) {
+            delete pendingDueDateQueue[cName];
+            persistAuditData();
+          } else if (isAdmin() && currentWorkshop) {
+            const mergedDue = { ...(currentWorkshop.settings && currentWorkshop.settings.customerDueDates ? currentWorkshop.settings.customerDueDates : {}) };
+            if (val && val.date) mergedDue[cName] = { date: val.date, note: val.note || '' };
+            else delete mergedDue[cName];
+            const nextS = { ...(currentWorkshop.settings || {}), customerDueDates: mergedDue };
+            const { error: uErr } = await client.from('workshops').update({ settings: nextS }).eq('id', currentProfile.workshop_id);
+            if (!uErr) {
+              currentWorkshop.settings = nextS;
+              delete pendingDueDateQueue[cName];
+              persistAuditData();
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
     const { data: wsFresh, error: wsFreshErr } = await client
       .from('workshops')
       .select('*')
@@ -1537,12 +1628,51 @@ async function syncData(silent) {
     persistData();
     processAndRender();
 
+    // 4. رفع سجل التدقيق المعلّق إلى Supabase بصمت (دون تعطيل المزامنة لو لم يُشغّل SQL v24 بعد)
+    if (pendingAuditQueue.length > 0) {
+      while (pendingAuditQueue.length > 0) {
+        const aItem = pendingAuditQueue[0];
+        const { error: audErr } = await client
+          .from('audit_logs')
+          .upsert({
+            id: String(aItem.id),
+            workshop_id: currentProfile.workshop_id,
+            actor_user_id: aItem.actor_user_id || currentUser.id,
+            actor_name: String(aItem.actor_name || currentProfile.display_name || ''),
+            action_type: String(aItem.action_type || 'edit_tx'),
+            customer_name: String(aItem.customer_name || ''),
+            summary: String(aItem.summary || ''),
+            before_data: aItem.before_data || null,
+            after_data: aItem.after_data || null,
+            created_at: aItem.created_at || new Date().toISOString()
+          }, { onConflict: 'id' });
+        if (audErr) {
+          const aMsg = String(audErr.message || '');
+          if (aMsg.includes('audit_logs') || aMsg.includes('does not exist') || audErr.code === '42P01') {
+            auditTableMissingOnServer = true;
+          }
+          break;
+        }
+        auditTableMissingOnServer = false;
+        pendingAuditQueue.shift();
+        persistAuditData();
+      }
+    }
+
     // عند المزامنة: إخفاء التاريخ والساعة (تظهر فقط في وضع الأوفلاين)
     updateSyncStatusUI('متصل ومُزامن', 'ok');
     if (detectedOfflineCollisions.length > 0) {
       showToast('⚠️ تم اكتشاف أسماء متطابقة مضافة أوفلاين — ظهرت معاً بعلامة لتعديل أحدها');
     }
     if (typeof checkAndRunDailyBackups === 'function') checkAndRunDailyBackups();
+
+    // فحص الترحيل التلقائي من الحساب المجاني بعد تسجيل الدخول السحابي
+    if (pendingAutoFreeMigrateCheck) {
+      pendingAutoFreeMigrateCheck = false;
+      if (isAdmin() && !isFreeOfflineMode() && typeof checkAndPromptFreeMigration === 'function') {
+        setTimeout(() => checkAndPromptFreeMigration(true), 350);
+      }
+    }
 
     if (currentCustomerName && document.getElementById('detailView').classList.contains('open')) {
       renderCustomerDetail(currentCustomerName);
@@ -2459,5 +2589,160 @@ async function createIsolatedWorkshop(ev) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'إنشاء الورشة وحساب مديرها';
+  }
+}
+
+
+// ==================== مزامنة موعد التسديد وجلب سجل التدقيق (v24) ====================
+async function persistCustomerDueDateChange(custName, dueDateStr, dueNote = '') {
+  const cleanName = String(custName || '').trim();
+  if (!cleanName) return;
+
+  const prevEntry = (settings.customerDueDates && settings.customerDueDates[cleanName]) || null;
+  if (!settings.customerDueDates || typeof settings.customerDueDates !== 'object') {
+    settings.customerDueDates = {};
+  }
+
+  if (dueDateStr) {
+    settings.customerDueDates[cleanName] = {
+      date: formatDate(dueDateStr),
+      note: String(dueNote || '').trim(),
+      updatedAt: new Date().toISOString()
+    };
+  } else {
+    delete settings.customerDueDates[cleanName];
+  }
+
+  if (currentWorkshop) {
+    currentWorkshop.settings = {
+      ...(currentWorkshop.settings || {}),
+      overdueDays: settings.overdueDays,
+      customerDueDates: { ...settings.customerDueDates }
+    };
+    if (isFreeOfflineMode()) {
+      saveFreeOfflineWorkshopSettings(currentWorkshop.settings);
+    } else if (currentUser) {
+      localStorage.setItem('debt_ctx_sb_' + currentUser.id, JSON.stringify({
+        profile: currentProfile,
+        workshop: currentWorkshop
+      }));
+    }
+  }
+
+  recordAuditEvent({
+    action_type: 'set_due_date',
+    customer_name: cleanName,
+    summary: dueDateStr
+      ? `تحديد موعد التسديد بتاريخ ${formatDate(dueDateStr)}${dueNote ? ' (' + dueNote + ')' : ''}`
+      : 'إزالة موعد التسديد',
+    before_data: prevEntry ? { dueDate: prevEntry.date, note: prevEntry.note || '' } : null,
+    after_data: dueDateStr ? { dueDate: formatDate(dueDateStr), note: String(dueNote || '').trim() } : null
+  });
+
+  if (!isFreeOfflineMode()) {
+    pendingDueDateQueue[cleanName] = dueDateStr
+      ? { date: formatDate(dueDateStr), note: String(dueNote || '').trim() }
+      : null;
+    persistAuditData();
+
+    if (navigator.onLine && ensureSupabaseClient()) {
+      let syncedDue = false;
+      try {
+        const { error: rpcErr } = await sb.rpc('set_customer_due_date', {
+          p_customer_name: cleanName,
+          p_due_date: dueDateStr ? formatDate(dueDateStr) : null,
+          p_due_note: dueDateStr ? String(dueNote || '').trim() : null
+        });
+        if (!rpcErr) {
+          syncedDue = true;
+        } else if (isAdmin() && currentWorkshop) {
+          const { error: updErr } = await sb
+            .from('workshops')
+            .update({ settings: currentWorkshop.settings })
+            .eq('id', currentProfile.workshop_id);
+          if (!updErr) syncedDue = true;
+        }
+      } catch (e) {
+        if (isAdmin() && currentWorkshop) {
+          try {
+            const { error: updErr2 } = await sb
+              .from('workshops')
+              .update({ settings: currentWorkshop.settings })
+              .eq('id', currentProfile.workshop_id);
+            if (!updErr2) syncedDue = true;
+          } catch (err2) {}
+        }
+      }
+      if (syncedDue) {
+        delete pendingDueDateQueue[cleanName];
+        persistAuditData();
+      }
+    }
+  }
+}
+
+async function fetchAuditLogsFromServer() {
+  if (isFreeOfflineMode() || !navigator.onLine || !ensureSupabaseClient() || !currentProfile) {
+    return { fromServer: false, missingTable: false };
+  }
+  try {
+    // محاولة رفع المعلّق أولاً
+    if (pendingAuditQueue.length > 0) {
+      while (pendingAuditQueue.length > 0) {
+        const aItem = pendingAuditQueue[0];
+        const { error: upErr } = await sb
+          .from('audit_logs')
+          .upsert({
+            id: String(aItem.id),
+            workshop_id: currentProfile.workshop_id,
+            actor_user_id: aItem.actor_user_id || currentUser.id,
+            actor_name: String(aItem.actor_name || currentProfile.display_name || ''),
+            action_type: String(aItem.action_type || 'edit_tx'),
+            customer_name: String(aItem.customer_name || ''),
+            summary: String(aItem.summary || ''),
+            before_data: aItem.before_data || null,
+            after_data: aItem.after_data || null,
+            created_at: aItem.created_at || new Date().toISOString()
+          }, { onConflict: 'id' });
+        if (upErr) {
+          const msg = String(upErr.message || '');
+          if (msg.includes('audit_logs') || msg.includes('does not exist') || upErr.code === '42P01') {
+            auditTableMissingOnServer = true;
+            return { fromServer: false, missingTable: true };
+          }
+          break;
+        }
+        pendingAuditQueue.shift();
+        persistAuditData();
+      }
+    }
+
+    const { data, error } = await sb
+      .from('audit_logs')
+      .select('*')
+      .eq('workshop_id', currentProfile.workshop_id)
+      .order('created_at', { ascending: false })
+      .limit(300);
+
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.includes('audit_logs') || msg.includes('does not exist') || error.code === '42P01') {
+        auditTableMissingOnServer = true;
+        return { fromServer: false, missingTable: true };
+      }
+      return { fromServer: false, missingTable: false, error: msg };
+    }
+
+    auditTableMissingOnServer = false;
+    const mergedMap = new Map();
+    (data || []).forEach(r => mergedMap.set(String(r.id), r));
+    (pendingAuditQueue || []).forEach(r => mergedMap.set(String(r.id), r));
+    auditLogs = Array.from(mergedMap.values()).sort((a, b) =>
+      String(b.created_at || '').localeCompare(String(a.created_at || ''))
+    );
+    persistAuditData();
+    return { fromServer: true, missingTable: false };
+  } catch (e) {
+    return { fromServer: false, missingTable: false };
   }
 }

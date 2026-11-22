@@ -163,6 +163,75 @@ function sendWhatsApp(specificTx = null, customerNameOverride = null) {
   }
 }
 
+function buildOverdueReminderWhatsAppText(cust) {
+  const activeCodes = getActiveCurrenciesForReport(cust).filter(code => cust.byCurrency[code].balance > 0.001);
+  const codes = activeCodes.length > 0 ? activeCodes : getActiveCurrenciesForReport(cust);
+  const dueInfo = cust.dueInfo || { status: 'none' };
+  const lines = [];
+
+  if (settings.shopName) lines.push(`*${settings.shopName}*`);
+  lines.push(`السلام عليكم ${cleanDisplayCustomerName(cust.name)}،`);
+
+  if (dueInfo.status === 'overdue' && dueInfo.dueDate) {
+    lines.push(`نود تذكيركم بلطف بأن موعد تسديد الحساب المتفق عليه بتاريخ ${dueInfo.dueDate} قد مضى منذ ${formatArabicDays(dueInfo.daysOverdue)}.`);
+  } else if (dueInfo.status === 'due_today' && dueInfo.dueDate) {
+    lines.push(`نود تذكيركم بلطف بأن اليوم (${dueInfo.dueDate}) هو موعد تسديد الحساب المستحق لديكم.`);
+  } else if (dueInfo.status === 'stale_overdue') {
+    lines.push(`نود تذكيركم بلطف بتسوية الرصيد المستحق على حسابكم (آخر حركة بتاريخ ${dueInfo.lastDate || ''}).`);
+  } else if (dueInfo.dueDate) {
+    lines.push(`نود تذكيركم بلطف بموعد تسديد الحساب المستحق بتاريخ ${dueInfo.dueDate}.`);
+  } else {
+    lines.push(`نود تذكيركم بلطف بتسوية الرصيد المستحق على حسابكم.`);
+  }
+
+  lines.push(`----------------`);
+  lines.push(`الرصيد المستحق حتى تاريخ ${todayString()}:`);
+  codes.forEach(code => {
+    const info = cust.byCurrency[code];
+    if (info.balance > 0.001) {
+      lines.push(`• ${formatBalanceWaLine(info.balance, code)}`);
+    }
+  });
+
+  if (settings.shamCashEnabled && (settings.shamCashCode || '').trim()) {
+    lines.push(`----------------`);
+    lines.push(`شام كاش: ${settings.shamCashCode.trim()}`);
+  }
+
+  const phones = getShopPhonesList();
+  const footerParts = [];
+  if (settings.shopAddress) footerParts.push(settings.shopAddress);
+  if (phones.length > 0) footerParts.push(phones.join(' / '));
+  if (footerParts.length > 0) {
+    lines.push(`----------------`);
+    lines.push(footerParts.join(' - '));
+  }
+  lines.push(`شاكرين حسن تعاونكم.`);
+  return lines.join('\n');
+}
+
+function sendOverdueWhatsAppReminder(encodedOrRawName = null) {
+  let targetName = currentCustomerName;
+  if (encodedOrRawName) {
+    try { targetName = decodeURIComponent(encodedOrRawName); } catch (e) { targetName = encodedOrRawName; }
+  }
+  const cust = groupedCustomers.find(c => c.name === targetName);
+  if (!cust) return;
+
+  const text = buildOverdueReminderWhatsAppText(cust);
+  const msg = encodeURIComponent(text);
+  const phone = formatPhoneForWa(cust.phone);
+  const fallbackUrl = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
+
+  if (/Android/i.test(navigator.userAgent)) {
+    const pkg = settings.whatsappApp === 'business' ? 'com.whatsapp.w4b' : 'com.whatsapp';
+    const query = phone ? `phone=${phone}&text=${msg}` : `text=${msg}`;
+    window.location.href = `intent://send?${query}#Intent;scheme=whatsapp;package=${pkg};S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end`;
+  } else {
+    window.open(fallbackUrl, '_blank');
+  }
+}
+
 // ==================== تصدير كشف PDF (سادة وخفيف الألوان للطباعة + دمج أنيق للعملتين) ====================
 async function waitImagesAndPaint(rootEl) {
   const imgs = Array.from(rootEl.querySelectorAll('img'));

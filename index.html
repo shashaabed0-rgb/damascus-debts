@@ -392,6 +392,282 @@
       font-weight: 800;
       opacity: .88;
     }
+    /* ===== v24: سجل التدقيق + تذكير الديون المتأخرة ومواعيد السداد + الترحيل للسحابي ===== */
+    .due-banner {
+      background: #fef2f2;
+      border: 1.5px solid #f87171;
+      color: #991b1b;
+      border-radius: 12px;
+      padding: 11px 13px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    [data-theme="dark"] .due-banner {
+      background: rgba(220, 38, 38, 0.16);
+      border-color: rgba(248, 113, 113, 0.55);
+      color: #fca5a5;
+    }
+    .due-banner-btn {
+      background: #dc2626;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 11px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .cust-card.is-overdue-card {
+      border-right: 4px solid #dc2626 !important;
+    }
+    .cust-card.is-duetoday-card {
+      border-right: 4px solid #ea580c !important;
+    }
+    .due-tag-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 5px;
+    }
+    .due-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+    .due-badge.overdue {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+    }
+    .due-badge.due-today {
+      background: #ffedd5;
+      color: #c2410c;
+      border: 1px solid #fdba74;
+    }
+    .due-badge.due-soon {
+      background: #fef9c3;
+      color: #854d0e;
+      border: 1px solid #fde047;
+    }
+    .due-badge.scheduled {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+    }
+    [data-theme="dark"] .due-badge.overdue {
+      background: rgba(220, 38, 38, 0.24);
+      color: #fca5a5;
+      border-color: rgba(248, 113, 113, 0.45);
+    }
+    [data-theme="dark"] .due-badge.due-today {
+      background: rgba(234, 88, 12, 0.24);
+      color: #fdba74;
+      border-color: rgba(251, 146, 60, 0.45);
+    }
+    [data-theme="dark"] .due-badge.due-soon {
+      background: rgba(202, 138, 4, 0.22);
+      color: #fde047;
+      border-color: rgba(250, 204, 21, 0.4);
+    }
+    [data-theme="dark"] .due-badge.scheduled {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border-color: rgba(96, 165, 250, 0.4);
+    }
+    .due-remind-btn {
+      background: #f0fdf4;
+      color: #15803d;
+      border: 1px solid #86efac;
+      border-radius: 7px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    [data-theme="dark"] .due-remind-btn {
+      background: rgba(22, 163, 74, 0.2);
+      color: #86efac;
+      border-color: rgba(74, 222, 128, 0.4);
+    }
+    .detail-due-bar {
+      margin-bottom: 12px;
+      padding: 11px 13px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .detail-due-bar.is-overdue {
+      background: #fef2f2;
+      border-color: #fca5a5;
+    }
+    .detail-due-bar.is-due-today {
+      background: #fff7ed;
+      border-color: #fdba74;
+    }
+    [data-theme="dark"] .detail-due-bar.is-overdue {
+      background: rgba(220, 38, 38, 0.14);
+      border-color: rgba(248, 113, 113, 0.45);
+    }
+    [data-theme="dark"] .detail-due-bar.is-due-today {
+      background: rgba(234, 88, 12, 0.14);
+      border-color: rgba(251, 146, 60, 0.45);
+    }
+    .detail-due-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .detail-due-sub {
+      font-size: 11.5px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .detail-due-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .due-quick-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 7px;
+    }
+    .due-chip-btn {
+      background: var(--bg);
+      color: var(--primary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .due-chip-btn:active { transform: scale(.97); }
+    .audit-note-banner {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      border-radius: 11px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-size: 12.2px;
+      font-weight: 700;
+      line-height: 1.6;
+    }
+    [data-theme="dark"] .audit-note-banner {
+      background: rgba(59, 130, 246, 0.14);
+      border-color: rgba(96, 165, 250, 0.35);
+      color: #93c5fd;
+    }
+    .audit-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px 13px;
+      margin-bottom: 9px;
+    }
+    .audit-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+    .audit-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .audit-badge.add { background: #dcfce7; color: #166534; }
+    .audit-badge.edit { background: #ffedd5; color: #c2410c; }
+    .audit-badge.del { background: #fee2e2; color: #b91c1c; }
+    .audit-badge.sys { background: #ede9fe; color: #5b21b6; }
+    [data-theme="dark"] .audit-badge.add { background: rgba(22, 163, 74, 0.22); color: #86efac; }
+    [data-theme="dark"] .audit-badge.edit { background: rgba(234, 88, 12, 0.22); color: #fdba74; }
+    [data-theme="dark"] .audit-badge.del { background: rgba(220, 38, 38, 0.22); color: #fca5a5; }
+    [data-theme="dark"] .audit-badge.sys { background: rgba(124, 58, 237, 0.22); color: #c4b5fd; }
+    .audit-time {
+      font-size: 11.2px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .audit-main {
+      font-size: 13.2px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .audit-actor {
+      font-size: 11.8px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .audit-diff-box {
+      margin-top: 7px;
+      padding: 7px 9px;
+      border-radius: 8px;
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      font-size: 11.8px;
+      line-height: 1.65;
+      color: var(--text);
+    }
+    .audit-diff-old { color: #b91c1c; }
+    .audit-diff-new { color: #15803d; }
+    [data-theme="dark"] .audit-diff-old { color: #fca5a5; }
+    [data-theme="dark"] .audit-diff-new { color: #86efac; }
+    .migrate-btn-box {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+    .btn-migrate-free {
+      width: 100%;
+      background: #f0fdf4 !important;
+      color: #166534 !important;
+      border: 1.5px solid #22c55e !important;
+      font-weight: 800;
+    }
+    [data-theme="dark"] .btn-migrate-free {
+      background: rgba(22, 163, 74, 0.16) !important;
+      color: #86efac !important;
+      border-color: rgba(74, 222, 128, 0.45) !important;
+    }
+    #dueDateModal.open, #migrateFreeModal.open {
+      z-index: 99996 !important;
+    }
     #toast {
       z-index: 99999 !important;
     }
@@ -451,7 +727,7 @@
       <div class="login-dev-card">
         <div class="login-dev-head">
           <span class="login-dev-title">معلومات المطور والدعم الفني</span>
-          <span class="login-dev-ver" id="loginVersionBadge">v23.0</span>
+          <span class="login-dev-ver" id="loginVersionBadge">v24.0</span>
         </div>
         <div class="about-info-box" style="margin-top:0;">
           <div class="about-info-row">
@@ -532,6 +808,12 @@
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
 
+        <button type="button" id="drawerAuditBtn" class="side-menu-item hidden" onclick="closeSideMenu(true); openAuditLogView();">
+          <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg></span>
+          <span class="side-item-txt">سجل التدقيق والمتابعة</span>
+          <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+
         <div id="drawerToolsDivider" class="side-divider hidden"></div>
         <div id="drawerToolsLabel" class="side-section-label hidden">الجهاز والحماية</div>
 
@@ -551,7 +833,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v23.0</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v24.0</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -633,6 +915,7 @@
       </div>
 
       <div id="duplicateConflictBanner" class="dup-banner hidden"></div>
+      <div id="dueReminderBanner" class="due-banner hidden"></div>
 
       <div id="customerList"></div>
     </main>
@@ -670,6 +953,7 @@
     <div class="view-body detail-view-body">
       <div id="detailDupBanner" class="dup-banner hidden"></div>
       <div id="detailStatsWrap"></div>
+      <div id="detailDueBar" class="detail-due-bar hidden"></div>
 
       <div class="detail-box detail-actions-box">
         <div class="action-grid" style="margin-bottom:0;">
@@ -827,6 +1111,54 @@
         </div>
         <div id="workshopsListBox"></div>
       </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== صفحة سجل التدقيق والمتابعة (للمدير فقط — غير قابل للحذف) ==================== -->
+  <section id="auditLogView" class="full-view">
+    <div class="view-bar">
+      <div class="view-bar-inner">
+        <div class="view-bar-right">
+          <button class="back-btn" onclick="closeAuditLogView()" title="رجوع">
+            <svg class="ic" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <div style="min-width:0;">
+            <div class="view-title">سجل التدقيق والمتابعة</div>
+            <div class="view-sub" id="auditWorkshopSub">سجل محمي للتعديلات والحذف</div>
+          </div>
+        </div>
+        <div class="view-bar-actions">
+          <button class="bar-icon-btn" title="تحديث السجل" onclick="loadAuditLogs(true)">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="view-body">
+      <div class="audit-note-banner">
+        🛡️ يتم تسجيل كل عملية إضافة أو تعديل أو حذف تلقائياً (الاسم، المبلغ قبل وبعد، المستخدم، والتوقيت). هذا السجل محمي ولا يمكن حذف محتوياته.
+      </div>
+      <div id="auditServerWarn" class="alert-banner alert-err hidden"></div>
+
+      <div class="search-wrap" style="margin-bottom:10px;">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" id="auditSearchInput" class="search-input" placeholder="ابحث باسم الزبون أو الموظف أو التفاصيل..." oninput="renderAuditLogsList()" />
+      </div>
+
+      <div id="auditFilterTabs" class="segmented" style="margin-bottom:12px;">
+        <button type="button" class="seg-btn active" onclick="setAuditFilter('all', this)">الكل</button>
+        <button type="button" class="seg-btn" onclick="setAuditFilter('edit', this)">تعديلات</button>
+        <button type="button" class="seg-btn" onclick="setAuditFilter('del', this)">حذف</button>
+        <button type="button" class="seg-btn" onclick="setAuditFilter('add', this)">إضافات</button>
+      </div>
+
+      <div class="section-head">
+        <span>سجل الحركات والتغييرات</span>
+        <span id="auditCountLbl">0 سجل</span>
+      </div>
+      <div id="auditListBox"></div>
     </div>
   </section>
 
@@ -1003,6 +1335,16 @@
             </div>
           </div>
         </div>
+
+        <!-- إعدادات تذكير الديون المتأخرة -->
+        <div class="set-card" style="margin-top:12px;">
+          <h4 class="set-title">تذكير الديون المتأخرة</h4>
+          <div class="field" style="margin-bottom:0;">
+            <label>التنبيه التلقائي للزبون الذي لم يسدّد بعد مرور (عدد الأيام)</label>
+            <input type="number" id="setOverdueDays" class="input" inputmode="numeric" min="0" max="365" placeholder="30" />
+            <div class="field-hint">الافتراضي 30 يوماً (ضع 0 لإيقاف التنبيه التلقائي مع إبقاء تذكيرات مواعيد السداد اليدوية شغّالة).</div>
+          </div>
+        </div>
       </div>
 
       <!-- العملة والواتساب -->
@@ -1118,7 +1460,7 @@
           </div>
         </div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;">
-          للانتقال إلى النسخة السحابية (عدد زبائن غير محدود + مزامنة لحظية بين الجوالات والكمبيوتر + حماية وإدارة الموظفين)، تواصل مع الدعم الفني:
+          للانتقال إلى النسخة السحابية (عدد زبائن غير محدود + مزامنة لحظية + سجل تدقيق وحماية الموظفين)، تواصل مع الدعم الفني. عند تسجيل دخولك بحسابك السحابي يمكنك ترحيل جميع زبائنك وحركاتك الحالية تلقائياً أو بضغطة زر.
         </div>
         <div class="action-grid" style="margin-bottom:8px;">
           <a id="freeUpgradeCallLink" class="btn btn-light" style="text-decoration:none;" href="tel:0994373742">اتصال للدعم</a>
@@ -1150,6 +1492,12 @@
           <button type="button" id="settingsAccountsShortcut" class="btn btn-primary hidden" onclick="closeSettingsView(true); openAccountsView();">إدارة الحسابات</button>
           <button type="button" class="btn btn-danger" onclick="handleLogout()">تسجيل الخروج</button>
         </div>
+
+        <div id="migrateFreeManualWrap" class="migrate-btn-box hidden">
+          <button type="button" id="migrateFreeManualBtn" class="btn btn-migrate-free" onclick="openMigrateFreeModal(false)">
+            ترحيل بيانات الحساب المجاني إلى السحابة
+          </button>
+        </div>
       </div>
 
       <!-- زر حول التطبيق في صفحة الضبط -->
@@ -1160,7 +1508,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v23.0</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v24.0</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -1215,6 +1563,17 @@
       <div class="field hidden" id="txDateField">
         <label>التاريخ</label>
         <input type="date" id="txDate" class="input" />
+      </div>
+
+      <div class="field" id="txDueDateField">
+        <label>موعد التسديد للتذكير (اختياري)</label>
+        <input type="date" id="txDueDate" class="input" />
+        <div class="due-quick-chips">
+          <button type="button" class="due-chip-btn" onclick="setQuickDueDateInput('txDueDate', 7)">+7 أيام</button>
+          <button type="button" class="due-chip-btn" onclick="setQuickDueDateInput('txDueDate', 15)">+15 يوم</button>
+          <button type="button" class="due-chip-btn" onclick="setQuickDueDateInput('txDueDate', 30)">+شهر</button>
+          <button type="button" class="due-chip-btn" onclick="clearDueDateInput('txDueDate')">مسح</button>
+        </div>
       </div>
 
       <button class="btn btn-primary" id="saveTxBtn" onclick="saveTransaction()">حفظ العملية</button>
@@ -1311,6 +1670,67 @@
     </div>
   </div>
 
+  <!-- ==================== نافذة تحديد / تعديل موعد التسديد للزبون ==================== -->
+  <div class="modal-backdrop" id="dueDateModal">
+    <div class="modal-sheet" style="max-width:410px;">
+      <div class="sheet-head">
+        <h3>تحديد موعد التسديد</h3>
+        <button class="close-btn" onclick="closeModal('dueDateModal')">✕</button>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+        الزبون: <strong id="dueModalCustName" style="color:var(--text);">—</strong>
+      </div>
+      <div class="field">
+        <label>تاريخ موعد السداد</label>
+        <input type="date" id="dueDateInput" class="input" />
+        <div class="due-quick-chips">
+          <button type="button" class="due-chip-btn" onclick="setQuickDueDateInput('dueDateInput', 3)">بعد 3 أيام</button>
+          <button type="button" class="due-chip-btn" onclick="setQuickDueDateInput('dueDateInput', 7)">بعد أسبوع</button>
+          <button type="button" class="due-chip-btn" onclick="setQuickDueDateInput('dueDateInput', 15)">بعد 15 يوم</button>
+          <button type="button" class="due-chip-btn" onclick="setQuickDueDateInput('dueDateInput', 30)">بعد شهر</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>ملاحظة التذكير (اختياري)</label>
+        <input type="text" id="dueNoteInput" class="input" placeholder="مثال: وعد بالدفع أول الشهر" />
+      </div>
+      <div class="confirm-stack-actions">
+        <button type="button" class="btn btn-primary" onclick="saveCustomerDueDateFromModal()">حفظ موعد التسديد</button>
+        <button type="button" id="removeDueDateBtn" class="btn btn-danger hidden" onclick="removeCustomerDueDateFromModal()">إزالة الموعد</button>
+        <button type="button" class="btn btn-light" onclick="closeModal('dueDateModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== نافذة ترحيل بيانات الحساب المجاني إلى السحابة ==================== -->
+  <div class="modal-backdrop" id="migrateFreeModal">
+    <div class="modal-sheet" style="max-width:430px;">
+      <div class="sheet-head">
+        <h3>ترحيل بيانات الحساب المجاني للسحابة</h3>
+        <button class="close-btn" onclick="closeModal('migrateFreeModal')">✕</button>
+      </div>
+      <div id="migrateFreeSummaryBox" class="audit-note-banner" style="margin-bottom:12px;"></div>
+      <div class="switch-row" style="margin-bottom:10px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;">ترحيل بيانات المحل والإعدادات أيضاً</div>
+          <div style="font-size:11.5px;color:var(--muted);">اسم المحل، العنوان، الهواتف، اللوغو، شام كاش، ومواعيد السداد</div>
+        </div>
+        <input type="checkbox" id="migrateIncludeSettingsChk" />
+      </div>
+      <div class="switch-row" style="margin-bottom:16px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;">تفريغ الحساب المجاني بعد الترحيل</div>
+          <div style="font-size:11.5px;color:var(--muted);">لمنع تكرار السؤال عند تسجيل الدخول لاحقاً</div>
+        </div>
+        <input type="checkbox" id="migrateClearFreeChk" checked />
+      </div>
+      <div class="confirm-stack-actions">
+        <button type="button" id="confirmMigrateFreeBtn" class="btn btn-primary" onclick="executeFreeToCloudMigration()">ترحيل البيانات الآن للسحابة</button>
+        <button type="button" class="btn btn-light" onclick="dismissFreeMigrationModal()">لاحقاً</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== نافذة حول التطبيق والميزات ==================== -->
   <div class="modal-backdrop" id="aboutModal">
     <div class="modal-sheet about-modal-sheet">
@@ -1322,7 +1742,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v23.0</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v24.0</span>
         <p class="about-desc">نظام عملي ومتكامل لإدارة ديون ودفعات الزبائن بالعملتين، يعمل بدون إنترنت وبمزامنة سحابية فورية مع كشوفات PDF وواتساب.</p>
       </div>
 
@@ -1400,8 +1820,16 @@
             مزامنة لحظية عبر Supabase، عزل كامل لكل ورشة، قفل حساب الموظف على جوال واحد فقط مع تنبيه فوري عند محاولة فتحه من جهاز ثاني، زر «إخراج من الجهاز» لحماية البيانات عند فقدان الجوال، إظهار ونسخ بيانات الدخول، وحذف الحساب نهائياً من السيرفر.
           </div>
           <div class="about-feat-item">
-            <strong>9. الحساب المجاني الأوفلاين (حتى 25 زبون)</strong>
-            يعمل مجاناً بالكامل بدون إنترنت أو تسجيل حساب، ويدعم حتى 25 زبوناً مع كافة ميزات العملتين وكشوف PDF وواتساب والنسخ الاحتياطي المحلي.
+            <strong>9. الحساب المجاني الأوفلاين والترحيل للسحابة</strong>
+            يعمل مجاناً بالكامل بدون إنترنت حتى 25 زبوناً، وعند الانتقال للنسخة السحابية يتيح ترحيل جميع الزبائن والحركات والإعدادات تلقائياً أو بضغطة زر.
+          </div>
+          <div class="about-feat-item">
+            <strong>10. سجل التدقيق والمتابعة (للمدير)</strong>
+            سجل تلقائي محمي غير قابل للحذف يوثّق كل إضافة أو تعديل أو حذف مع المبالغ قبل وبعد واسم الموظف والتاريخ والساعة.
+          </div>
+          <div class="about-feat-item">
+            <strong>11. تذكير بالديون المتأخرة ومواعيد التسديد</strong>
+            تحديد موعد تسديد لكل زبون مع تنبيه تلقائي للديون المتأخرة والمستحقة اليوم وزر تذكير فوري عبر واتساب.
           </div>
         </div>
       </div>
