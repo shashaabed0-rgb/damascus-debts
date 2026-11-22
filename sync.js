@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v17.0',
+  version: 'v18.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '' // ضع رقم التواصل هنا لتثبيته لجميع الورشات (أو يُؤخذ تلقائياً من هاتف المحل)
@@ -1119,6 +1119,31 @@ async function syncData(silent) {
       }
     }
 
+    // تسجيل الأسماء الجديدة التي ستُرفع الآن لاكتشاف أي تزامن متزامن بنفس الثانية ومنع دمج الحركات أو الهاتف
+    const uploadedNewByName = new Map();
+    const newCustNamesToWatch = new Set(
+      pendingQueue
+        .filter(q => (q.action === 'upsert' || q.action === 'add') && q.isNewCustomer && q.payload && q.payload.name)
+        .map(q => String(q.payload.name).trim())
+    );
+    pendingQueue.forEach(q => {
+      if ((q.action === 'upsert' || q.action === 'add') && q.payload && q.payload.name) {
+        const nm = String(q.payload.name).trim();
+        if (newCustNamesToWatch.has(nm)) {
+          if (!uploadedNewByName.has(nm)) {
+            uploadedNewByName.set(nm, {
+              ids: new Set(),
+              records: [],
+              createdBy: String(q.payload.created_by || currentProfile.display_name || '').trim()
+            });
+          }
+          const entry = uploadedNewByName.get(nm);
+          entry.ids.add(String(q.payload.id));
+          entry.records.push({ ...q.payload });
+        }
+      }
+    });
+
     // 2. رفع العمليات المحفوظة محلياً بالترتيب
     while (pendingQueue.length > 0) {
       const item = pendingQueue[0];
@@ -1140,13 +1165,59 @@ async function syncData(silent) {
     }
 
     // 3. سحب أحدث السجلات للورشة فقط
-    const { data: rows, error: fetchErr } = await client
+    let { data: rows, error: fetchErr } = await client
       .from('debt_records')
       .select('*')
       .eq('workshop_id', currentProfile.workshop_id)
       .order('created_at', { ascending: true });
 
     if (fetchErr) throw fetchErr;
+
+    // 3.5 حماية إضافية ضد التزامن المتزامن في نفس الثانية: فصل أي اسم جديد تطابق مع جهاز آخر بدون خلط الهاتف أو الحركات
+    if (uploadedNewByName.size > 0 && Array.isArray(rows)) {
+      const allServerNamesNow = new Set(rows.map(r => String(r.name || '').trim()).filter(Boolean));
+      const raceFixRecords = [];
+
+      uploadedNewByName.forEach((info, origName) => {
+        const matchingRows = rows.filter(r => String(r.name || '').trim() === origName);
+        const otherRows = matchingRows.filter(r => !info.ids.has(String(r.id)));
+        const myRows = matchingRows.filter(r => info.ids.has(String(r.id)));
+        if (otherRows.length > 0 && myRows.length > 0) {
+          const earliestOtherId = otherRows.map(r => String(r.id)).sort()[0];
+          const earliestMyId = myRows.map(r => String(r.id)).sort()[0];
+          // الجهاز الأحدث يفصل حركاته باسم مكرر مستقل (برقم هاتفه وحركاته فقط)
+          if (earliestMyId > earliestOtherId) {
+            const shortBy = (info.createdBy || '').split(/\s+/)[0] || 'جهاز';
+            let cand = `${origName} (مكرر - ${shortBy})`;
+            let n = 2;
+            while (allServerNamesNow.has(cand)) {
+              cand = `${origName} (مكرر - ${shortBy} ${n})`;
+              n++;
+            }
+            allServerNamesNow.add(cand);
+            detectedOfflineCollisions.push(origName);
+            myRows.forEach(r => {
+              const isolated = { ...r, name: cand };
+              raceFixRecords.push(isolated);
+            });
+          }
+        }
+      });
+
+      if (raceFixRecords.length > 0) {
+        for (const rec of raceFixRecords) {
+          await client.from('debt_records').upsert(toDbRecord(rec), { onConflict: 'id' });
+        }
+        const reFetch = await client
+          .from('debt_records')
+          .select('*')
+          .eq('workshop_id', currentProfile.workshop_id)
+          .order('created_at', { ascending: true });
+        if (!reFetch.error && Array.isArray(reFetch.data)) {
+          rows = reFetch.data;
+        }
+      }
+    }
 
     const pendingDeletes = new Set(pendingQueue.filter(q => q.action === 'delete').map(q => String(q.id)));
     const serverMap = new Map();

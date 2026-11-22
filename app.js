@@ -712,8 +712,8 @@ function processAndRender() {
   }
 
   document.getElementById('indebtedCount').textContent = indebtedCount;
-  document.getElementById('customersDatalist').innerHTML =
-    groupedCustomers.map(c => `<option value="${escapeHtml(c.name)}"></option>`).join('');
+  const dlEl = document.getElementById('customersDatalist');
+  if (dlEl) dlEl.innerHTML = '';
 
   renderCustomers();
 }
@@ -1032,6 +1032,7 @@ function updateTxCurrencyPickerVisibility(forceShow = false) {
 }
 
 let txOriginCustomerName = '';
+let txOriginCustomerPhone = '';
 
 function normalizeArabicNameForCompare(str) {
   return normalizeDigits(String(str || ''))
@@ -1104,7 +1105,15 @@ function checkDuplicateTxName() {
 }
 
 function onTxNameInput() {
-  autoFillPhone();
+  // عدم جلب رقم الهاتف أو أي بيانات من أي اسم قديم عند التكرار أو تغيير الاسم
+  const nameVal = document.getElementById('txName').value.trim();
+  const phoneEl = document.getElementById('txPhone');
+  if (txOriginCustomerName && phoneEl) {
+    const curPhone = normalizeLocalPhoneInput(phoneEl.value);
+    if (nameVal !== txOriginCustomerName && txOriginCustomerPhone && curPhone === txOriginCustomerPhone) {
+      phoneEl.value = '';
+    }
+  }
   checkDuplicateTxName();
 }
 
@@ -1131,10 +1140,11 @@ function checkDuplicateEditCustName() {
 function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt', preferredCurrency = null, allowCurrSwitch = false) {
   editingTxId = null;
   txOriginCustomerName = String(prefillName || '').trim();
+  txOriginCustomerPhone = txOriginCustomerName ? normalizeLocalPhoneInput(prefillPhone) : '';
   document.getElementById('txModalTitle').textContent = 'تسجيل عملية جديدة';
   document.getElementById('saveTxBtn').textContent = 'حفظ العملية';
   document.getElementById('txName').value = prefillName;
-  document.getElementById('txPhone').value = normalizeLocalPhoneInput(prefillPhone);
+  document.getElementById('txPhone').value = txOriginCustomerPhone;
   document.getElementById('txAmount').value = '';
   document.getElementById('txNote').value = '';
   document.getElementById('txDate').value = toInputDate(todayString());
@@ -1160,10 +1170,11 @@ function openEditTxModal(id) {
   if (!rec) return;
   editingTxId = String(rec.id);
   txOriginCustomerName = String(rec.name || '').trim();
+  txOriginCustomerPhone = normalizeLocalPhoneInput(rec.phone || '');
   document.getElementById('txModalTitle').textContent = 'تعديل الحركة';
   document.getElementById('saveTxBtn').textContent = 'حفظ التعديل';
   document.getElementById('txName').value = rec.name || '';
-  document.getElementById('txPhone').value = String(rec.phone || '').replace(/^'/, '');
+  document.getElementById('txPhone').value = txOriginCustomerPhone;
   document.getElementById('txAmount').value = rec.amount || '';
   document.getElementById('txNote').value = rec.note || '';
   document.getElementById('txDate').value = toInputDate(rec.date);
@@ -1203,16 +1214,7 @@ function quickAddForCurrent(kind) {
   openAddModal(cust.name, cust.phone, kind, prefCurr, allowSwitch);
 }
 
-function autoFillPhone() {
-  const val = document.getElementById('txName').value.trim();
-  const found = groupedCustomers.find(c => c.name === val);
-  if (found) {
-    if (found.phone) document.getElementById('txPhone').value = normalizeLocalPhoneInput(found.phone);
-    if (!editingTxId && !isDualCurrencyMode() && found.hasDisabledOpenBalance) {
-      updateTxCurrencyPickerVisibility(true);
-    }
-  }
-}
+// تم تعطيل التعبئة التلقائية من الأسماء القديمة لمنع انتقال رقم الهاتف أو الحركات عند تكرار الاسم
 
 function setTxKind(k) {
   txKind = k;
@@ -1265,7 +1267,9 @@ function saveTransaction() {
       note,
       created_by: currentProfile.display_name || currentProfile.email || ''
     });
-    const existedLocally = groupedCustomers.some(c => c.name === name);
+    // إذا كانت عملية جديدة من الواجهة الرئيسية (أو تم تغيير الاسم عن الزبون الأصلي)، يُعامل كزبون جديد معزول تماماً
+    const isSameOriginCustomer = Boolean(txOriginCustomerName && name === txOriginCustomerName);
+    const existedLocally = isSameOriginCustomer && groupedCustomers.some(c => c.name === name);
     allRecords.push(rec);
     queueUpsertRecord(rec, { isNewCustomer: !existedLocally });
     persistData();
@@ -2016,7 +2020,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v17.0';
+  const ver = (APP_META && APP_META.version) || 'v18.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2047,7 +2051,7 @@ function openAboutModal() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v17.0';
+  const ver = (APP_META && APP_META.version) || 'v18.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
