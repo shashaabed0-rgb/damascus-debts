@@ -17,8 +17,12 @@ function formatBalanceWaLine(balance, code) {
   return `لك رصيد متبقي: ${formatNum(Math.abs(balance))} ${unit}`;
 }
 
-function getActiveCurrenciesForReport(cust) {
+function getActiveCurrenciesForReport(cust, includeArchive = false) {
   const enabled = getEnabledCurrencyCodes();
+  if (includeArchive) {
+    const withAny = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].allRecords.length > 0);
+    return withAny.length > 0 ? withAny : [enabled[0]];
+  }
   const list = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].activeRecords.length > 0);
   if (list.length > 0) return list;
   const withAny = enabled.filter(code => cust.byCurrency[code] && cust.byCurrency[code].allRecords.length > 0);
@@ -162,14 +166,15 @@ function extractCopyableAscii(rawText) {
   return m ? m.join(' ') : '';
 }
 
-async function exportCustomerPDF() {
+async function exportCustomerPDF(includeArchive = false) {
   const cust = groupedCustomers.find(c => c.name === currentCustomerName);
   if (!cust) return;
   if (typeof window.html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
     return showToast('يرجى الاتصال بالإنترنت أول مرة لتحميل محرك PDF');
   }
 
-  const activeCodes = getActiveCurrenciesForReport(cust);
+  const isFullReport = Boolean(includeArchive);
+  const activeCodes = getActiveCurrenciesForReport(cust, isFullReport);
   const headerCurrencyText = activeCodes.map(getCurrencyUnitWord).join(' / ');
 
   const overlay = document.getElementById('pdfBusyOverlay');
@@ -196,30 +201,65 @@ async function exportCustomerPDF() {
     const summaryRowsHtml = activeCodes.map(code => {
       const info = cust.byCurrency[code];
       const unit = getCurrencyUnitWord(code);
-      const balText = Math.abs(info.balance) < 0.001
+
+      let totalDebt = info.totalDebt;
+      let totalPay = info.totalPay;
+      let balance = info.balance;
+
+      if (isFullReport) {
+        totalDebt = 0;
+        totalPay = 0;
+        (info.allRecords || []).forEach(r => {
+          if (r.kind === 'debt') totalDebt += r.amount;
+          else totalPay += r.amount;
+        });
+        balance = totalDebt - totalPay;
+      }
+
+      const balText = Math.abs(balance) < 0.001
         ? `0 ${unit} (خالص)`
-        : (info.balance > 0 ? `${formatNum(info.balance)} ${unit}` : `له ${formatNum(Math.abs(info.balance))} ${unit}`);
+        : (balance > 0 ? `${formatNum(balance)} ${unit}` : `له ${formatNum(Math.abs(balance))} ${unit}`);
       return `
         <tr>
           <td style="padding:9px 10px;border:1px solid #cbd5e1;font-weight:800;color:#1e293b;text-align:right;background:#f8fafc;width:110px;">${unit}</td>
-          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(info.totalDebt)} ${unit}</td>
-          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(info.totalPay)} ${unit}</td>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(totalDebt)} ${unit}</td>
+          <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:700;color:#1f2937;direction:ltr;">${formatNum(totalPay)} ${unit}</td>
           <td style="padding:9px 10px;border:1px solid #cbd5e1;text-align:center;font-weight:800;color:#0f172a;direction:ltr;background:#fcfdff;">${balText}</td>
         </tr>
       `;
     }).join('');
 
-    // 2. جدول الحركات المربع بالكامل (كل عملية وعمود داخل خانة بحدود أفقية وعمودية)
-    const unifiedRecords = cust.activeRecords || [];
+    // 2. جدول الحركات المربع بالكامل (الحالية فقط أو كامل العمليات مع الأرشيف للمطابقة)
+    const activeIdSet = new Set((cust.activeRecords || []).map(r => String(r.id)));
+    let unifiedRecords;
+    if (isFullReport) {
+      unifiedRecords = [];
+      activeCodes.forEach(code => {
+        (cust.byCurrency[code].allRecords || []).forEach(r => unifiedRecords.push(r));
+      });
+      unifiedRecords.sort((a, b) => {
+        const da = formatDate(a.date);
+        const db = formatDate(b.date);
+        if (da !== db) return da.localeCompare(db);
+        return String(a.id).localeCompare(String(b.id));
+      });
+    } else {
+      unifiedRecords = cust.activeRecords || [];
+    }
+
     const txRowsHtml = unifiedRecords.map((r, i) => {
       const code = r.currency || getRecordCurrency(r);
       const unit = getCurrencyUnitWord(code);
       const isDebt = r.kind === 'debt';
+      const isArchivedRow = isFullReport && !activeIdSet.has(String(r.id));
+      const archBadge = isArchivedRow
+        ? `<div style="font-size:10px;color:#64748b;font-weight:600;margin-top:2px;">(أرشيف)</div>`
+        : '';
       return `
         <tr style="background:${i % 2 === 1 ? '#fafafa' : '#ffffff'};">
           <td style="padding:8px 7px;border:1px solid #cbd5e1;text-align:center;color:#475569;font-weight:700;">${i + 1}</td>
           <td style="padding:8px 7px;border:1px solid #cbd5e1;white-space:nowrap;color:#334155;text-align:center;">${escapeHtml(formatDate(r.date))}</td>
-          <td style="padding:8px 7px;border:1px solid #cbd5e1;font-weight:700;color:${isDebt ? '#334155' : '#475569'};white-space:nowrap;text-align:center;">${isDebt ? 'دين (+)' : 'دفعة (−)'}</td>
+          <td style="padding:8px 7px;border:1px solid #cbd5e1;font-weight:700;color:${isDebt ? '#334155' : '#475569'};white-space:nowrap;text-align:center;">${isDebt ? 'دين (+)' : 'دفعة (−)'}${archBadge}</td>
           <td style="padding:8px 7px;border:1px solid #cbd5e1;direction:ltr;text-align:center;font-weight:800;color:#0f172a;white-space:nowrap;">${formatNum(r.amount)} ${unit}</td>
           <td style="padding:8px 8px;border:1px solid #cbd5e1;color:#334155;">${escapeHtml(r.note || '—')}</td>
         </tr>
@@ -241,7 +281,7 @@ async function exportCustomerPDF() {
             </div>
           </div>
           <div style="text-align:left;font-size:12px;color:#475569;line-height:1.65;border-right:1px solid #cbd5e1;padding-right:14px;">
-            <div style="font-size:14.5px;font-weight:800;color:#1e293b;">كشف حساب زبون</div>
+            <div style="font-size:14.5px;font-weight:800;color:#1e293b;">${isFullReport ? 'كشف حساب شامل (مطابقة)' : 'كشف حساب زبون'}</div>
             <div>التاريخ: ${todayString()}</div>
             <div>العملة: ${headerCurrencyText}</div>
           </div>
@@ -274,7 +314,7 @@ async function exportCustomerPDF() {
 
         <!-- عنوان وجدول الحركات المربع بالكامل -->
         <div style="font-size:12.5px;font-weight:800;color:#334155;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
-          <span>جدول العمليات والحركات</span>
+          <span>${isFullReport ? 'جدول كامل العمليات (الحالية + الأرشيف)' : 'جدول العمليات والحركات'}</span>
           <span style="font-size:11.5px;color:#64748b;font-weight:700;">عدد الحركات: ${unifiedRecords.length}</span>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:12.6px;border:1.2px solid #94a3b8;">
@@ -467,15 +507,15 @@ async function exportCustomerPDF() {
     }
 
     const safeName = cust.name.replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '').trim() || 'كشف_حساب';
-    const fileName = `كشف_حساب_${safeName}.pdf`;
+    const fileName = `${isFullReport ? 'كشف_شامل' : 'كشف_حساب'}_${safeName}.pdf`;
     const pdfBlob = doc.output('blob');
     const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       await navigator.share({
         files: [pdfFile],
-        title: `كشف حساب ${cust.name}`,
-        text: `كشف حساب ${cust.name} - ${settings.shopName}`
+        title: `${isFullReport ? 'كشف حساب شامل' : 'كشف حساب'} ${cust.name}`,
+        text: `${isFullReport ? 'كشف حساب شامل (مطابقة)' : 'كشف حساب'} ${cust.name} - ${settings.shopName}`
       });
     } else {
       const url = URL.createObjectURL(pdfBlob);

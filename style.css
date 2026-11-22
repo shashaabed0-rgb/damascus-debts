@@ -473,7 +473,7 @@ button, input, textarea, select { font-family: inherit; }
 .modal-backdrop.open { display: flex; }
 #addModal { z-index: 200; }
 #editCustomerModal, #editWorkshopModal { z-index: 250; }
-#confirmModal { z-index: 300; }
+#confirmModal, #aboutModal { z-index: 300; }
 #exitModal { z-index: 350; }
 
 .modal-sheet {
@@ -1662,4 +1662,134 @@ html[data-theme="dark"] .exit-prompt-box {
   background: #23324d;
   color: #f8fafc;
   border: 1px solid #3c5278;
+}
+
+/* ==================== زر إرسال الأرشيف PDF + نافذة حول التطبيق ==================== */
+.archive-export-bar {
+  margin: 2px 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
+}
+.archive-pdf-btn {
+  padding: 10px 13px;
+  font-size: 13.5px;
+  border-radius: 11px;
+}
+
+.side-ver-badge {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 8px;
+  direction: ltr;
+  flex-shrink: 0;
+}
+
+.about-settings-btn {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 13px 15px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: right;
+  color: var(--text);
+  transition: background 0.15s, border-color 0.15s;
+}
+.about-settings-btn:active { background: var(--primary-soft); }
+
+.about-hero {
+  text-align: center;
+  padding: 4px 6px 14px;
+}
+.about-app-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  object-fit: contain;
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  padding: 4px;
+  margin: 0 auto 10px;
+  display: block;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+.about-app-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
+}
+.about-ver-pill {
+  display: inline-block;
+  margin-top: 6px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 12px;
+  border-radius: 20px;
+  direction: ltr;
+}
+.about-desc {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.about-info-box {
+  background: #f8fafc;
+  border: 1.2px solid var(--border);
+  border-radius: 13px;
+  overflow: hidden;
+}
+.about-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 13px;
+  font-size: 13.5px;
+}
+.about-info-row + .about-info-row {
+  border-top: 1px solid var(--border);
+}
+.about-info-lbl {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.about-info-val {
+  color: var(--text);
+  font-weight: 800;
+}
+.about-copyright {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+html[data-theme="dark"] .about-info-box {
+  background: #131c2d;
+  border-color: var(--border);
+}
+html[data-theme="dark"] .about-settings-btn {
+  background: var(--card);
+  border-color: var(--border);
+}
+html[data-theme="dark"] .about-app-icon {
+  background: #f1f5f9;
+  border-color: var(--border);
 }

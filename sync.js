@@ -17,6 +17,15 @@ function createIsolatedAuthClient() {
   });
 }
 
+// ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
+const APP_META = {
+  appName: 'دفتر الديون السحابي',
+  version: 'v12.0',
+  developerOrg: 'مركز الدمشقي للصيانة',
+  developerName: 'أبو العز',
+  developerPhone: '' // ضع رقم التواصل هنا لتثبيته لجميع الورشات (أو يُؤخذ تلقائياً من هاتف المحل)
+};
+
 const CURRENCIES = {
   USD: { code: 'USD', symbol: '$', name: 'دولار', short: 'دولار' },
   SYP: { code: 'SYP', symbol: 'ل.س', name: 'ليرة سوري', short: 'ليرة سوري' }

@@ -129,6 +129,14 @@
           <span class="side-item-txt">قفل التطبيق الآن</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
+
+        <div class="side-divider"></div>
+        <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
+          <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+          <span class="side-item-txt">حول التطبيق</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v12.0</span>
+          <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
       </nav>
 
       <div class="side-theme-bar">
@@ -696,6 +704,20 @@
           <button type="button" class="btn btn-danger" onclick="handleLogout()">تسجيل الخروج</button>
         </div>
       </div>
+
+      <!-- زر حول التطبيق في صفحة الضبط -->
+      <button type="button" class="about-settings-btn" onclick="openAboutModal()">
+        <span class="settings-drawer-left">
+          <span class="settings-drawer-ic drive">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </span>
+          <div>
+            <div class="settings-drawer-title">حول التطبيق والمطور</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v12.0</div>
+          </div>
+        </span>
+        <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
     </div>
   </section>
 
@@ -808,6 +830,51 @@
         <button class="btn btn-danger" onclick="executeConfirmedDelete()">نعم، احذف</button>
         <button class="btn btn-light" onclick="closeModal('confirmModal')">إلغاء</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== نافذة حول التطبيق ==================== -->
+  <div class="modal-backdrop" id="aboutModal">
+    <div class="modal-sheet" style="max-width:430px;">
+      <div class="sheet-head">
+        <h3>حول التطبيق</h3>
+        <button class="close-btn" onclick="closeModal('aboutModal')">✕</button>
+      </div>
+
+      <div class="about-hero">
+        <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
+        <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v12.0</span>
+        <p class="about-desc">نظام متكامل لإدارة ديون ودفعات الزبائن بالعملتين مع مزامنة سحابية فورية وكشوفات حساب PDF.</p>
+      </div>
+
+      <div class="about-info-box">
+        <div class="about-info-row">
+          <span class="about-info-lbl">الورشة / الجهة</span>
+          <strong class="about-info-val" id="aboutDevOrg">مركز الدمشقي للصيانة</strong>
+        </div>
+        <div class="about-info-row">
+          <span class="about-info-lbl">الإشراف والتطوير</span>
+          <strong class="about-info-val" id="aboutDevName">أبو العز</strong>
+        </div>
+        <div class="about-info-row" id="aboutPhoneRow">
+          <span class="about-info-lbl">رقم التواصل</span>
+          <strong class="about-info-val" id="aboutDevPhone" dir="ltr"></strong>
+        </div>
+      </div>
+
+      <div class="action-grid hidden" id="aboutContactBtns" style="margin-top:12px;margin-bottom:4px;">
+        <a id="aboutCallLink" class="btn btn-light" style="text-decoration:none;" href="#">
+          <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span>اتصال</span>
+        </a>
+        <a id="aboutWaLink" class="btn btn-wa" style="text-decoration:none;" href="#" target="_blank" rel="noopener">
+          <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <span>واتساب</span>
+        </a>
+      </div>
+
+      <div class="about-copyright" id="aboutCopyright">© 2026 مركز الدمشقي للصيانة — جميع الحقوق محفوظة</div>
     </div>
   </div>
 

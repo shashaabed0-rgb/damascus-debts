@@ -121,7 +121,8 @@ function updateBodyScrollLock() {
     document.getElementById('addModal').classList.contains('open') ||
     document.getElementById('editCustomerModal').classList.contains('open') ||
     document.getElementById('editWorkshopModal').classList.contains('open') ||
-    document.getElementById('confirmModal').classList.contains('open');
+    document.getElementById('confirmModal').classList.contains('open') ||
+    document.getElementById('aboutModal').classList.contains('open');
   document.body.classList.toggle('no-scroll', anyOpen);
 }
 
@@ -210,7 +211,7 @@ window.addEventListener('popstate', () => {
   }
 
   // تنظيف احتياطي في حال كانت أي طبقة مفتوحة بصرياً
-  const fallbackLayers = ['sideMenu', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'accountsView', 'settingsView', 'detailView'];
+  const fallbackLayers = ['sideMenu', 'aboutModal', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'accountsView', 'settingsView', 'detailView'];
   for (const id of fallbackLayers) {
     const domId = id === 'sideMenu' ? 'sideMenuBackdrop' : id;
     if (document.getElementById(domId).classList.contains('open')) {
@@ -888,7 +889,15 @@ function renderCustomerDetail(name) {
         ${rows}
       `;
     }).join('');
-    document.getElementById('archiveBody').innerHTML = archHtml;
+    const fullPdfBtnHtml = `
+      <div class="archive-export-bar">
+        <button type="button" class="btn btn-pdf archive-pdf-btn" onclick="exportCustomerPDF(true)">
+          <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>إرسال كشف شامل PDF (الأرشيف + الحالية)</span>
+        </button>
+      </div>
+    `;
+    document.getElementById('archiveBody').innerHTML = fullPdfBtnHtml + archHtml;
   } else {
     drawer.classList.add('hidden');
     drawer.classList.remove('open');
@@ -1709,6 +1718,48 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 
+// ==================== نافذة حول التطبيق والمطور ====================
+function openAboutModal() {
+  const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
+  const ver = (APP_META && APP_META.version) || 'v12.0';
+  const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
+  const devName = (APP_META && APP_META.developerName) || 'أبو العز';
+  const shopPhones = getShopPhonesList();
+  const phone = ((APP_META && APP_META.developerPhone) || '').trim() || (shopPhones[0] || '');
+
+  document.getElementById('aboutAppName').textContent = appName;
+  document.getElementById('aboutVersionPill').textContent = `الإصدار ${ver}`;
+  document.getElementById('aboutDevOrg').textContent = org;
+  document.getElementById('aboutDevName').textContent = devName;
+  document.getElementById('aboutCopyright').textContent = `© ${new Date().getFullYear()} ${org} — جميع الحقوق محفوظة`;
+
+  const phoneRow = document.getElementById('aboutPhoneRow');
+  const contactBtns = document.getElementById('aboutContactBtns');
+  if (phone) {
+    document.getElementById('aboutDevPhone').textContent = phone;
+    phoneRow.classList.remove('hidden');
+    contactBtns.classList.remove('hidden');
+    const cleanTel = phone.replace(/[^\d+]/g, '');
+    document.getElementById('aboutCallLink').href = `tel:${cleanTel}`;
+    const waNum = formatPhoneForWa(phone);
+    document.getElementById('aboutWaLink').href = waNum ? `https://wa.me/${waNum}` : '#';
+  } else {
+    phoneRow.classList.add('hidden');
+    contactBtns.classList.add('hidden');
+  }
+
+  openModal('aboutModal');
+}
+
+function syncAppVersionBadges() {
+  const ver = (APP_META && APP_META.version) || 'v12.0';
+  const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
+  const dBadge = document.getElementById('drawerVersionBadge');
+  if (dBadge) dBadge.textContent = ver;
+  const sSub = document.getElementById('settingsAboutSub');
+  if (sSub) sSub.textContent = `${org} • الإصدار ${ver}`;
+}
+
 // ==================== مظهر التطبيق (ليلي / نهاري / تلقائي حسب الجهاز) ====================
 const systemDarkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
@@ -1835,6 +1886,7 @@ function registerPwaServiceWorker() {
   });
 }
 
+syncAppVersionBadges();
 registerPwaServiceWorker();
 
 // بدء تشغيل التطبيق بعد تحميل كل الملفات
