@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v20.0',
+  version: 'v21.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -49,6 +49,10 @@ const DEVICE_SETTINGS_KEY = 'debt_device_settings_sb_v1';
 const LAST_SESSION_KEY = 'debt_last_session_sb_v1';
 const DEVICE_UID_KEY = 'debt_device_uid_v1';
 const DEVICE_LOGOUT_VER_PREFIX = 'debt_logout_ver_v1_';
+const FREE_OFFLINE_MAX_CUSTOMERS = 25;
+const FREE_OFFLINE_WORKSHOP_ID = 'free_offline_local';
+const FREE_OFFLINE_MODE_KEY = 'debt_free_offline_mode_v1';
+const FREE_OFFLINE_WS_SETTINGS_KEY = 'debt_free_offline_ws_settings_v1';
 let lastSyncMeta = { syncedAt: '', localUpdatedAt: '', lastAction: '' };
 const memberCredsMap = new Map();
 const workshopCredsMap = new Map();
@@ -133,11 +137,17 @@ let tempSettingsWa = 'normal';
 let tempLogoData = '';
 
 // ==================== الصلاحيات ====================
+function isFreeOfflineMode() {
+  return !!(currentProfile && currentProfile.is_free_offline === true);
+}
 function isAdmin() {
-  return !!(currentProfile && (currentProfile.role === 'admin' || currentProfile.role === 'super_admin'));
+  return !!(currentProfile && (currentProfile.role === 'admin' || currentProfile.role === 'super_admin' || currentProfile.is_free_offline === true));
+}
+function canManageAccounts() {
+  return !isFreeOfflineMode() && !!(currentProfile && (currentProfile.role === 'admin' || currentProfile.role === 'super_admin'));
 }
 function isSuperAdmin() {
-  return !!(currentProfile && currentProfile.role === 'super_admin');
+  return !isFreeOfflineMode() && !!(currentProfile && currentProfile.role === 'super_admin');
 }
 function canDeleteRecords() {
   return isAdmin() || !!(currentProfile && currentProfile.can_delete);
@@ -145,6 +155,7 @@ function canDeleteRecords() {
 function getRoleLabel(role) {
   if (role === 'super_admin') return 'مدير عام';
   if (role === 'admin') return 'مدير';
+  if (role === 'free_offline') return 'حساب مجاني (أوفلاين)';
   return 'موظف / جهاز';
 }
 
@@ -558,6 +569,91 @@ function isSupabaseNotFoundError(err) {
   return err.code === 'PGRST116' || err.status === 406;
 }
 
+function loadFreeOfflineWorkshopSettings() {
+  try {
+    const raw = localStorage.getItem(FREE_OFFLINE_WS_SETTINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) {}
+  return {
+    shopName: 'دفتر الديون (مجاني)',
+    shopAddress: '',
+    shopPhone: '',
+    shopPhones: [],
+    shopLogo: '',
+    generalNote: '',
+    shamCashEnabled: false,
+    shamCashCode: '',
+    waConfig: { ...DEFAULT_WA_CONFIG },
+    currency: 'BOTH'
+  };
+}
+
+function saveFreeOfflineWorkshopSettings(wsSettingsObj) {
+  try {
+    localStorage.setItem(FREE_OFFLINE_WS_SETTINGS_KEY, JSON.stringify(wsSettingsObj || {}));
+  } catch (e) {}
+}
+
+function updateFreeOfflineStatusBar() {
+  if (!isFreeOfflineMode()) return;
+  const used = groupedCustomers.length;
+  const max = FREE_OFFLINE_MAX_CUSTOMERS;
+  const state = used >= max ? 'err' : 'ok';
+  updateSyncStatusUI(`حساب مجاني أوفلاين • ${used} / ${max} زبون`, state);
+
+  const txtEl = document.getElementById('freeSettingsUsageText');
+  const barEl = document.getElementById('freeSettingsUsageBar');
+  if (txtEl) txtEl.textContent = `${used} / ${max} زبون`;
+  if (barEl) {
+    const pct = Math.min(100, Math.round((used / max) * 100));
+    barEl.style.width = `${pct}%`;
+    barEl.className = 'free-meter-fill' + (used >= max ? ' full' : (used >= max - 5 ? ' warn' : ''));
+  }
+}
+
+function enterFreeOfflineMode(isAutoResume = false) {
+  try { localStorage.setItem(FREE_OFFLINE_MODE_KEY, '1'); } catch (e) {}
+  const wsSettings = loadFreeOfflineWorkshopSettings();
+
+  currentUser = { id: 'free_offline_user', email: '' };
+  currentProfile = {
+    user_id: 'free_offline_user',
+    workshop_id: FREE_OFFLINE_WORKSHOP_ID,
+    role: 'free_offline',
+    display_name: 'حساب مجاني',
+    email: '',
+    can_delete: true,
+    active: true,
+    is_free_offline: true
+  };
+  currentWorkshop = {
+    id: FREE_OFFLINE_WORKSHOP_ID,
+    name: wsSettings.shopName || 'دفتر الديون (مجاني)',
+    settings: wsSettings
+  };
+
+  applyWorkshopSettingsToState(currentWorkshop);
+  loadWorkshopLocalData();
+  pendingQueue = [];
+  persistData();
+  applyBrandingUI();
+  applyPermissionsUI();
+  updateHeaderLockButton();
+
+  document.getElementById('loginScreen').classList.add('hidden');
+  if (settings.lockEnabled && settings.pin && sessionStorage.getItem('debt_unlocked_v3') !== '1') {
+    showLockScreen();
+  } else {
+    showMainView();
+  }
+  if (!isAutoResume) {
+    showToast(`مرحباً بك في الحساب المجاني الأوفلاين (حتى ${FREE_OFFLINE_MAX_CUSTOMERS} زبون)`);
+  }
+}
+
 async function initApp() {
   const params = new URLSearchParams(window.location.search);
   const copyParam = params.get('copy');
@@ -566,6 +662,12 @@ async function initApp() {
     return;
   }
   loadDeviceSettings();
+  if (typeof syncLoginDevCardUI === 'function') syncLoginDevCardUI();
+
+  if (localStorage.getItem(FREE_OFFLINE_MODE_KEY) === '1') {
+    enterFreeOfflineMode(true);
+    return;
+  }
 
   let activeUser = null;
   const client = ensureSupabaseClient();
@@ -637,6 +739,7 @@ async function handleLogin(ev) {
       return;
     }
 
+    try { localStorage.removeItem(FREE_OFFLINE_MODE_KEY); } catch (e) {}
     saveLastUser(data.user);
     await loadUserWorkspace(data.user, true);
   } catch (err) {
@@ -741,15 +844,41 @@ async function loadUserWorkspace(user, forceNetworkCheck = false) {
 }
 
 function applyPermissionsUI() {
-  document.getElementById('drawerAccountsBtn').classList.toggle('hidden', !isAdmin());
-  document.getElementById('settingsAccountsShortcut').classList.toggle('hidden', !isAdmin());
+  const freeMode = isFreeOfflineMode();
+  document.getElementById('drawerAccountsBtn').classList.toggle('hidden', !canManageAccounts());
+  document.getElementById('settingsAccountsShortcut').classList.toggle('hidden', !canManageAccounts());
   document.getElementById('detailDeleteCustomerBtn').classList.toggle('hidden', !canDeleteRecords());
   document.getElementById('workshopAdminSettingsWrap').classList.toggle('hidden', !isAdmin());
   document.getElementById('currencySettingField').classList.toggle('hidden', !isAdmin());
   document.getElementById('restoreBackupWrap')?.classList.toggle('hidden', !isAdmin());
+  document.getElementById('syncBtn')?.classList.toggle('hidden', freeMode);
+  document.getElementById('cloudAccountCard')?.classList.toggle('hidden', freeMode);
+  document.getElementById('freeAccountCard')?.classList.toggle('hidden', !freeMode);
+  const titleEl = document.getElementById('shopSettingsCardTitle');
+  if (titleEl) {
+    titleEl.textContent = freeMode
+      ? 'بيانات المحل واللوغو (تُحفظ على هذا الجهاز)'
+      : 'بيانات المحل واللوغو (تتزامن مع جميع الأجهزة)';
+  }
 }
 
 async function handleLogout() {
+  if (isFreeOfflineMode()) {
+    if (!confirm('هل تريد الخروج إلى شاشة تسجيل الدخول؟ (ستبقى بياناتك المحلية محفوظة على الجهاز عند العودة للحساب المجاني)')) return;
+    try { localStorage.removeItem(FREE_OFFLINE_MODE_KEY); } catch (e) {}
+    sessionStorage.removeItem('debt_unlocked_v3');
+    currentUser = null;
+    currentProfile = null;
+    currentWorkshop = null;
+    allRecords = [];
+    pendingQueue = [];
+    groupedCustomers = [];
+    visibleCustomers = [];
+    resetAllOpenLayersForLogout();
+    showLoginScreen();
+    showToast('تم الخروج من الحساب المجاني');
+    return;
+  }
   if (pendingQueue.length > 0) {
     if (!confirm(`يوجد ${pendingQueue.length} عملية لم تُرفع بعد للسحابة. هل تريد تسجيل الخروج رغم ذلك؟`)) return;
   }
@@ -856,7 +985,7 @@ function subscribePresence() {
     try { sb.removeChannel(presenceChannel); } catch (e) {}
     presenceChannel = null;
   }
-  if (!currentUser || !currentProfile || !ensureSupabaseClient() || !navigator.onLine) return;
+  if (!currentUser || !currentProfile || isFreeOfflineMode() || !ensureSupabaseClient() || !navigator.onLine) return;
 
   presenceChannel = sb.channel('damascus-online-presence', {
     config: { presence: { key: currentUser.id } }
@@ -910,7 +1039,7 @@ function subscribeRealtime() {
     client.removeChannel(workshopStatusChannel);
     workshopStatusChannel = null;
   }
-  if (!currentProfile || !client || !navigator.onLine) return;
+  if (!currentProfile || isFreeOfflineMode() || !client || !navigator.onLine) return;
 
   realtimeChannel = sb
     .channel('debt-live-' + currentProfile.workshop_id)
@@ -987,6 +1116,10 @@ function showOfflineStatusBanner(prefix = 'بدون شبكة (وضع أوفلا�
 }
 
 async function syncData(silent) {
+  if (isFreeOfflineMode()) {
+    updateFreeOfflineStatusBar();
+    return;
+  }
   if (isSyncing || !currentProfile) return;
   const syncBtn = document.getElementById('syncBtn');
   const client = ensureSupabaseClient();
@@ -1265,6 +1398,7 @@ async function syncData(silent) {
 
 // ==================== طابور العمليات (أوفلاين أولاً) ====================
 function queueUpsertRecord(rec, opts = {}) {
+  if (isFreeOfflineMode()) return;
   const idStr = String(rec.id);
   const dbRec = toDbRecord(rec);
   const isNewCust = Boolean(opts && opts.isNewCustomer);
@@ -1278,6 +1412,7 @@ function queueUpsertRecord(rec, opts = {}) {
 }
 
 function queueDeleteRecord(targetId) {
+  if (isFreeOfflineMode()) return;
   const idStr = String(targetId);
   const qIdx = pendingQueue.findIndex(q => (q.action === 'upsert' || q.action === 'add') && String(q.payload.id) === idStr);
   if (qIdx !== -1) pendingQueue.splice(qIdx, 1);
@@ -1295,6 +1430,11 @@ function queueUpdateRecord(oldId, updatedFields) {
 
 function triggerSyncOrOfflineToast(onlineMsg, offlineMsg) {
   saveLastSyncMeta({ localUpdatedAt: formatDateTimeDisplay(new Date()) });
+  if (isFreeOfflineMode()) {
+    showToast('تم الحفظ على الجهاز ✓');
+    updateFreeOfflineStatusBar();
+    return;
+  }
   if (navigator.onLine && ensureSupabaseClient()) {
     showToast(onlineMsg);
     syncData(false);
@@ -1305,6 +1445,7 @@ function triggerSyncOrOfflineToast(onlineMsg, offlineMsg) {
 }
 
 window.addEventListener('online', () => {
+  if (isFreeOfflineMode()) return;
   showToast('عاد الإنترنت، جاري المزامنة التلقائية...');
   if (!ensureSupabaseClient()) {
     window.location.reload();
@@ -1314,13 +1455,14 @@ window.addEventListener('online', () => {
   syncData(false);
 });
 window.addEventListener('offline', () => {
+  if (isFreeOfflineMode()) return;
   showOfflineStatusBanner('انقطع الإنترنت (بياناتك محفوظة)');
 });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && isUnlocked && navigator.onLine) syncData(true);
+  if (!document.hidden && isUnlocked && !isFreeOfflineMode() && navigator.onLine) syncData(true);
 });
 setInterval(() => {
-  if (isUnlocked && !document.hidden && navigator.onLine) syncData(true);
+  if (isUnlocked && !document.hidden && !isFreeOfflineMode() && navigator.onLine) syncData(true);
 }, 30000);
 
 // ==================== صفحة إدارة الحسابات والأجهزة والورشات ====================
@@ -1333,7 +1475,7 @@ function showAccAlert(msg, isOk = false) {
 }
 
 function openAccountsView() {
-  if (!isAdmin()) return showToast('هذه الصفحة مخصصة للمدير فقط');
+  if (!canManageAccounts()) return showToast('إدارة الحسابات والأجهزة متاحة في النسخة السحابية فقط');
   showAccAlert('');
   document.getElementById('accWorkshopSub').textContent = settings.shopName || '';
   document.getElementById('accTabsWrap').classList.toggle('hidden', !isSuperAdmin());

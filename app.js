@@ -123,7 +123,8 @@ function updateBodyScrollLock() {
     document.getElementById('editCustomerModal').classList.contains('open') ||
     document.getElementById('editWorkshopModal').classList.contains('open') ||
     document.getElementById('confirmModal').classList.contains('open') ||
-    document.getElementById('aboutModal').classList.contains('open');
+    document.getElementById('aboutModal').classList.contains('open') ||
+    document.getElementById('freeLimitModal').classList.contains('open');
   document.body.classList.toggle('no-scroll', anyOpen);
 }
 
@@ -212,7 +213,7 @@ window.addEventListener('popstate', () => {
   }
 
   // تنظيف احتياطي في حال كانت أي طبقة مفتوحة بصرياً
-  const fallbackLayers = ['sideMenu', 'aboutModal', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'accountsView', 'settingsView', 'detailView'];
+  const fallbackLayers = ['sideMenu', 'freeLimitModal', 'aboutModal', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'accountsView', 'settingsView', 'detailView'];
   for (const id of fallbackLayers) {
     const domId = id === 'sideMenu' ? 'sideMenuBackdrop' : id;
     if (document.getElementById(domId).classList.contains('open')) {
@@ -390,6 +391,10 @@ function showMainView() {
   armRootExitGuard();
   applyMainFiltersVisibility();
   processAndRender();
+  if (isFreeOfflineMode()) {
+    updateFreeOfflineStatusBar();
+    return;
+  }
   if (!navigator.onLine || !ensureSupabaseClient()) {
     showOfflineStatusBanner('بدون شبكة');
   } else {
@@ -716,6 +721,7 @@ function processAndRender() {
   if (dlEl) dlEl.innerHTML = '';
 
   renderCustomers();
+  if (isFreeOfflineMode()) updateFreeOfflineStatusBar();
 }
 
 function setFilter(f, btn) {
@@ -1141,7 +1147,36 @@ function checkDuplicateEditCustName() {
   return null;
 }
 
+function openFreeLimitModal() {
+  const phone = ((APP_META && APP_META.developerPhone) || '0994373742').trim();
+  const cleanTel = phone.replace(/[^\d+]/g, '');
+  const waNum = formatPhoneForWa(phone);
+  const waMsg = encodeURIComponent('السلام عليكم، أرغب بالاشتراك في النسخة السحابية لتطبيق دفتر الديون (أكثر من 25 زبون).');
+  const cLink = document.getElementById('limitCallLink');
+  const wLink = document.getElementById('limitWaLink');
+  if (cLink) cLink.href = `tel:${cleanTel}`;
+  if (wLink) wLink.href = waNum ? `https://wa.me/${waNum}?text=${waMsg}` : '#';
+  openModal('freeLimitModal');
+}
+
+function wouldExceedFreeCustomerLimit(candidateName, replacingOldName = null) {
+  if (!isFreeOfflineMode()) return false;
+  const cleanNew = cleanDisplayCustomerName(candidateName);
+  if (!cleanNew) return false;
+  const existingNames = new Set(groupedCustomers.map(c => c.name));
+  if (replacingOldName && existingNames.has(replacingOldName)) {
+    // إعادة تسمية زبون موجود لا تزيد عدد الزبائن
+    return false;
+  }
+  if (existingNames.has(candidateName)) return false;
+  return existingNames.size >= FREE_OFFLINE_MAX_CUSTOMERS;
+}
+
 function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt', preferredCurrency = null, allowCurrSwitch = false) {
+  if (!prefillName && isFreeOfflineMode() && groupedCustomers.length >= FREE_OFFLINE_MAX_CUSTOMERS) {
+    openFreeLimitModal();
+    return;
+  }
   editingTxId = null;
   txOriginCustomerName = String(prefillName || '').trim();
   txOriginDisplayName = cleanDisplayCustomerName(txOriginCustomerName);
@@ -1244,6 +1279,11 @@ function saveTransaction() {
       document.getElementById('txName').focus();
       return showToast(`الاسم مشابه لزبون موجود (${cleanDisplayCustomerName(dupMatch.name)}) — عدّل الاسم قبل التثبيت`);
     }
+  }
+  if (!isKeepingOrigin && wouldExceedFreeCustomerLimit(name, editingTxId ? txOriginCustomerName : null)) {
+    closeModal('addModal');
+    openFreeLimitModal();
+    return;
   }
   if (!amount || amount <= 0) return showToast('يرجى إدخال مبلغ صحيح');
 
@@ -1476,6 +1516,17 @@ function openSettingsView() {
   document.getElementById('setAccountName').textContent = currentProfile?.display_name || '—';
   document.getElementById('setAccountEmail').textContent = currentProfile?.email || currentUser?.email || '—';
   document.getElementById('setAccountRole').textContent = currentProfile ? getRoleLabel(currentProfile.role) : '—';
+  if (isFreeOfflineMode()) {
+    updateFreeOfflineStatusBar();
+    const phone = ((APP_META && APP_META.developerPhone) || '0994373742').trim();
+    const cleanTel = phone.replace(/[^\d+]/g, '');
+    const waNum = formatPhoneForWa(phone);
+    const waMsg = encodeURIComponent('السلام عليكم، أرغب بالترقية للنسخة السحابية من تطبيق دفتر الديون.');
+    const fc = document.getElementById('freeUpgradeCallLink');
+    const fw = document.getElementById('freeUpgradeWaLink');
+    if (fc) fc.href = `tel:${cleanTel}`;
+    if (fw) fw.href = waNum ? `https://wa.me/${waNum}?text=${waMsg}` : '#';
+  }
 
   refreshLogoPreviewUI();
   updateSettingButtonsUI();
@@ -1619,13 +1670,17 @@ async function saveSettings() {
     if (currentWorkshop) {
       currentWorkshop.name = settings.shopName;
       currentWorkshop.settings = wsSettingsObj;
-      localStorage.setItem('debt_ctx_sb_' + currentUser.id, JSON.stringify({
-        profile: currentProfile,
-        workshop: currentWorkshop
-      }));
+      if (isFreeOfflineMode()) {
+        saveFreeOfflineWorkshopSettings(wsSettingsObj);
+      } else {
+        localStorage.setItem('debt_ctx_sb_' + currentUser.id, JSON.stringify({
+          profile: currentProfile,
+          workshop: currentWorkshop
+        }));
+      }
     }
 
-    if (navigator.onLine) {
+    if (!isFreeOfflineMode() && navigator.onLine && ensureSupabaseClient()) {
       const btn = document.getElementById('saveSettingsBtn');
       btn.disabled = true;
       btn.textContent = 'جاري الحفظ...';
@@ -1977,6 +2032,16 @@ async function handleRestoreBackupFile(ev) {
 }
 
 async function restoreRecordsArray(recs) {
+  if (isFreeOfflineMode()) {
+    const mergedNames = new Set(allRecords.map(r => String(r.name || '').trim()).filter(Boolean));
+    recs.forEach(raw => {
+      if (raw && raw.name && String(raw.name).trim()) mergedNames.add(String(raw.name).trim());
+    });
+    if (mergedNames.size > FREE_OFFLINE_MAX_CUSTOMERS) {
+      openFreeLimitModal();
+      return showToast(`الحساب المجاني يدعم حتى ${FREE_OFFLINE_MAX_CUSTOMERS} زبون فقط — الملف يحتوي على ${mergedNames.size} زبون`);
+    }
+  }
   let restoredCount = 0;
   const existingMap = new Map(allRecords.map(r => [String(r.id), r]));
   recs.forEach((raw, i) => {
@@ -2045,7 +2110,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v20.0';
+  const ver = (APP_META && APP_META.version) || 'v21.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2075,13 +2140,46 @@ function openAboutModal() {
   openModal('aboutModal');
 }
 
+function syncLoginDevCardUI() {
+  const ver = (APP_META && APP_META.version) || 'v21.0';
+  const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
+  const devName = (APP_META && APP_META.developerName) || 'أبو العز';
+  const phone = ((APP_META && APP_META.developerPhone) || '').trim();
+
+  const vBadge = document.getElementById('loginVersionBadge');
+  if (vBadge) vBadge.textContent = ver;
+  const orgEl = document.getElementById('loginDevOrg');
+  if (orgEl) orgEl.textContent = org;
+  const nameEl = document.getElementById('loginDevName');
+  if (nameEl) nameEl.textContent = devName;
+
+  const phoneRow = document.getElementById('loginPhoneRow');
+  const contactBtns = document.getElementById('loginContactBtns');
+  if (phone) {
+    const pEl = document.getElementById('loginDevPhone');
+    if (pEl) pEl.textContent = phone;
+    if (phoneRow) phoneRow.classList.remove('hidden');
+    if (contactBtns) contactBtns.classList.remove('hidden');
+    const cleanTel = phone.replace(/[^\d+]/g, '');
+    const cLink = document.getElementById('loginCallLink');
+    if (cLink) cLink.href = `tel:${cleanTel}`;
+    const waNum = formatPhoneForWa(phone);
+    const wLink = document.getElementById('loginWaLink');
+    if (wLink) wLink.href = waNum ? `https://wa.me/${waNum}` : '#';
+  } else {
+    if (phoneRow) phoneRow.classList.add('hidden');
+    if (contactBtns) contactBtns.classList.add('hidden');
+  }
+}
+
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v20.0';
+  const ver = (APP_META && APP_META.version) || 'v21.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
   const sSub = document.getElementById('settingsAboutSub');
   if (sSub) sSub.textContent = `${org} • الإصدار ${ver}`;
+  syncLoginDevCardUI();
 }
 
 // ==================== مظهر التطبيق (ليلي / نهاري / تلقائي حسب الجهاز) ====================
