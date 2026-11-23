@@ -5,6 +5,7 @@ function showQuickCopyScreen(code, shopName) {
   quickCopyCodeValue = String(code || '').trim();
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('lockScreen').classList.add('hidden');
+  document.getElementById('forceChangePassScreen')?.classList.add('hidden');
   document.getElementById('mainView').classList.add('hidden');
   document.getElementById('quickCopyScreen').classList.remove('hidden');
 
@@ -139,7 +140,8 @@ function updateBodyScrollLock() {
     document.getElementById('aboutModal').classList.contains('open') ||
     document.getElementById('freeLimitModal').classList.contains('open') ||
     document.getElementById('auditLogView').classList.contains('open') ||
-    document.getElementById('migrateFreeModal').classList.contains('open');
+    document.getElementById('migrateFreeModal').classList.contains('open') ||
+    document.getElementById('tempCredsOnceModal').classList.contains('open');
   document.body.classList.toggle('no-scroll', anyOpen);
 }
 
@@ -238,7 +240,7 @@ window.addEventListener('popstate', () => {
   }
 
   // تنظيف احتياطي في حال كانت أي طبقة مفتوحة بصرياً
-  const fallbackLayers = ['sideMenu', 'migrateFreeModal', 'freeLimitModal', 'aboutModal', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'auditLogView', 'accountsView', 'settingsView', 'detailView'];
+  const fallbackLayers = ['sideMenu', 'tempCredsOnceModal', 'migrateFreeModal', 'freeLimitModal', 'aboutModal', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'auditLogView', 'accountsView', 'settingsView', 'detailView'];
   for (const id of fallbackLayers) {
     const domId = id === 'sideMenu' ? 'sideMenuBackdrop' : id;
     const el = document.getElementById(domId);
@@ -315,6 +317,7 @@ function applyBrandingUI() {
 function showLockScreen() {
   isUnlocked = false;
   document.getElementById('mainView').classList.add('hidden');
+  document.getElementById('forceChangePassScreen')?.classList.add('hidden');
   document.getElementById('lockScreen').classList.remove('hidden');
   document.getElementById('lockErr').textContent = '';
   document.getElementById('pinInput').value = '';
@@ -421,9 +424,11 @@ async function unlockWithBiometrics() {
 function showMainView() {
   isUnlocked = true;
   document.getElementById('lockScreen').classList.add('hidden');
+  document.getElementById('forceChangePassScreen')?.classList.add('hidden');
   document.getElementById('mainView').classList.remove('hidden');
   armRootExitGuard();
   applyMainFiltersVisibility();
+  updateCustomerSortUI();
   processAndRender();
   if (isFreeOfflineMode()) {
     updateFreeOfflineStatusBar();
@@ -873,10 +878,50 @@ function processAndRender() {
   );
   const map = {};
 
+  function extractRecordTimestampMs(r) {
+    if (!r) return 0;
+    if (r.created_at) {
+      const t = Date.parse(r.created_at);
+      if (!isNaN(t) && t > 0) return t;
+    }
+    const idMatch = String(r.id || '').match(/(\d{13})/);
+    if (idMatch) {
+      const idMs = Number(idMatch[1]);
+      if (Number.isFinite(idMs) && idMs > 1500000000000) return idMs;
+    }
+    const dMid = parseYmdToLocalMidnight(r.date);
+    return dMid ? dMid.getTime() : 0;
+  }
+
   allRecords.forEach(r => {
     const name = String(r.name || '').trim();
     if (!name) return;
-    if (!map[name]) map[name] = { name, phone: '', rawRecords: [], hasStubPending: false };
+    if (!map[name]) {
+      map[name] = {
+        name,
+        phone: '',
+        rawRecords: [],
+        hasStubPending: false,
+        lastActivityTs: 0,
+        lastDateStr: '',
+        lastDateTs: 0,
+        firstDateTs: 0
+      };
+    }
+    const recTs = extractRecordTimestampMs(r);
+    if (recTs > map[name].lastActivityTs) map[name].lastActivityTs = recTs;
+    const normDate = formatDate(r.date);
+    const dateMid = parseYmdToLocalMidnight(normDate);
+    const dateTs = dateMid ? dateMid.getTime() : 0;
+    if (dateTs > 0) {
+      if (!map[name].lastDateTs || dateTs >= map[name].lastDateTs) {
+        map[name].lastDateTs = dateTs;
+        map[name].lastDateStr = normDate;
+      }
+      if (!map[name].firstDateTs || dateTs < map[name].firstDateTs) {
+        map[name].firstDateTs = dateTs;
+      }
+    }
     if (r.phone && String(r.phone).trim()) {
       map[name].phone = normalizeLocalPhoneInput(r.phone);
     }
@@ -904,6 +949,10 @@ function processAndRender() {
       records: entry.rawRecords,
       hasNoTransactions: entry.rawRecords.length === 0,
       hasStubPending: entry.hasStubPending,
+      lastActivityTs: entry.lastActivityTs || 0,
+      lastDateStr: entry.lastDateStr || '',
+      lastDateTs: entry.lastDateTs || 0,
+      firstDateTs: entry.firstDateTs || 0,
       conflictGroupKey: getConflictBaseKey(entry.name),
       isDuplicateConflict: false,
       conflictPeers: [],
@@ -930,18 +979,7 @@ function processAndRender() {
     }
   });
 
-  groupedCustomers = tempList.sort((a, b) => {
-    const aDup = a.isDuplicateConflict ? 1 : 0;
-    const bDup = b.isDuplicateConflict ? 1 : 0;
-    if (bDup !== aDup) return bDup - aDup;
-    if (aDup && bDup && a.conflictGroupKey !== b.conflictGroupKey) {
-      return a.conflictGroupKey.localeCompare(b.conflictGroupKey, 'ar');
-    }
-    const aHas = a.hasDebt ? 1 : 0;
-    const bHas = b.hasDebt ? 1 : 0;
-    if (bHas !== aHas) return bHas - aHas;
-    return a.name.localeCompare(b.name, 'ar');
-  });
+  groupedCustomers = sortCustomersArray(tempList);
 
   updateDuplicateConflictBannerUI();
   updateDueReminderBannerUI();
@@ -980,6 +1018,101 @@ function processAndRender() {
 
   renderCustomers();
   if (isFreeOfflineMode()) updateFreeOfflineStatusBar();
+}
+
+function sortCustomersArray(arr) {
+  const mode = settings.customerSortMode || 'latest';
+  const dateDir = settings.customerSortDateDir === 'desc' ? 'desc' : 'asc';
+
+  return arr.sort((a, b) => {
+    // تبقى الأسماء المكررة المتعارضة في الأعلى دائماً للتنبيه وتعديلها
+    const aDup = a.isDuplicateConflict ? 1 : 0;
+    const bDup = b.isDuplicateConflict ? 1 : 0;
+    if (bDup !== aDup) return bDup - aDup;
+    if (aDup && bDup && a.conflictGroupKey !== b.conflictGroupKey) {
+      return a.conflictGroupKey.localeCompare(b.conflictGroupKey, 'ar');
+    }
+
+    const aName = cleanDisplayCustomerName(a.name);
+    const bName = cleanDisplayCustomerName(b.name);
+
+    if (mode === 'alpha') {
+      return aName.localeCompare(bName, 'ar');
+    }
+
+    if (mode === 'date') {
+      const aDate = a.lastDateTs || a.lastActivityTs || 0;
+      const bDate = b.lastDateTs || b.lastActivityTs || 0;
+      if (aDate !== bDate) {
+        return dateDir === 'asc' ? (aDate - bDate) : (bDate - aDate);
+      }
+      if (a.lastActivityTs !== b.lastActivityTs) {
+        return dateDir === 'asc' ? (a.lastActivityTs - b.lastActivityTs) : (b.lastActivityTs - a.lastActivityTs);
+      }
+      return aName.localeCompare(bName, 'ar');
+    }
+
+    // الافتراضي: 'latest' (الأحدث إضافةً أو حركةً في الأعلى)
+    if (b.lastActivityTs !== a.lastActivityTs) {
+      return b.lastActivityTs - a.lastActivityTs;
+    }
+    if (b.lastDateTs !== a.lastDateTs) {
+      return b.lastDateTs - a.lastDateTs;
+    }
+    return aName.localeCompare(bName, 'ar');
+  });
+}
+
+function updateCustomerSortUI() {
+  const mode = settings.customerSortMode || 'latest';
+  const dateDir = settings.customerSortDateDir === 'desc' ? 'desc' : 'asc';
+  const bLatest = document.getElementById('sortBtnLatest');
+  const bAlpha = document.getElementById('sortBtnAlpha');
+  const bDate = document.getElementById('sortBtnDate');
+  if (bLatest) bLatest.classList.toggle('active', mode === 'latest');
+  if (bAlpha) bAlpha.classList.toggle('active', mode === 'alpha');
+  if (bDate) {
+    bDate.classList.toggle('active', mode === 'date');
+    bDate.textContent = dateDir === 'asc' ? 'حسب التاريخ ↑' : 'حسب التاريخ ↓';
+  }
+}
+
+function setCustomerSort(mode) {
+  if (mode === 'date' && settings.customerSortMode === 'date') {
+    settings.customerSortDateDir = settings.customerSortDateDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    settings.customerSortMode = (mode === 'alpha' || mode === 'date') ? mode : 'latest';
+  }
+  persistDeviceSettings();
+  updateCustomerSortUI();
+  groupedCustomers = sortCustomersArray(groupedCustomers);
+  renderCustomers();
+
+  if (settings.customerSortMode === 'latest') {
+    showToast('الترتيب: الأحدث أولاً');
+  } else if (settings.customerSortMode === 'alpha') {
+    showToast('الترتيب: أبجدي (أ ← ي)');
+  } else {
+    showToast(settings.customerSortDateDir === 'asc' ? 'الترتيب: الأقدم تاريخاً أولاً' : 'الترتيب: الأحدث تاريخاً أولاً');
+  }
+}
+
+function onMainSearchInput() {
+  const inp = document.getElementById('searchInput');
+  const clr = document.getElementById('mainSearchClearBtn');
+  if (clr) clr.classList.toggle('hidden', !(inp && inp.value.length > 0));
+  renderCustomers();
+}
+
+function clearMainSearch() {
+  const inp = document.getElementById('searchInput');
+  const clr = document.getElementById('mainSearchClearBtn');
+  if (inp) {
+    inp.value = '';
+    inp.focus();
+  }
+  if (clr) clr.classList.add('hidden');
+  renderCustomers();
 }
 
 function setFilter(f, btn) {
@@ -1116,6 +1249,9 @@ function renderCustomers() {
       ? [c.phone, 'بدون حركات']
       : [c.phone, `${c.activeRecords.length} حركة حالية`];
     if (c.archivedCount > 0) metaParts.push(`${c.archivedCount} بالأرشيف`);
+    if (c.lastDateStr && (settings.customerSortMode === 'date' || settings.customerSortMode === 'latest')) {
+      metaParts.push(c.lastDateStr);
+    }
     const meta = metaParts.filter(Boolean).join(' • ') + pendMark;
     const encName = encodeURIComponent(c.name);
     const dupRowHtml = c.isDuplicateConflict
@@ -2196,6 +2332,7 @@ async function saveSettings() {
       customerDueDates: settings.customerDueDates || {},
       frozen: Boolean(currentWorkshop && currentWorkshop.settings && currentWorkshop.settings.frozen)
     };
+    delete wsSettingsObj.managerPassword;
 
     if (currentWorkshop) {
       currentWorkshop.name = settings.shopName;
@@ -2238,7 +2375,10 @@ async function saveSettings() {
 // إغلاق النوافذ المنبثقة عند الضغط خارجها
 document.querySelectorAll('.modal-backdrop').forEach(el => {
   el.addEventListener('click', e => {
-    if (e.target === el) closeModal(el.id);
+    if (e.target === el) {
+      if (el.id === 'tempCredsOnceModal') closeTempCredsModal();
+      else closeModal(el.id);
+    }
   });
 });
 
@@ -2645,7 +2785,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v27.0';
+  const ver = (APP_META && APP_META.version) || 'v28.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2676,7 +2816,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v27.0';
+  const ver = (APP_META && APP_META.version) || 'v28.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2708,7 +2848,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v27.0';
+  const ver = (APP_META && APP_META.version) || 'v28.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;

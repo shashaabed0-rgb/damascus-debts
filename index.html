@@ -1081,6 +1081,228 @@
       }
     }
 
+    /* ===== v28: عزل كلمات مرور الورشات الفرعية + شاشة التغيير الإجباري + نافذة التسليم لمرة واحدة ===== */
+    #forceChangePassScreen:not(.hidden) {
+      position: fixed;
+      inset: 0;
+      z-index: 99985;
+      background: var(--bg);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 24px 14px 32px;
+    }
+    #forceChangePassScreen .lock-card {
+      margin: auto;
+      max-width: 420px;
+      width: 100%;
+    }
+    .force-pass-notice {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+      border-radius: 10px;
+      padding: 9px 11px;
+      margin-bottom: 13px;
+      font-size: 12.2px;
+      font-weight: 700;
+      line-height: 1.6;
+      text-align: right;
+    }
+    [data-theme="dark"] .force-pass-notice {
+      background: rgba(217, 119, 6, 0.16);
+      border-color: rgba(251, 191, 36, 0.35);
+      color: #fde68a;
+    }
+    .ws-pass-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+    .ws-pass-status.private {
+      background: #ecfdf5;
+      color: #166534;
+      border: 1px solid #a7f3d0;
+    }
+    .ws-pass-status.temp {
+      background: #fff7ed;
+      color: #c2410c;
+      border: 1px solid #fdba74;
+    }
+    [data-theme="dark"] .ws-pass-status.private {
+      background: rgba(22, 163, 74, 0.2);
+      color: #86efac;
+      border-color: rgba(74, 222, 128, 0.4);
+    }
+    [data-theme="dark"] .ws-pass-status.temp {
+      background: rgba(234, 88, 12, 0.22);
+      color: #fdba74;
+      border-color: rgba(251, 146, 60, 0.45);
+    }
+    .temp-cred-once-box {
+      background: var(--bg);
+      border: 1.5px dashed var(--primary);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .temp-cred-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 4px 0;
+    }
+    .temp-cred-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 800;
+      color: var(--primary);
+      direction: ltr;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    #tempCredsOnceModal.open {
+      z-index: 99997 !important;
+    }
+    @media (min-width: 900px) {
+      #forceChangePassScreen:not(.hidden) {
+        align-items: center;
+        padding: 32px 20px;
+      }
+      #forceChangePassScreen .lock-card {
+        max-width: 440px;
+      }
+    }
+    /* ===== تحسين وضوح شريط البحث + شريط الترتيب (الأحدث / أبجدي / حسب التاريخ) ===== */
+    #mainView .search-wrap {
+      position: relative;
+      margin-bottom: 10px !important;
+      border-radius: 14px;
+    }
+    #mainView .search-wrap > svg.ic {
+      color: var(--primary) !important;
+      opacity: 0.92;
+      pointer-events: none;
+    }
+    #mainView .search-input {
+      background: var(--card) !important;
+      border: 1.8px solid rgba(42, 69, 112, 0.30) !important;
+      border-radius: 14px !important;
+      min-height: 48px !important;
+      font-size: 14.5px !important;
+      font-weight: 600;
+      padding-left: 40px !important;
+      box-shadow: 0 4px 14px rgba(42, 69, 112, 0.09) !important;
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+    #mainView .search-input:focus {
+      border-color: var(--primary) !important;
+      box-shadow: 0 0 0 3.5px rgba(42, 69, 112, 0.15), 0 4px 14px rgba(42, 69, 112, 0.12) !important;
+      outline: none;
+    }
+    [data-theme="dark"] #mainView .search-wrap > svg.ic {
+      color: #93c5fd !important;
+    }
+    [data-theme="dark"] #mainView .search-input {
+      border-color: rgba(147, 197, 253, 0.38) !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+    }
+    [data-theme="dark"] #mainView .search-input:focus {
+      border-color: #60a5fa !important;
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2) !important;
+    }
+    .search-clear-btn {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: none;
+      background: rgba(100, 116, 139, 0.16);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: 1;
+      font-family: inherit;
+      z-index: 2;
+    }
+    .search-clear-btn.hidden {
+      display: none !important;
+    }
+    .main-sort-bar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 11px;
+      padding: 5px 7px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-sizing: border-box;
+    }
+    .main-sort-lbl {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11.8px;
+      font-weight: 800;
+      color: var(--muted);
+      white-space: nowrap;
+      padding-right: 3px;
+      flex-shrink: 0;
+    }
+    .main-sort-pills {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 5px;
+      flex: 1;
+      min-width: 0;
+    }
+    .sort-pill-btn {
+      border: 1px solid transparent;
+      background: var(--bg);
+      color: var(--muted);
+      border-radius: 9px;
+      padding: 6.5px 5px;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: center;
+      transition: background .14s ease, color .14s ease, border-color .14s ease;
+    }
+    .sort-pill-btn.active {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+      box-shadow: 0 2px 6px rgba(42, 69, 112, 0.22);
+    }
+    [data-theme="dark"] .sort-pill-btn.active {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+    .sort-pill-btn:active {
+      transform: scale(.97);
+    }
     #toast {
       z-index: 99999 !important;
     }
@@ -1140,7 +1362,7 @@
       <div class="login-dev-card">
         <div class="login-dev-head">
           <span class="login-dev-title">معلومات المطور والدعم الفني</span>
-          <span class="login-dev-ver" id="loginVersionBadge">v27.0</span>
+          <span class="login-dev-ver" id="loginVersionBadge">v28.0</span>
         </div>
         <div class="about-info-box" style="margin-top:0;">
           <div class="about-info-row">
@@ -1189,6 +1411,37 @@
       <input type="password" id="pinInput" class="pin-input" inputmode="numeric" maxlength="6" placeholder="••••" />
       <div id="lockErr" class="lock-err"></div>
       <button class="btn btn-primary" onclick="unlockWithPin()">دخول</button>
+    </div>
+  </div>
+
+  <!-- ==================== شاشة التغيير الإجباري لكلمة المرور المؤقتة (للورشات المعزولة) ==================== -->
+  <div id="forceChangePassScreen" class="hidden">
+    <div class="lock-card">
+      <div class="lock-badge" style="background:#ecfdf5;color:#15803d;border:1px solid #a7f3d0;">
+        <svg class="ic" style="width:28px;height:28px" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      </div>
+      <h2>تعيين كلمة مرور خاصة بك</h2>
+      <p id="forcePassShopName" style="font-weight:700;color:var(--primary);margin-bottom:10px;"></p>
+      <div id="forcePassSubtitle" class="force-pass-notice">
+        لحماية خصوصية بيانات ورشتك، يرجى تغيير كلمة المرور المؤقتة ووضع كلمة مرور خاصة بك الآن. لن تُحفظ كنص صريح ولن يتمكن أي شخص من رؤيتها.
+      </div>
+      <div id="forcePassErr" class="lock-err"></div>
+      <form id="forceChangePassForm" class="login-form-box" onsubmit="handleForcedPasswordChangeSubmit(event)">
+        <div class="field">
+          <label>كلمة المرور الجديدة الخاصة بك (6 أحرف أو أرقام على الأقل)</label>
+          <input type="password" id="forceNewPass1" class="input" dir="ltr" minlength="6" autocomplete="new-password" placeholder="••••••••" required />
+        </div>
+        <div class="field">
+          <label>تأكيد كلمة المرور الجديدة</label>
+          <input type="password" id="forceNewPass2" class="input" dir="ltr" minlength="6" autocomplete="new-password" placeholder="••••••••" required />
+        </div>
+        <div class="switch-row" style="margin-bottom:14px;">
+          <span style="font-size:12.5px;font-weight:700;color:var(--muted);">إظهار كلمة المرور أثناء الكتابة</span>
+          <input type="checkbox" id="forceShowPassChk" onchange="toggleForcePassVisibility(this.checked)" />
+        </div>
+        <button type="submit" id="forcePassSubmitBtn" class="btn btn-primary">حفظ كلمة المرور والدخول للتطبيق</button>
+        <button type="button" class="btn btn-light" style="margin-top:8px;" onclick="handleLogout()">تسجيل الخروج</button>
+      </form>
     </div>
   </div>
 
@@ -1246,7 +1499,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v27.0</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v28.0</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -1318,7 +1571,20 @@
 
       <div class="search-wrap">
         <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="search" id="searchInput" class="search-input" placeholder="ابحث باسم الزبون أو رقم الهاتف..." oninput="renderCustomers()" />
+        <input type="search" id="searchInput" class="search-input" placeholder="ابحث باسم الزبون أو رقم الهاتف..." oninput="onMainSearchInput()" />
+        <button type="button" id="mainSearchClearBtn" class="search-clear-btn hidden" title="مسح البحث" onclick="clearMainSearch()">✕</button>
+      </div>
+
+      <div id="mainSortBar" class="main-sort-bar" role="group" aria-label="ترتيب قائمة الزبائن">
+        <span class="main-sort-lbl">
+          <svg class="ic" style="width:14px;height:14px;" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="9" y2="18"/></svg>
+          <span>ترتيب:</span>
+        </span>
+        <div class="main-sort-pills">
+          <button type="button" id="sortBtnLatest" class="sort-pill-btn active" onclick="setCustomerSort('latest')">الأحدث</button>
+          <button type="button" id="sortBtnAlpha" class="sort-pill-btn" onclick="setCustomerSort('alpha')">أبجدي</button>
+          <button type="button" id="sortBtnDate" class="sort-pill-btn" onclick="setCustomerSort('date')">حسب التاريخ ↑</button>
+        </div>
       </div>
 
       <div id="mainFilterTabs" class="segmented hidden">
@@ -1509,8 +1775,9 @@
               <input type="email" id="wsAdminEmail" class="input" dir="ltr" autocomplete="off" data-lpignore="true" data-form-type="other" name="new_ws_admin_mail" placeholder="owner@shop.com" required />
             </div>
             <div class="field">
-              <label>كلمة المرور (6 أحرف فأكثر)</label>
-              <input type="text" id="wsAdminPass" class="input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="new_ws_admin_secret" placeholder="6 أحرف فأكثر" required />
+              <label>كلمة مرور مؤقتة لأول دخول (6 أحرف فأكثر)</label>
+              <input type="text" id="wsAdminPass" class="input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="new_ws_admin_secret" placeholder="كلمة مرور مؤقتة لتسليمها لصاحب الورشة" required />
+              <div class="field-hint">تُستخدم لأول دخول فقط — سيُجبر التطبيق صاحب الورشة على تغييرها فوراً، ولن تُحفظ أو تظهر لديك بعد الإنشاء.</div>
             </div>
             <button type="submit" id="addWorkshopSubmitBtn" class="btn btn-primary">إنشاء الورشة وحساب مديرها</button>
           </form>
@@ -1923,7 +2190,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v27.0</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v28.0</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -2072,9 +2339,9 @@
           <input type="text" id="editWsEmailInput" class="input" dir="ltr" inputmode="email" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="ws_mgr_email_edit" placeholder="owner@shop.com" />
         </div>
         <div class="field">
-          <label>كلمة مرور مدير الورشة (6 أحرف فأكثر)</label>
-          <input type="text" id="editWsPassInput" class="input" dir="ltr" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="ws_mgr_pass_edit" placeholder="اتركها كما هي أو اكتب كلمة مرور جديدة" />
-          <div class="field-hint">تغيير الإيميل أو كلمة المرور هنا يطبّق مباشرةً على حساب مدير الورشة، كما يظهر التحديث عندك لو غيّرها المدير من حسابه.</div>
+          <label>تعيين كلمة مرور مؤقتة للطوارئ (اختياري — 6 أحرف فأكثر)</label>
+          <input type="text" id="editWsPassInput" class="input" dir="ltr" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="ws_mgr_pass_edit" placeholder="اتركها فارغة إن لم ترد إعادة تعيين كلمة المرور" />
+          <div class="field-hint">للمساعدة عند نسيان كلمة السر فقط: سيُجبر التطبيق صاحب الورشة على تغييرها فور دخوله القادم، ولن تُحفظ أو تظهر لديك بعد الحفظ.</div>
         </div>
       </div>
       <button class="btn btn-primary" id="saveWsEditBtn" onclick="saveWorkshopEdit()">حفظ التعديل</button>
@@ -2154,6 +2421,37 @@
     </div>
   </div>
 
+  <!-- ==================== نافذة تسليم كلمة المرور المؤقتة لمرة واحدة فقط ==================== -->
+  <div class="modal-backdrop" id="tempCredsOnceModal">
+    <div class="modal-sheet" style="max-width:430px;">
+      <div class="sheet-head">
+        <h3 id="tempCredsTitle">بيانات الدخول المؤقتة للورشة</h3>
+        <button class="close-btn" onclick="closeTempCredsModal()">✕</button>
+      </div>
+      <div class="force-pass-notice">
+        ⚠️ هذه البيانات تظهر <strong>هذه المرة فقط</strong> لتسليمها لصاحب الورشة ولن تُحفظ أو تظهر مجدداً بعد الإغلاق. عند أول دخول سيُجبره التطبيق على تعيين كلمة مروره الخاصة.
+      </div>
+      <div class="temp-cred-once-box">
+        <div class="temp-cred-row">
+          <span style="color:var(--muted);font-weight:700;">الورشة:</span>
+          <strong id="tempCredWsName">—</strong>
+        </div>
+        <div class="temp-cred-row">
+          <span style="color:var(--muted);font-weight:700;">البريد الإلكتروني:</span>
+          <span id="tempCredEmail" class="temp-cred-code">—</span>
+        </div>
+        <div class="temp-cred-row">
+          <span style="color:var(--muted);font-weight:700;">كلمة المرور المؤقتة:</span>
+          <span id="tempCredPass" class="temp-cred-code">—</span>
+        </div>
+      </div>
+      <div class="confirm-stack-actions">
+        <button type="button" class="btn btn-wa" onclick="copyTempCredsBundle()">نسخ رسالة التسليم لصاحب الورشة</button>
+        <button type="button" class="btn btn-light" onclick="closeTempCredsModal()">تم النسخ — إغلاق</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== نافذة حول التطبيق والميزات ==================== -->
   <div class="modal-backdrop" id="aboutModal">
     <div class="modal-sheet about-modal-sheet">
@@ -2165,7 +2463,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v27.0</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v28.0</span>
         <p class="about-desc">نظام عملي ومتكامل لإدارة ديون ودفعات الزبائن بالعملتين، يعمل بدون إنترنت وبمزامنة سحابية فورية مع كشوفات PDF وواتساب.</p>
       </div>
 

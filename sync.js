@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v27.0',
+  version: 'v28.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -104,6 +104,8 @@ let settings = {
   whatsappApp: 'normal',
   themeMode: 'auto',
   showMainFilters: false,
+  customerSortMode: 'latest',
+  customerSortDateDir: 'asc',
   lockEnabled: false,
   pin: '',
   bioEnabled: false,
@@ -124,7 +126,8 @@ let cachedAllMembersByWs = new Map();
 let editingWorkshopId = null;
 let editingWorkshopAdminId = null;
 let editingWorkshopOldEmail = '';
-let editingWorkshopOldPass = '';
+let sessionTempLoginPass = '';
+let tempCredsOnceData = null;
 
 let allRecords = [];
 let pendingQueue = [];
@@ -185,6 +188,10 @@ function loadDeviceSettings() {
     settings.whatsappApp = dev.whatsappApp || 'normal';
     settings.themeMode = (dev.themeMode === 'light' || dev.themeMode === 'dark' || dev.themeMode === 'auto') ? dev.themeMode : 'auto';
     settings.showMainFilters = !!dev.showMainFilters;
+    settings.customerSortMode = (dev.customerSortMode === 'latest' || dev.customerSortMode === 'alpha' || dev.customerSortMode === 'date')
+      ? dev.customerSortMode
+      : 'latest';
+    settings.customerSortDateDir = dev.customerSortDateDir === 'desc' ? 'desc' : 'asc';
     settings.lockEnabled = !!dev.lockEnabled;
     settings.pin = dev.pin || '';
     settings.bioEnabled = !!dev.bioEnabled;
@@ -198,6 +205,8 @@ function persistDeviceSettings() {
     whatsappApp: settings.whatsappApp,
     themeMode: settings.themeMode || 'auto',
     showMainFilters: !!settings.showMainFilters,
+    customerSortMode: settings.customerSortMode || 'latest',
+    customerSortDateDir: settings.customerSortDateDir || 'asc',
     lockEnabled: settings.lockEnabled,
     pin: settings.pin,
     bioEnabled: settings.bioEnabled,
@@ -832,6 +841,10 @@ function enterFreeOfflineMode(isAutoResume = false) {
   updateHeaderLockButton();
 
   document.getElementById('loginScreen').classList.add('hidden');
+  if (needsForcedPasswordChange(currentProfile, currentWorkshop)) {
+    showForceChangePassScreen();
+    return;
+  }
   if (settings.lockEnabled && settings.pin && sessionStorage.getItem('debt_unlocked_v3') !== '1') {
     showLockScreen();
   } else {
@@ -891,10 +904,139 @@ async function initApp() {
 
 function showLoginScreen(errMsg = '') {
   isUnlocked = false;
+  sessionTempLoginPass = '';
   document.getElementById('mainView').classList.add('hidden');
   document.getElementById('lockScreen').classList.add('hidden');
+  document.getElementById('forceChangePassScreen')?.classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('loginErr').textContent = errMsg;
+}
+
+function needsForcedPasswordChange(profile, workshop) {
+  if (!profile || profile.is_free_offline === true) return false;
+  if (profile.role === 'super_admin') return false;
+  if (profile.must_change_password === true) return true;
+  if (profile.role === 'admin' && workshop && workshop.settings && workshop.settings.adminMustChangePassword === true) {
+    return true;
+  }
+  return false;
+}
+
+function showForceChangePassScreen() {
+  isUnlocked = false;
+  resetAllOpenLayersForLogout();
+  document.getElementById('mainView').classList.add('hidden');
+  document.getElementById('lockScreen').classList.add('hidden');
+  document.getElementById('loginScreen').classList.add('hidden');
+
+  const shopEl = document.getElementById('forcePassShopName');
+  if (shopEl) shopEl.textContent = settings.shopName || (currentWorkshop && currentWorkshop.name) || '';
+
+  const isReset = Boolean(
+    (currentProfile && currentProfile.password_reset_at) ||
+    (currentWorkshop && currentWorkshop.settings && currentWorkshop.settings.adminPasswordResetAt)
+  );
+  const subEl = document.getElementById('forcePassSubtitle');
+  if (subEl) {
+    subEl.textContent = isReset
+      ? 'تم تعيين كلمة مرور مؤقتة لحسابك من قِبل الدعم الفني. لحماية خصوصية بيانات ورشتك، يرجى وضع كلمة مرور جديدة خاصة بك الآن — لن تُحفظ كنص صريح ولن يتمكن أحد من رؤيتها.'
+      : 'مرحباً بك! لحماية خصوصية بيانات ورشتك، يرجى تغيير كلمة المرور المؤقتة وتعيين كلمة مرور خاصة بك للمتابعة — لن يتمكن المدير العام أو أي شخص آخر من رؤيتها.';
+  }
+
+  const p1 = document.getElementById('forceNewPass1');
+  const p2 = document.getElementById('forceNewPass2');
+  const chk = document.getElementById('forceShowPassChk');
+  const errEl = document.getElementById('forcePassErr');
+  if (p1) { p1.value = ''; p1.type = 'password'; }
+  if (p2) { p2.value = ''; p2.type = 'password'; }
+  if (chk) chk.checked = false;
+  if (errEl) errEl.textContent = '';
+
+  document.getElementById('forceChangePassScreen')?.classList.remove('hidden');
+}
+
+function toggleForcePassVisibility(show) {
+  const t = show ? 'text' : 'password';
+  const p1 = document.getElementById('forceNewPass1');
+  const p2 = document.getElementById('forceNewPass2');
+  if (p1) p1.type = t;
+  if (p2) p2.type = t;
+}
+
+async function handleForcedPasswordChangeSubmit(ev) {
+  ev.preventDefault();
+  const p1 = (document.getElementById('forceNewPass1')?.value || '').trim();
+  const p2 = (document.getElementById('forceNewPass2')?.value || '').trim();
+  const errEl = document.getElementById('forcePassErr');
+  const btn = document.getElementById('forcePassSubmitBtn');
+  if (errEl) errEl.textContent = '';
+
+  if (p1.length < 6) {
+    if (errEl) errEl.textContent = 'كلمة المرور يجب أن تكون 6 أحرف أو أرقام على الأقل.';
+    return;
+  }
+  if (p1 !== p2) {
+    if (errEl) errEl.textContent = 'كلمتا المرور غير متطابقتين، يرجى التأكد.';
+    return;
+  }
+  if (sessionTempLoginPass && p1 === sessionTempLoginPass) {
+    if (errEl) errEl.textContent = 'يرجى اختيار كلمة مرور جديدة مختلفة عن كلمة المرور المؤقتة.';
+    return;
+  }
+  if (!navigator.onLine || !ensureSupabaseClient()) {
+    if (errEl) errEl.textContent = 'يلزم الاتصال بالإنترنت لحفظ كلمة المرور الجديدة.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'جاري حفظ كلمة مرورك الخاصة...';
+  try {
+    const { error: authErr } = await sb.auth.updateUser({ password: p1 });
+    if (authErr) throw authErr;
+
+    try {
+      await sb.rpc('sync_my_saved_password', { new_password: p1 });
+    } catch (e) {}
+
+    if (currentProfile) {
+      currentProfile.must_change_password = false;
+      currentProfile.password_reset_at = null;
+      if (currentProfile.role === 'admin') currentProfile.login_password = null;
+    }
+
+    if (isAdmin() && !isSuperAdmin() && currentWorkshop) {
+      const nextWsSettings = { ...(currentWorkshop.settings || {}) };
+      delete nextWsSettings.managerPassword;
+      nextWsSettings.adminMustChangePassword = false;
+      nextWsSettings.adminPasswordResetAt = null;
+      try {
+        await sb.from('workshops').update({ settings: nextWsSettings }).eq('id', currentProfile.workshop_id);
+      } catch (e) {}
+      currentWorkshop.settings = nextWsSettings;
+    }
+
+    if (currentUser && currentProfile && currentWorkshop) {
+      localStorage.setItem('debt_ctx_sb_' + currentUser.id, JSON.stringify({
+        profile: currentProfile,
+        workshop: currentWorkshop
+      }));
+    }
+
+    sessionTempLoginPass = '';
+    document.getElementById('forceChangePassScreen')?.classList.add('hidden');
+    showToast('تم حفظ كلمة مرورك الخاصة بنجاح ✓ — حسابك محمي الآن');
+
+    if (settings.lockEnabled && settings.pin && sessionStorage.getItem('debt_unlocked_v3') !== '1') {
+      showLockScreen();
+    } else {
+      showMainView();
+    }
+  } catch (err) {
+    if (errEl) errEl.textContent = err.message || 'تعذّر تحديث كلمة المرور، حاول مجدداً.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'حفظ كلمة المرور والدخول للتطبيق';
+  }
 }
 
 async function handleLogin(ev) {
@@ -928,6 +1070,7 @@ async function handleLogin(ev) {
     }
 
     try { localStorage.removeItem(FREE_OFFLINE_MODE_KEY); } catch (e) {}
+    sessionTempLoginPass = password;
     pendingAutoFreeMigrateCheck = true;
     saveLastUser(data.user);
     await loadUserWorkspace(data.user, true);
@@ -1141,21 +1284,34 @@ async function changeMyPassword() {
   const { error } = await sb.auth.updateUser({ password: newPass });
   if (error) return showToast(error.message);
 
-  // حفظ كلمة المرور الجديدة لتبقى ظاهرة عند المدير العام عند الحاجة
+  // مزامنة الحالة على السيرفر (للموظف تُحفظ لمدير ورشته؛ أما مدير الورشة المعزولة فتُمسح أي نسخة نصية وتبقى مشفّرة فقط)
   try {
     await sb.rpc('sync_my_saved_password', { new_password: newPass });
   } catch (e) {}
 
-  // حفظ نسخة احتياطية إضافية داخل إعدادات الورشة إذا كان المستخدم مدير ورشة
+  // إزالة أي نسخة نصية قديمة لكلمة السر من إعدادات الورشة المعزولة لضمان الخصوصية
   if (isAdmin() && !isSuperAdmin() && currentWorkshop) {
     try {
       const nextWsSettings = {
         ...(currentWorkshop.settings || {}),
         managerEmail: currentProfile?.email || currentUser?.email || '',
-        managerPassword: newPass
+        adminMustChangePassword: false,
+        adminPasswordResetAt: null
       };
+      delete nextWsSettings.managerPassword;
       await sb.from('workshops').update({ settings: nextWsSettings }).eq('id', currentProfile.workshop_id);
       currentWorkshop.settings = nextWsSettings;
+      if (currentProfile) {
+        currentProfile.must_change_password = false;
+        currentProfile.password_reset_at = null;
+        currentProfile.login_password = null;
+      }
+      if (currentUser) {
+        localStorage.setItem('debt_ctx_sb_' + currentUser.id, JSON.stringify({
+          profile: currentProfile,
+          workshop: currentWorkshop
+        }));
+      }
     } catch (e) {}
   }
 
@@ -1479,6 +1635,13 @@ async function syncData(silent) {
         profile: currentProfile,
         workshop: currentWorkshop
       }));
+    }
+
+    if (needsForcedPasswordChange(currentProfile, currentWorkshop)) {
+      isSyncing = false;
+      syncBtn.classList.remove('spinning');
+      showForceChangePassScreen();
+      return;
     }
 
     // 1.5 فحص تعارض الأسماء المتطابقة المضافة أثناء الأوفلاين قبل الرفع لعدم دمجها وإظهارها معاً بعلامة تعديل
@@ -2208,24 +2371,52 @@ function copyWorkshopCred(wsId, kind) {
   const rec = workshopCredsMap.get(wsId);
   if (!rec) return;
   if (kind === 'email') copyCredentialValue(rec.email, 'اسم المستخدم');
-  else if (kind === 'pass') copyCredentialValue(rec.password, 'كلمة المرور');
 }
 
-function toggleWsCardPass(btn, wsId) {
-  const rec = workshopCredsMap.get(wsId);
-  const el = document.getElementById('wsPassVal_' + wsId);
-  const realPass = (rec && rec.password) || (el && el.getAttribute('data-pass')) || '';
-  if (!el || !realPass) return;
-  const shown = el.getAttribute('data-shown') === '1';
-  if (shown) {
-    el.textContent = '••••••••';
-    el.setAttribute('data-shown', '0');
-    btn.textContent = 'إظهار';
-  } else {
-    el.textContent = realPass;
-    el.setAttribute('data-shown', '1');
-    btn.textContent = 'إخفاء';
+function openTempCredsOnceModal(wsName, email, tempPass, isReset = false) {
+  tempCredsOnceData = {
+    wsName: String(wsName || ''),
+    email: String(email || ''),
+    tempPass: String(tempPass || ''),
+    isReset: Boolean(isReset)
+  };
+  const titleEl = document.getElementById('tempCredsTitle');
+  if (titleEl) {
+    titleEl.textContent = isReset ? 'تم تعيين كلمة مرور مؤقتة للطوارئ' : 'تم إنشاء الورشة — بيانات الدخول المؤقتة';
   }
+  const nEl = document.getElementById('tempCredWsName');
+  const eEl = document.getElementById('tempCredEmail');
+  const pEl = document.getElementById('tempCredPass');
+  if (nEl) nEl.textContent = tempCredsOnceData.wsName || '—';
+  if (eEl) eEl.textContent = tempCredsOnceData.email || '—';
+  if (pEl) pEl.textContent = tempCredsOnceData.tempPass || '—';
+  openModal('tempCredsOnceModal');
+}
+
+function copyTempCredsBundle() {
+  if (!tempCredsOnceData) return;
+  const appUrl = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+    ? `${window.location.origin}${window.location.pathname}`
+    : '';
+  const lines = [
+    `بيانات الدخول المؤقتة لورشة: ${tempCredsOnceData.wsName}`,
+    `البريد الإلكتروني: ${tempCredsOnceData.email}`,
+    `كلمة المرور المؤقتة: ${tempCredsOnceData.tempPass}`,
+    `ملاحظة: سيطلب التطبيق منك تغيير كلمة المرور ووضع كلمة سر خاصة بك فور تسجيل الدخول لحماية خصوصية بياناتك.`
+  ];
+  if (appUrl) lines.push(`رابط التطبيق: ${appUrl}`);
+  copyCredentialValue(lines.join('\n'), 'رسالة بيانات الدخول المؤقتة');
+}
+
+function closeTempCredsModal(keepHistory = false) {
+  tempCredsOnceData = null;
+  const nEl = document.getElementById('tempCredWsName');
+  const eEl = document.getElementById('tempCredEmail');
+  const pEl = document.getElementById('tempCredPass');
+  if (nEl) nEl.textContent = '—';
+  if (eEl) eEl.textContent = '—';
+  if (pEl) pEl.textContent = '—';
+  closeModal('tempCredsOnceModal', keepHistory);
 }
 
 function getWorkshopManagerInfo(w) {
@@ -2237,10 +2428,11 @@ function getWorkshopManagerInfo(w) {
   const email = (adminMember && adminMember.email)
     || (w.settings && w.settings.managerEmail)
     || '';
-  const password = (adminMember && adminMember.login_password)
-    || (w.settings && w.settings.managerPassword)
-    || '';
-  return { adminMember, wsMembers, email, password };
+  const mustChangePassword = Boolean(
+    (adminMember && adminMember.must_change_password === true) ||
+    (w.settings && w.settings.adminMustChangePassword === true)
+  );
+  return { adminMember, wsMembers, email, mustChangePassword };
 }
 
 function renderIsolatedWorkshopsList(list) {
@@ -2282,7 +2474,7 @@ function renderIsolatedWorkshopsList(list) {
     }
     const liveDevCount = onlineArr.length;
     const isOnline = liveDevCount > 0;
-    const { adminMember, wsMembers, email: mgrEmail, password: mgrPass } = getWorkshopManagerInfo(w);
+    const { adminMember, wsMembers, email: mgrEmail, mustChangePassword: mgrMustChange } = getWorkshopManagerInfo(w);
 
     const onlineBadge = isOnline
       ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصلة (${formatArabicDeviceCount(liveDevCount)})</span>`
@@ -2313,7 +2505,7 @@ function renderIsolatedWorkshopsList(list) {
       : '';
 
     const safeWsId = escapeHtml(w.id);
-    workshopCredsMap.set(w.id, { email: mgrEmail || '', password: mgrPass || '' });
+    workshopCredsMap.set(w.id, { email: mgrEmail || '' });
     const credsBoxHtml = !isOwnWs ? `
       <div class="ws-creds-box">
         <div class="ws-cred-row">
@@ -2323,11 +2515,9 @@ function renderIsolatedWorkshopsList(list) {
         </div>
         <div class="ws-cred-row">
           <span class="ws-cred-lbl">كلمة المرور:</span>
-          ${mgrPass
-            ? `<span class="ws-cred-val" id="wsPassVal_${safeWsId}" data-shown="0">••••••••</span>
-               <button type="button" class="ws-cred-mini-btn" onclick="toggleWsCardPass(this, '${safeWsId}')">إظهار</button>
-               <button type="button" class="ws-cred-mini-btn" onclick="copyWorkshopCred('${safeWsId}', 'pass')">نسخ</button>`
-            : `<span class="ws-cred-val unset">غير محفوظة بعد — اضغط تعديل لتعيينها</span>`
+          ${mgrMustChange
+            ? `<span class="ws-pass-status temp">⏳ مؤقتة — سيُطلب تغييرها عند الدخول</span>`
+            : `<span class="ws-pass-status private">🔒 محمية (خاصة بصاحب الورشة)</span>`
           }
         </div>
       </div>` : '';
@@ -2337,7 +2527,7 @@ function renderIsolatedWorkshopsList(list) {
            <button class="btn btn-light btn-sm" onclick="openEditWorkshopModal('${safeWsId}')">تعديل الاسم</button>
          </div>`
       : `<div class="member-actions">
-           <button class="btn btn-primary btn-sm" onclick="openEditWorkshopModal('${safeWsId}')">تعديل الورشة / كلمة السر</button>
+           <button class="btn btn-primary btn-sm" onclick="openEditWorkshopModal('${safeWsId}')">تعديل / كلمة مؤقتة</button>
            ${adminMember ? `<button class="btn btn-warn-sm btn-sm" onclick="forceLogoutWorkshopAdmin('${escapeHtml(adminMember.user_id)}', '${escapeHtml(w.name)}')">إخراج من الجهاز</button>` : ''}
            <button class="btn btn-light btn-sm" onclick="toggleWorkshopFreeze('${safeWsId}')">
              ${isFrozen ? 'فك التجميد' : 'تجميد الورشة'}
@@ -2420,16 +2610,16 @@ function openEditWorkshopModal(wsId) {
   if (!ws) return;
   editingWorkshopId = wsId;
   const isOwnWs = wsId === currentProfile.workshop_id;
-  const { adminMember, email, password } = getWorkshopManagerInfo(ws);
+  const { adminMember, email } = getWorkshopManagerInfo(ws);
 
   editingWorkshopAdminId = (!isOwnWs && adminMember) ? adminMember.user_id : null;
   editingWorkshopOldEmail = email || '';
-  editingWorkshopOldPass = password || '';
 
   document.getElementById('editWsNameInput').value = ws.name || '';
   document.getElementById('editWsCredsWrap').classList.toggle('hidden', isOwnWs || !editingWorkshopAdminId);
   document.getElementById('editWsEmailInput').value = email || '';
-  document.getElementById('editWsPassInput').value = password || '';
+  // حقل كلمة المرور المؤقتة يبقى فارغاً دائماً ولا يُعرض أي باسورد مخزّن
+  document.getElementById('editWsPassInput').value = '';
 
   openModal('editWorkshopModal');
 }
@@ -2441,14 +2631,14 @@ async function saveWorkshopEdit() {
 
   const isOwnWs = editingWorkshopId === currentProfile.workshop_id;
   const newEmail = isOwnWs ? '' : document.getElementById('editWsEmailInput').value.trim().toLowerCase();
-  const newPass = isOwnWs ? '' : document.getElementById('editWsPassInput').value.trim();
+  const tempPass = isOwnWs ? '' : document.getElementById('editWsPassInput').value.trim();
 
   if (!isOwnWs && editingWorkshopAdminId) {
     if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
       return showToast('يرجى كتابة بريد إلكتروني صحيح');
     }
-    if (newPass && newPass.length < 6) {
-      return showToast('كلمة المرور يجب أن تكون 6 أحرف أو أرقام على الأقل');
+    if (tempPass && tempPass.length < 6) {
+      return showToast('كلمة المرور المؤقتة يجب أن تكون 6 أحرف أو أرقام على الأقل');
     }
   }
 
@@ -2458,15 +2648,15 @@ async function saveWorkshopEdit() {
   btn.textContent = 'جاري الحفظ...';
 
   try {
-    // 1. إذا تغير إيميل أو كلمة مرور مدير الورشة الجانبية، ننفّذ التحديث عبر دالة Supabase الآمنة
+    // 1. إذا تغير الإيميل أو تم تعيين كلمة مرور مؤقتة للطوارئ، ننفّذ التحديث عبر دالة Supabase الآمنة
     const emailChanged = Boolean(!isOwnWs && editingWorkshopAdminId && newEmail && newEmail !== editingWorkshopOldEmail.toLowerCase());
-    const passChanged = Boolean(!isOwnWs && editingWorkshopAdminId && newPass && newPass !== editingWorkshopOldPass);
+    const passResetRequested = Boolean(!isOwnWs && editingWorkshopAdminId && tempPass);
 
-    if (emailChanged || passChanged) {
+    if (emailChanged || passResetRequested) {
       const { error: rpcErr } = await sb.rpc('super_admin_update_member_credentials', {
         target_user_id: editingWorkshopAdminId,
         new_email: emailChanged ? newEmail : null,
-        new_password: passChanged ? newPass : null
+        new_password: passResetRequested ? tempPass : null
       });
       if (rpcErr) {
         const msg = String(rpcErr.message || '');
@@ -2477,14 +2667,18 @@ async function saveWorkshopEdit() {
       }
     }
 
-    // 2. تحديث اسم الورشة وحفظ نسخة من الإيميل/كلمة السر ضمن إعدادات الورشة
+    // 2. تحديث اسم الورشة وحذف أي نسخة نصية قديمة لكلمة السر (مع تفعيل إجبار التغيير عند تعيين مؤقتة)
     const nextSettings = {
       ...(ws && ws.settings ? ws.settings : {}),
       shopName: newName
     };
+    delete nextSettings.managerPassword;
     if (!isOwnWs) {
       if (newEmail) nextSettings.managerEmail = newEmail;
-      if (newPass) nextSettings.managerPassword = newPass;
+      if (passResetRequested) {
+        nextSettings.adminMustChangePassword = true;
+        nextSettings.adminPasswordResetAt = new Date().toISOString();
+      }
     }
 
     const { error: wsErr } = await sb
@@ -2499,11 +2693,17 @@ async function saveWorkshopEdit() {
       applyBrandingUI();
     }
 
+    const finalEmailForOnce = newEmail || editingWorkshopOldEmail;
     editingWorkshopId = null;
     editingWorkshopAdminId = null;
     closeModal('editWorkshopModal');
-    showToast('تم حفظ تعديلات الورشة وبيانات المدير بنجاح ✓');
     loadIsolatedWorkshops();
+
+    if (passResetRequested) {
+      openTempCredsOnceModal(newName, finalEmailForOnce, tempPass, true);
+    } else {
+      showToast('تم حفظ تعديلات الورشة بنجاح ✓');
+    }
   } catch (err) {
     showAccAlert('تعذّر الحفظ: ' + (err.message || err));
     showToast(err.message || 'تعذّر حفظ التعديل');
@@ -2595,25 +2795,28 @@ async function createIsolatedWorkshop(ev) {
           currency: 'BOTH',
           frozen: false,
           managerEmail: email,
-          managerPassword: password
+          adminMustChangePassword: true
         }
       })
       .select()
       .single();
     if (wsErr) throw wsErr;
 
+    // لا نُخزّن كلمة المرور المؤقتة كنص صريح أبداً للورشات المعزولة، ونُجبر صاحبها على تغييرها عند أول دخول
     const memPayload = {
       user_id: signUpData.user.id,
       workshop_id: wsData.id,
       role: 'admin',
       display_name: adminName,
       email,
-      login_password: password,
+      login_password: null,
+      must_change_password: true,
       can_delete: true,
       active: true
     };
     let { error: memErr } = await sb.from('workshop_members').insert(memPayload);
-    if (memErr && String(memErr.message || '').includes('login_password')) {
+    if (memErr && (String(memErr.message || '').includes('must_change_password') || String(memErr.message || '').includes('login_password'))) {
+      delete memPayload.must_change_password;
       delete memPayload.login_password;
       const retry = await sb.from('workshop_members').insert(memPayload);
       memErr = retry.error;
@@ -2621,8 +2824,9 @@ async function createIsolatedWorkshop(ev) {
     if (memErr) throw memErr;
 
     document.getElementById('addWorkshopForm').reset();
-    showAccAlert(`تم إنشاء الورشة المعزولة "${wsName}" وحساب مديرها بنجاح!`, true);
+    showAccAlert(`تم إنشاء الورشة المعزولة "${wsName}" بنجاح ✓ كلمة المرور محمية ولا تُحفظ لديك.`, true);
     loadIsolatedWorkshops();
+    openTempCredsOnceModal(wsName, email, password, false);
   } catch (err) {
     const msg = (err.message || '').includes('already registered')
       ? 'بريد مدير الورشة مسجّل مسبقاً، اختر بريداً آخر.'
