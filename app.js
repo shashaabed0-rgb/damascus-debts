@@ -1063,17 +1063,50 @@ function sortCustomersArray(arr) {
   });
 }
 
+function toggleSortMenu(ev) {
+  if (ev) ev.stopPropagation();
+  const menu = document.getElementById('sortDropdownMenu');
+  const btn = document.getElementById('sortMenuBtn');
+  if (!menu || !btn) return;
+  const willOpen = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !willOpen);
+  btn.classList.toggle('open', willOpen);
+  btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+}
+
+function closeSortMenu() {
+  const menu = document.getElementById('sortDropdownMenu');
+  const btn = document.getElementById('sortMenuBtn');
+  if (menu) menu.classList.add('hidden');
+  if (btn) {
+    btn.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const anchor = document.getElementById('sortMenuAnchor');
+  if (anchor && !anchor.contains(e.target)) {
+    closeSortMenu();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSortMenu();
+});
+
 function updateCustomerSortUI() {
   const mode = settings.customerSortMode || 'latest';
   const dateDir = settings.customerSortDateDir === 'desc' ? 'desc' : 'asc';
   const bLatest = document.getElementById('sortBtnLatest');
   const bAlpha = document.getElementById('sortBtnAlpha');
   const bDate = document.getElementById('sortBtnDate');
+  const bDateTxt = document.getElementById('sortBtnDateTxt');
   if (bLatest) bLatest.classList.toggle('active', mode === 'latest');
   if (bAlpha) bAlpha.classList.toggle('active', mode === 'alpha');
-  if (bDate) {
-    bDate.classList.toggle('active', mode === 'date');
-    bDate.textContent = dateDir === 'asc' ? 'حسب التاريخ ↑' : 'حسب التاريخ ↓';
+  if (bDate) bDate.classList.toggle('active', mode === 'date');
+  if (bDateTxt) {
+    bDateTxt.textContent = dateDir === 'asc' ? 'حسب التاريخ (الأقدم ↑)' : 'حسب التاريخ (الأحدث ↓)';
   }
 }
 
@@ -1083,6 +1116,7 @@ function setCustomerSort(mode) {
   } else {
     settings.customerSortMode = (mode === 'alpha' || mode === 'date') ? mode : 'latest';
   }
+  closeSortMenu();
   persistDeviceSettings();
   updateCustomerSortUI();
   groupedCustomers = sortCustomersArray(groupedCustomers);
