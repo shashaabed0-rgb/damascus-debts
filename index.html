@@ -1356,6 +1356,41 @@
     .sort-drop-item.active .sort-drop-chk {
       opacity: 1;
     }
+    /* ===== مربع تغيير كلمة مرور المدير داخل بطاقته في إدارة الحسابات ===== */
+    .self-pass-box {
+      margin-top: 10px;
+      padding: 10px 11px;
+      border-radius: 11px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+    .self-pass-box.hidden {
+      display: none !important;
+    }
+    .self-pass-title {
+      font-size: 12.2px;
+      font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 7px;
+    }
+    .self-pass-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .self-pass-row .input {
+      flex: 1 1 160px;
+      min-width: 0;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    .self-pass-hint {
+      margin-top: 6px;
+      font-size: 11.2px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
     #toast {
       z-index: 99999 !important;
     }
@@ -2229,7 +2264,7 @@
           <div><strong>الأجهزة المتصلة بحسابك الآن:</strong> <span id="setAccountLiveDevices">—</span></div>
         </div>
 
-        <div class="field">
+        <div class="field" id="settingsChangePassField">
           <label>تغيير كلمة مرور حسابك</label>
           <div style="display:flex;gap:7px;align-items:center;">
             <input type="text" id="setNewPassInput" class="input masked-pass-input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="account_new_secret_val" placeholder="كلمة مرور جديدة (6 أحرف فأكثر)" />

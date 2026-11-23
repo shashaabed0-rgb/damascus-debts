@@ -841,10 +841,6 @@ function enterFreeOfflineMode(isAutoResume = false) {
   updateHeaderLockButton();
 
   document.getElementById('loginScreen').classList.add('hidden');
-  if (needsForcedPasswordChange(currentProfile, currentWorkshop)) {
-    showForceChangePassScreen();
-    return;
-  }
   if (settings.lockEnabled && settings.pin && sessionStorage.getItem('debt_unlocked_v3') !== '1') {
     showLockScreen();
   } else {
@@ -1004,11 +1000,17 @@ async function handleForcedPasswordChangeSubmit(ev) {
       if (currentProfile.role === 'admin') currentProfile.login_password = null;
     }
 
+    const changedIso = new Date().toISOString();
+    if (currentUser && currentUser.id) {
+      try { localStorage.setItem('debt_pass_updated_at_' + currentUser.id, changedIso); } catch (e) {}
+    }
+
     if (isAdmin() && !isSuperAdmin() && currentWorkshop) {
       const nextWsSettings = { ...(currentWorkshop.settings || {}) };
       delete nextWsSettings.managerPassword;
       nextWsSettings.adminMustChangePassword = false;
       nextWsSettings.adminPasswordResetAt = null;
+      nextWsSettings.adminPasswordUpdatedAt = changedIso;
       try {
         await sb.from('workshops').update({ settings: nextWsSettings }).eq('id', currentProfile.workshop_id);
       } catch (e) {}
@@ -1168,6 +1170,10 @@ async function loadUserWorkspace(user, forceNetworkCheck = false) {
   updateHeaderLockButton();
 
   document.getElementById('loginScreen').classList.add('hidden');
+  if (needsForcedPasswordChange(currentProfile, currentWorkshop)) {
+    showForceChangePassScreen();
+    return;
+  }
   if (settings.lockEnabled && settings.pin && sessionStorage.getItem('debt_unlocked_v3') !== '1') {
     showLockScreen();
   } else {
@@ -1180,6 +1186,7 @@ function applyPermissionsUI() {
   document.getElementById('drawerAccountsBtn').classList.toggle('hidden', !canManageAccounts());
   document.getElementById('drawerAuditBtn')?.classList.toggle('hidden', freeMode || !isAdmin());
   document.getElementById('settingsAccountsShortcut').classList.toggle('hidden', !canManageAccounts());
+  document.getElementById('settingsChangePassField')?.classList.toggle('hidden', canManageAccounts());
   document.getElementById('detailDeleteCustomerBtn').classList.toggle('hidden', !canDeleteRecords());
   document.getElementById('workshopAdminSettingsWrap').classList.toggle('hidden', !isAdmin());
   document.getElementById('currencySettingField').classList.toggle('hidden', !isAdmin());
@@ -1275,51 +1282,118 @@ async function handleLogout() {
   showToast('تم تسجيل الخروج');
 }
 
-async function changeMyPassword() {
-  const inputEl = document.getElementById('setNewPassInput');
+function getSavedPassUpdatedAt(uid, isSelfCard = false) {
+  let iso = '';
+  if (isSelfCard && currentWorkshop && currentWorkshop.settings && currentWorkshop.settings.adminPasswordUpdatedAt) {
+    iso = String(currentWorkshop.settings.adminPasswordUpdatedAt);
+  }
+  if (uid) {
+    try {
+      const localIso = localStorage.getItem('debt_pass_updated_at_' + uid) || '';
+      if (localIso && (!iso || localIso > iso)) iso = localIso;
+    } catch (e) {}
+  }
+  return iso;
+}
+
+function toggleSelfPassBox(uid) {
+  const box = document.getElementById('selfPassBox_' + uid);
+  const btn = document.getElementById('selfPassToggleBtn_' + uid);
+  if (!box) return;
+  const willOpen = box.classList.contains('hidden');
+  box.classList.toggle('hidden', !willOpen);
+  if (btn) btn.textContent = willOpen ? 'إلغاء' : 'تغيير كلمة السر';
+  if (willOpen) {
+    const inp = document.getElementById('selfNewPassInput_' + uid);
+    if (inp) {
+      inp.value = '';
+      setTimeout(() => inp.focus(), 60);
+    }
+  }
+}
+
+async function changeMyPassword(inputId = 'setNewPassInput', eyeBtnId = 'toggleMyPassVisBtn', submitBtnId = '') {
+  const inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
   const newPass = (inputEl.value || '').trim();
   if (newPass.length < 6) return showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
   if (!navigator.onLine) return showToast('يلزم الاتصال بالإنترنت لتغيير كلمة المرور');
 
-  const { error } = await sb.auth.updateUser({ password: newPass });
-  if (error) return showToast(error.message);
-
-  // مزامنة الحالة على السيرفر (للموظف تُحفظ لمدير ورشته؛ أما مدير الورشة المعزولة فتُمسح أي نسخة نصية وتبقى مشفّرة فقط)
-  try {
-    await sb.rpc('sync_my_saved_password', { new_password: newPass });
-  } catch (e) {}
-
-  // إزالة أي نسخة نصية قديمة لكلمة السر من إعدادات الورشة المعزولة لضمان الخصوصية
-  if (isAdmin() && !isSuperAdmin() && currentWorkshop) {
-    try {
-      const nextWsSettings = {
-        ...(currentWorkshop.settings || {}),
-        managerEmail: currentProfile?.email || currentUser?.email || '',
-        adminMustChangePassword: false,
-        adminPasswordResetAt: null
-      };
-      delete nextWsSettings.managerPassword;
-      await sb.from('workshops').update({ settings: nextWsSettings }).eq('id', currentProfile.workshop_id);
-      currentWorkshop.settings = nextWsSettings;
-      if (currentProfile) {
-        currentProfile.must_change_password = false;
-        currentProfile.password_reset_at = null;
-        currentProfile.login_password = null;
-      }
-      if (currentUser) {
-        localStorage.setItem('debt_ctx_sb_' + currentUser.id, JSON.stringify({
-          profile: currentProfile,
-          workshop: currentWorkshop
-        }));
-      }
-    } catch (e) {}
+  const submitBtn = submitBtnId ? document.getElementById(submitBtnId) : null;
+  const oldBtnTxt = submitBtn ? submitBtn.textContent : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'جاري التحديث...';
   }
 
-  inputEl.value = '';
-  inputEl.classList.remove('revealed');
-  const eyeBtn = document.getElementById('toggleMyPassVisBtn');
-  if (eyeBtn) eyeBtn.textContent = 'إظهار';
-  showToast('تم تحديث كلمة المرور بنجاح ✓');
+  try {
+    const { error } = await sb.auth.updateUser({ password: newPass });
+    if (error) return showToast(error.message);
+
+    // مزامنة الحالة على السيرفر (للموظف تُحفظ لمدير ورشته؛ أما مدير الورشة فتُمسح أي نسخة نصية وتبقى مشفّرة فقط)
+    try {
+      await sb.rpc('sync_my_saved_password', { new_password: newPass });
+    } catch (e) {}
+
+    const changedIso = new Date().toISOString();
+    if (currentUser && currentUser.id) {
+      try { localStorage.setItem('debt_pass_updated_at_' + currentUser.id, changedIso); } catch (e) {}
+    }
+
+    if (isAdmin() && currentWorkshop) {
+      try {
+        const nextWsSettings = {
+          ...(currentWorkshop.settings || {}),
+          managerEmail: currentProfile?.email || currentUser?.email || '',
+          adminMustChangePassword: false,
+          adminPasswordResetAt: null,
+          adminPasswordUpdatedAt: changedIso
+        };
+        delete nextWsSettings.managerPassword;
+        await sb.from('workshops').update({ settings: nextWsSettings }).eq('id', currentProfile.workshop_id);
+        currentWorkshop.settings = nextWsSettings;
+      } catch (e) {}
+    }
+
+    if (currentProfile) {
+      currentProfile.must_change_password = false;
+      currentProfile.password_reset_at = null;
+      if (isAdmin()) currentProfile.login_password = null;
+    }
+
+    if (currentUser && currentProfile && currentWorkshop) {
+      localStorage.setItem('debt_ctx_sb_' + currentUser.id, JSON.stringify({
+        profile: currentProfile,
+        workshop: currentWorkshop
+      }));
+    }
+
+    // تحديث النسخة المعروضة في قائمة الحسابات فوراً ليظهر تاريخ التغيير الجديد مباشرةً
+    if (Array.isArray(cachedMembersList) && currentUser) {
+      const me = cachedMembersList.find(m => m.user_id === currentUser.id);
+      if (me) {
+        me.must_change_password = false;
+        me.password_reset_at = null;
+        if (isAdmin()) me.login_password = null;
+      }
+    }
+
+    inputEl.value = '';
+    inputEl.classList.remove('revealed');
+    const eyeBtn = document.getElementById(eyeBtnId);
+    if (eyeBtn) eyeBtn.textContent = 'إظهار';
+
+    if (document.getElementById('accountsView')?.classList.contains('open')) {
+      renderWorkshopMembersList(cachedMembersList);
+      showAccAlert('تم تغيير كلمة مرور حسابك بنجاح ✓ وأصبحت محمية ومشفّرة.', true);
+    }
+    showToast('تم تغيير كلمة المرور بنجاح ✓');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = oldBtnTxt || 'حفظ التغيير';
+    }
+  }
 }
 
 // ==================== المزامنة مع Supabase والعمل أوفلاين ====================
@@ -2034,10 +2108,21 @@ function renderWorkshopMembersList(list) {
     banner.classList.add('hidden');
   }
 
+  // ترتيب القائمة بوضوح: حسابك (مدير الورشة) أولاً، ثم باقي المدراء، ثم الموظفين
+  const sortedList = [...list].sort((a, b) => {
+    const aSelf = a.user_id === currentUser.id ? 1 : 0;
+    const bSelf = b.user_id === currentUser.id ? 1 : 0;
+    if (bSelf !== aSelf) return bSelf - aSelf;
+    const rank = (r) => (r === 'super_admin' ? 3 : (r === 'admin' ? 2 : 1));
+    if (rank(b.role) !== rank(a.role)) return rank(b.role) - rank(a.role);
+    return String(a.display_name || '').localeCompare(String(b.display_name || ''), 'ar');
+  });
+
   memberCredsMap.clear();
-  box.innerHTML = list.map(m => {
+  box.innerHTML = sortedList.map(m => {
     const isSelf = m.user_id === currentUser.id;
     const isSuper = m.role === 'super_admin';
+    const isRoleAdmin = m.role === 'admin' || m.role === 'super_admin';
     const liveDevices = getLiveDevicesForUser(m.user_id, m);
     const liveCount = liveDevices.length;
     const isOnline = liveCount > 0;
@@ -2075,6 +2160,33 @@ function renderWorkshopMembersList(list) {
 
     const liveDevicesBoxHtml = isOnline ? buildLiveDevicesChipsHtml(liveDevices) : '';
 
+    let passRowContent = '';
+    if (isSelf) {
+      const updatedIso = getSavedPassUpdatedAt(m.user_id, true);
+      const updatedStr = updatedIso ? formatIsoDateTimeShort(updatedIso) : '';
+      if (m.must_change_password === true) {
+        passRowContent = `<span class="ws-pass-status temp">⏳ مؤقتة — يرجى التغيير</span>`;
+      } else if (updatedStr) {
+        passRowContent = `<span class="ws-pass-status private">✓ محمية ومشفّرة • تم التغيير: ${escapeHtml(updatedStr)}</span>`;
+      } else {
+        passRowContent = `<span class="ws-pass-status private">🔒 محمية ومشفّرة (خاصة بك)</span>`;
+      }
+      passRowContent += `<button type="button" id="selfPassToggleBtn_${safeUid}" class="ws-cred-mini-btn" onclick="toggleSelfPassBox('${safeUid}')">تغيير كلمة السر</button>`;
+    } else if (memPass) {
+      passRowContent = `
+        <span class="ws-cred-val" id="memPassVal_${safeUid}" data-shown="0">••••••••</span>
+        <button type="button" class="ws-cred-mini-btn" onclick="toggleMemberCardPass(this, '${safeUid}')">إظهار</button>
+        <button type="button" class="ws-cred-mini-btn" onclick="copyMemberCred('${safeUid}', 'pass')">نسخ</button>`;
+    } else if (isRoleAdmin) {
+      passRowContent = `
+        <span class="ws-pass-status private">🔒 محمية ومشفّرة</span>
+        ${!isSuper ? `<button type="button" class="ws-cred-mini-btn" onclick="promptUpdateMemberPassword('${safeUid}')">تعيين جديد</button>` : ''}`;
+    } else {
+      passRowContent = `
+        <span class="ws-cred-val unset">غير محفوظة بعد</span>
+        <button type="button" class="ws-cred-mini-btn" onclick="promptUpdateMemberPassword('${safeUid}')">تعيين</button>`;
+    }
+
     const credsBoxHtml = `
       <div class="ws-creds-box">
         <div class="ws-cred-row">
@@ -2084,17 +2196,20 @@ function renderWorkshopMembersList(list) {
         </div>
         <div class="ws-cred-row">
           <span class="ws-cred-lbl">كلمة المرور:</span>
-          ${memPass
-            ? `<span class="ws-cred-val" id="memPassVal_${safeUid}" data-shown="0">••••••••</span>
-               <button type="button" class="ws-cred-mini-btn" onclick="toggleMemberCardPass(this, '${safeUid}')">إظهار</button>
-               <button type="button" class="ws-cred-mini-btn" onclick="copyMemberCred('${safeUid}', 'pass')">نسخ</button>`
-            : `<span class="ws-cred-val unset">غير محفوظة بعد</span>
-               ${(!isSelf && !isSuper) ? `<button type="button" class="ws-cred-mini-btn" onclick="promptUpdateMemberPassword('${safeUid}')">تعيين</button>` : ''}`
-          }
+          ${passRowContent}
         </div>
       </div>`;
 
-    const controls = (!isSelf && !isSuper) ? `
+    const controls = isSelf ? `
+      <div id="selfPassBox_${safeUid}" class="self-pass-box hidden">
+        <div class="self-pass-title">تغيير كلمة مرور حسابك</div>
+        <div class="self-pass-row">
+          <input type="text" id="selfNewPassInput_${safeUid}" class="input masked-pass-input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="self_mgr_new_secret" placeholder="كلمة المرور الجديدة (6 أحرف فأكثر)" />
+          <button type="button" class="btn btn-light btn-sm" id="toggleSelfPassVis_${safeUid}" onclick="toggleMaskedInput('selfNewPassInput_${safeUid}', this)">إظهار</button>
+          <button type="button" class="btn btn-primary btn-sm" id="saveSelfPassBtn_${safeUid}" style="white-space:nowrap;" onclick="changeMyPassword('selfNewPassInput_${safeUid}', 'toggleSelfPassVis_${safeUid}', 'saveSelfPassBtn_${safeUid}')">حفظ التغيير</button>
+        </div>
+        <div class="self-pass-hint">تُحفظ كلمة مرورك بشكل مشفّر تماماً ولا تظهر كنص صريح لأي شخص، وسيظهر هنا تاريخ آخر تغيير فور الحفظ.</div>
+      </div>` : ((!isSuper) ? `
       <div class="member-actions">
         <button class="btn btn-warn-sm btn-sm" onclick="forceLogoutMemberDevice('${safeUid}')">إخراج من الجهاز</button>
         <button class="btn btn-light btn-sm" onclick="toggleMemberActive('${safeUid}', ${!!m.active})">
@@ -2109,7 +2224,7 @@ function renderWorkshopMembersList(list) {
         </button>
         <button class="btn btn-light btn-sm" onclick="promptUpdateMemberPassword('${safeUid}')">تغيير كلمة السر</button>
         <button class="btn btn-danger btn-sm" onclick="removeWorkshopMember('${safeUid}')">إزالة نهائية</button>
-      </div>` : '';
+      </div>` : '');
 
     return `
       <div class="member-card ${isOnline ? 'is-online-card' : ''}">
@@ -2432,7 +2547,8 @@ function getWorkshopManagerInfo(w) {
     (adminMember && adminMember.must_change_password === true) ||
     (w.settings && w.settings.adminMustChangePassword === true)
   );
-  return { adminMember, wsMembers, email, mustChangePassword };
+  const passwordUpdatedAt = (w.settings && w.settings.adminPasswordUpdatedAt) || '';
+  return { adminMember, wsMembers, email, mustChangePassword, passwordUpdatedAt };
 }
 
 function renderIsolatedWorkshopsList(list) {
@@ -2474,7 +2590,7 @@ function renderIsolatedWorkshopsList(list) {
     }
     const liveDevCount = onlineArr.length;
     const isOnline = liveDevCount > 0;
-    const { adminMember, wsMembers, email: mgrEmail, mustChangePassword: mgrMustChange } = getWorkshopManagerInfo(w);
+    const { adminMember, wsMembers, email: mgrEmail, mustChangePassword: mgrMustChange, passwordUpdatedAt: mgrPassUpdatedAt } = getWorkshopManagerInfo(w);
 
     const onlineBadge = isOnline
       ? `<span class="m-badge m-online"><span class="presence-dot online"></span>متصلة (${formatArabicDeviceCount(liveDevCount)})</span>`
@@ -2517,7 +2633,9 @@ function renderIsolatedWorkshopsList(list) {
           <span class="ws-cred-lbl">كلمة المرور:</span>
           ${mgrMustChange
             ? `<span class="ws-pass-status temp">⏳ مؤقتة — سيُطلب تغييرها عند الدخول</span>`
-            : `<span class="ws-pass-status private">🔒 محمية (خاصة بصاحب الورشة)</span>`
+            : (mgrPassUpdatedAt
+                ? `<span class="ws-pass-status private">✓ محمية (غُيّرت: ${escapeHtml(formatIsoDateTimeShort(mgrPassUpdatedAt))})</span>`
+                : `<span class="ws-pass-status private">🔒 محمية (خاصة بصاحب الورشة)</span>`)
           }
         </div>
       </div>` : '';
