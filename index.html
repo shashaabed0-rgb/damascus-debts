@@ -727,19 +727,122 @@
       flex-direction: column;
       gap: 11px;
     }
+    /* إصلاح اتجاه وترتيب العملات والأرقام في بطاقة الإجمالي والواجهة */
+    .sum-val:not(.hidden) {
+      direction: rtl !important;
+      display: inline-flex !important;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .sum-dual:not(.hidden) {
+      display: flex !important;
+      flex-direction: column;
+      gap: 7px;
+      margin-top: 6px;
+    }
+    .sum-dual-row {
+      direction: rtl !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 9px;
+      flex-wrap: nowrap;
+    }
+    .sum-dual-row .curr-chip {
+      min-width: 70px;
+      text-align: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .sum-dual-num {
+      direction: rtl !important;
+      display: inline-flex !important;
+      align-items: baseline;
+      gap: 5px;
+      white-space: nowrap;
+      unicode-bidi: isolate;
+    }
+    .sum-unit {
+      font-size: 0.72em;
+      font-weight: 800;
+      opacity: 0.88;
+    }
+    .tx-amt {
+      direction: rtl !important;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+    /* سطر الشرح العلوي المحسّن في سجل التدقيق والمتابعة */
     .audit-note-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: var(--card);
+      border: 1px solid #bfdbfe;
+      border-right: 3.5px solid #2563eb;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 11px 13px;
+      margin: 0;
+      box-sizing: border-box;
+      box-shadow: 0 1px 4px rgba(37, 99, 235, 0.06);
+    }
+    [data-theme="dark"] .audit-note-banner {
+      background: rgba(37, 99, 235, 0.12);
+      border-color: rgba(96, 165, 250, 0.32);
+      border-right-color: #60a5fa;
+      box-shadow: none;
+    }
+    .audit-note-ic {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: #eff6ff;
+      color: #2563eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+    [data-theme="dark"] .audit-note-ic {
+      background: rgba(59, 130, 246, 0.22);
+      color: #93c5fd;
+    }
+    .audit-note-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .audit-note-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #1e40af;
+      margin-bottom: 2px;
+      line-height: 1.4;
+    }
+    [data-theme="dark"] .audit-note-title {
+      color: #93c5fd;
+    }
+    .audit-note-desc {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .migrate-summary-banner {
       background: #eff6ff;
       border: 1px solid #bfdbfe;
       color: #1e40af;
       border-radius: 11px;
       padding: 10px 12px;
-      margin: 0;
-      font-size: 12.2px;
+      margin-bottom: 12px;
+      font-size: 12.6px;
       font-weight: 700;
-      line-height: 1.6;
-      box-sizing: border-box;
+      line-height: 1.65;
     }
-    [data-theme="dark"] .audit-note-banner {
+    [data-theme="dark"] .migrate-summary-banner {
       background: rgba(59, 130, 246, 0.14);
       border-color: rgba(96, 165, 250, 0.35);
       color: #93c5fd;
@@ -880,23 +983,6 @@
     .audit-diff-new { color: #15803d; }
     [data-theme="dark"] .audit-diff-old { color: #fca5a5; }
     [data-theme="dark"] .audit-diff-new { color: #86efac; }
-    .migrate-btn-box {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px dashed var(--border);
-    }
-    .btn-migrate-free {
-      width: 100%;
-      background: #f0fdf4 !important;
-      color: #166534 !important;
-      border: 1.5px solid #22c55e !important;
-      font-weight: 800;
-    }
-    [data-theme="dark"] .btn-migrate-free {
-      background: rgba(22, 163, 74, 0.16) !important;
-      color: #86efac !important;
-      border-color: rgba(74, 222, 128, 0.45) !important;
-    }
     #migrateFreeModal.open {
       z-index: 99996 !important;
     }
@@ -1054,7 +1140,7 @@
       <div class="login-dev-card">
         <div class="login-dev-head">
           <span class="login-dev-title">معلومات المطور والدعم الفني</span>
-          <span class="login-dev-ver" id="loginVersionBadge">v26.0</span>
+          <span class="login-dev-ver" id="loginVersionBadge">v27.0</span>
         </div>
         <div class="about-info-box" style="margin-top:0;">
           <div class="about-info-row">
@@ -1160,7 +1246,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v26.0</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v27.0</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -1465,7 +1551,13 @@
     <div class="view-body" id="auditLogBody">
       <div class="audit-inner-wrap">
         <div class="audit-note-banner">
-          🛡️ يوثّق هذا السجل تلقائياً حركات التعديل والحذف وتغيير مواعيد التسديد فقط (قبل وبعد، المستخدم، والتوقيت)، وهو محمي ولا يمكن حذفه.
+          <div class="audit-note-ic">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+          </div>
+          <div class="audit-note-content">
+            <div class="audit-note-title">سجل متابعة محمي (للقراءة فقط)</div>
+            <div class="audit-note-desc">يوثّق تلقائياً التعديلات والحذف وتغيير مواعيد التسديد مع القيم قبل وبعد واسم المستخدم والتوقيت، ولا يمكن حذفه.</div>
+          </div>
         </div>
         <div id="auditServerWarn" class="alert-banner alert-err hidden"></div>
 
@@ -1788,7 +1880,7 @@
           </div>
         </div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;">
-          للانتقال إلى النسخة السحابية (عدد زبائن غير محدود + مزامنة لحظية + سجل تدقيق وحماية الموظفين)، تواصل مع الدعم الفني. عند تسجيل دخولك بحسابك السحابي يمكنك ترحيل جميع زبائنك وحركاتك الحالية تلقائياً أو بضغطة زر.
+          للانتقال إلى النسخة السحابية (عدد زبائن غير محدود + مزامنة لحظية + سجل تدقيق وحماية الموظفين)، تواصل مع الدعم الفني. عند تسجيل دخولك بحسابك السحابي لأول مرة سيُعرض عليك ترحيل حركاتك المحفوظة تلقائياً.
         </div>
         <div class="action-grid" style="margin-bottom:8px;">
           <a id="freeUpgradeCallLink" class="btn btn-light" style="text-decoration:none;" href="tel:0994373742">اتصال للدعم</a>
@@ -1821,11 +1913,6 @@
           <button type="button" class="btn btn-danger" onclick="handleLogout()">تسجيل الخروج</button>
         </div>
 
-        <div id="migrateFreeManualWrap" class="migrate-btn-box hidden">
-          <button type="button" id="migrateFreeManualBtn" class="btn btn-migrate-free" onclick="openMigrateFreeModal(false)">
-            ترحيل بيانات الحساب المجاني إلى السحابة
-          </button>
-        </div>
       </div>
 
       <!-- زر حول التطبيق في صفحة الضبط -->
@@ -1836,7 +1923,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v26.0</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v27.0</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -2045,7 +2132,7 @@
         <h3>ترحيل بيانات الحساب المجاني للسحابة</h3>
         <button class="close-btn" onclick="closeModal('migrateFreeModal')">✕</button>
       </div>
-      <div id="migrateFreeSummaryBox" class="audit-note-banner" style="margin-bottom:12px;"></div>
+      <div id="migrateFreeSummaryBox" class="migrate-summary-banner"></div>
       <div class="switch-row" style="margin-bottom:10px;">
         <div>
           <div style="font-size:13px;font-weight:700;">ترحيل بيانات المحل والإعدادات أيضاً</div>
@@ -2078,7 +2165,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v26.0</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v27.0</span>
         <p class="about-desc">نظام عملي ومتكامل لإدارة ديون ودفعات الزبائن بالعملتين، يعمل بدون إنترنت وبمزامنة سحابية فورية مع كشوفات PDF وواتساب.</p>
       </div>
 
@@ -2157,7 +2244,7 @@
           </div>
           <div class="about-feat-item">
             <strong>9. الحساب المجاني الأوفلاين والترحيل للسحابة</strong>
-            يعمل مجاناً بالكامل بدون إنترنت حتى 25 زبوناً، وعند الانتقال للنسخة السحابية يتيح ترحيل جميع الزبائن والحركات والإعدادات تلقائياً أو بضغطة زر.
+            يعمل مجاناً بالكامل بدون إنترنت حتى 25 زبوناً، وعند تسجيل الدخول بحساب سحابي لأول مرة يعرض ترحيل الحركات تلقائياً في حال وجود بيانات محفوظة.
           </div>
           <div class="about-feat-item">
             <strong>10. سجل التدقيق والمتابعة (للمدير)</strong>

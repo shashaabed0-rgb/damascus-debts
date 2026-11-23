@@ -53,27 +53,37 @@ async function copyQuickCodeNow(isAuto = false) {
   }
 }
 
-// ==================== إدارة الصفحات والخروج بالرجوع مرتين (متوافق مع حماية Chrome) ====================
+// ==================== إدارة الصفحات والخروج بالرجوع مرتين (متوافق مع إيماءات وأزرار أندرويد) ====================
 let layerStack = [];
 let ignoreNextPopstate = 0;
+let ignorePopResetTimer = null;
 let exitPromptActive = false;
 let exitPromptTimer = null;
+let lastExitBackTs = 0;
+
+function bumpIgnoreNextPopstate(count = 1) {
+  ignoreNextPopstate += count;
+  clearTimeout(ignorePopResetTimer);
+  ignorePopResetTimer = setTimeout(() => {
+    ignoreNextPopstate = 0;
+  }, 350);
+}
 
 function armRootExitGuard() {
+  allowAppExit = false;
   if (!rootGuardArmed) {
     rootGuardArmed = true;
     try {
       history.replaceState({ appState: 'exit_ready' }, '');
     } catch (e) {}
   }
-  // إذا دخل المستخدم بضغطة زر (تسجيل دخول / قفل)، نفعّل حارس الرجوع فوراً مع وجود User Activation
   if (navigator.userActivation && navigator.userActivation.isActive) {
     ensureGestureExitGuard();
   }
 }
 
 function ensureGestureExitGuard() {
-  if (!isUnlocked || exitPromptActive || layerStack.length > 0) return;
+  if (!isUnlocked || allowAppExit || exitPromptActive || layerStack.length > 0) return;
   if (!history.state || history.state.appState !== 'main_guard') {
     try {
       history.replaceState({ appState: 'exit_ready' }, '');
@@ -82,10 +92,12 @@ function ensureGestureExitGuard() {
   }
 }
 
-// تفعيل حارس الرجوع فور أول لمسة أو تفاعل حقيقي داخل التطبيق (حتى لا يتجاهله متصفح Chrome)
-['touchstart', 'pointerdown', 'keydown'].forEach(evtName => {
+// مهم جداً: نعتمد على click و keydown فقط (وليس touchstart/pointerdown)
+// لأن إيماءة السحب للرجوع على جوالات أندرويد الحديثة تُطلق touchstart/pointerdown على حافة الشاشة!
+['click', 'keydown'].forEach(evtName => {
   window.addEventListener(evtName, () => {
     if (!isUnlocked) return;
+    if (allowAppExit) allowAppExit = false;
     if (exitPromptActive) {
       hideExitPrompt();
     }
@@ -97,12 +109,13 @@ function showExitPrompt(msg) {
   const box = document.getElementById('exitPromptBox');
   if (!box) return;
   exitPromptActive = true;
+  lastExitBackTs = Date.now();
   box.textContent = msg;
   box.classList.add('show');
   clearTimeout(exitPromptTimer);
   exitPromptTimer = setTimeout(() => {
     hideExitPrompt();
-  }, 3000);
+  }, 2600);
 }
 
 function hideExitPrompt() {
@@ -155,7 +168,7 @@ function popLayerFromUI(name, keepHistory = false) {
   if (idx !== -1) {
     layerStack.splice(idx, 1);
     if (!keepHistory && history.state && history.state.appState === 'layer') {
-      ignoreNextPopstate++;
+      bumpIgnoreNextPopstate(1);
       try {
         history.back();
       } catch (e) {
@@ -183,9 +196,10 @@ function resetAllOpenLayersForLogout() {
   layerStack.forEach(hideLayerDom);
   layerStack = [];
   hideExitPrompt();
+  allowAppExit = false;
   updateBodyScrollLock();
   if (openCount > 0 && history.state && history.state.appState === 'layer') {
-    ignoreNextPopstate++;
+    bumpIgnoreNextPopstate(1);
     try { history.go(-openCount); } catch (e) { ignoreNextPopstate = Math.max(0, ignoreNextPopstate - 1); }
   }
 }
@@ -204,6 +218,15 @@ function closeSideMenu(keepHistory = false) {
 window.addEventListener('popstate', () => {
   if (ignoreNextPopstate > 0) {
     ignoreNextPopstate--;
+    if (ignoreNextPopstate === 0) clearTimeout(ignorePopResetTimer);
+    return;
+  }
+
+  // في حال كان المستخدم قد أكّد الخروج بالضغطة الثانية، نسمح للرجوع بالاستمرار بدون مقاطعة
+  if (allowAppExit) {
+    if (history.state && history.state.appState) {
+      try { history.back(); } catch (e) {}
+    }
     return;
   }
 
@@ -218,15 +241,24 @@ window.addEventListener('popstate', () => {
   const fallbackLayers = ['sideMenu', 'migrateFreeModal', 'freeLimitModal', 'aboutModal', 'confirmModal', 'editWorkshopModal', 'editCustomerModal', 'addModal', 'auditLogView', 'accountsView', 'settingsView', 'detailView'];
   for (const id of fallbackLayers) {
     const domId = id === 'sideMenu' ? 'sideMenuBackdrop' : id;
-    if (document.getElementById(domId).classList.contains('open')) {
+    const el = document.getElementById(domId);
+    if (el && el.classList.contains('open')) {
       hideLayerDom(id);
       updateBodyScrollLock();
       return;
     }
   }
 
-  // على الشاشة الرئيسية: أظهر مربع واضح للخروج (وعند الضغط مرة ثانية سيخرج الهاتف تلقائياً)
+  // على الشاشة الرئيسية:
+  // الضغطة الأولى تُظهر تنبيه الخروج، والضغطة الثانية خلال 2.6 ثانية تخرج فعلياً من التطبيق بدون تكرار أو تعليق
   if (isUnlocked) {
+    const isSecondPress = exitPromptActive || (Date.now() - lastExitBackTs < 2600);
+    if (isSecondPress) {
+      hideExitPrompt();
+      allowAppExit = true;
+      try { history.back(); } catch (e) {}
+      return;
+    }
     const msg = pendingQueue.length > 0
       ? `يوجد ${pendingQueue.length} عملية محلية — اضغط رجوع مرة أخرى للخروج`
       : 'اضغط رجوع مرة أخرى للخروج من التطبيق';
@@ -929,17 +961,17 @@ function processAndRender() {
   const showDualSummary = dual || disabledHasDebt;
 
   if (showDualSummary) {
-    document.getElementById('activeCurrName').textContent = dual ? 'العملتين' : `${singleCurr.name} + أرصدة قيد التسديد`;
+    document.getElementById('activeCurrName').textContent = dual ? 'العملتين' : `${singleCurr.name} + أرصدة مفتوحة`;
     document.getElementById('totalDebtVal').classList.add('hidden');
     document.getElementById('totalDebtDual').classList.remove('hidden');
-    document.getElementById('totalDebtUsd').textContent = `${formatNum(grandUsd)} $`;
-    document.getElementById('totalDebtSyp').textContent = `${formatNum(grandSyp)} ل.س`;
+    document.getElementById('totalDebtUsd').innerHTML = `<span class="num-ltr">${formatNum(grandUsd)}</span><span class="sum-unit">$</span>`;
+    document.getElementById('totalDebtSyp').innerHTML = `<span class="num-ltr">${formatNum(grandSyp)}</span><span class="sum-unit">ل.س</span>`;
   } else {
     document.getElementById('activeCurrName').textContent = singleCurr.name;
     document.getElementById('totalDebtVal').classList.remove('hidden');
     document.getElementById('totalDebtDual').classList.add('hidden');
     const grandVal = settings.currency === 'SYP' ? grandSyp : grandUsd;
-    document.getElementById('totalDebtVal').textContent = `${formatNum(grandVal)} ${singleCurr.symbol}`;
+    document.getElementById('totalDebtVal').innerHTML = `<span class="num-ltr">${formatNum(grandVal)}</span><span class="sum-unit">${singleCurr.symbol}</span>`;
   }
 
   document.getElementById('indebtedCount').textContent = indebtedCount;
@@ -1874,7 +1906,7 @@ async function executeConfirmedDelete(choice = null) {
     closeModal('confirmModal', true);
     closeDetailView(true);
     if (backSteps > 0 && history.state && history.state.appState === 'layer') {
-      ignoreNextPopstate++;
+      bumpIgnoreNextPopstate(1);
       try { history.go(-backSteps); } catch (e) { ignoreNextPopstate = Math.max(0, ignoreNextPopstate - 1); }
     }
     processAndRender();
@@ -1929,7 +1961,7 @@ async function executeConfirmedDelete(choice = null) {
     closeModal('confirmModal', true);
     closeDetailView(true);
     if (backSteps > 0 && history.state && history.state.appState === 'layer') {
-      ignoreNextPopstate++;
+      bumpIgnoreNextPopstate(1);
       try { history.go(-backSteps); } catch (e) { ignoreNextPopstate = Math.max(0, ignoreNextPopstate - 1); }
     }
     processAndRender();
@@ -2008,7 +2040,6 @@ function openSettingsView() {
   document.getElementById('setAccountRole').textContent = currentProfile ? getRoleLabel(currentProfile.role) : '—';
   if (!isFreeOfflineMode()) {
     updateSettingsLiveDevicesSummary();
-    updateManualFreeMigrationButtonUI();
   }
   if (isFreeOfflineMode()) {
     updateFreeOfflineStatusBar();
@@ -2614,7 +2645,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v26.0';
+  const ver = (APP_META && APP_META.version) || 'v27.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2645,7 +2676,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v26.0';
+  const ver = (APP_META && APP_META.version) || 'v27.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2677,7 +2708,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v26.0';
+  const ver = (APP_META && APP_META.version) || 'v27.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
@@ -2826,7 +2857,7 @@ document.addEventListener('selectstart', (e) => {
 let currentAuditFilter = 'all';
 
 function openAuditLogView() {
-  if (!isAdmin()) return showToast('سجل التدقيق والمتابعة مخصص للمدير فقط');
+  if (isFreeOfflineMode() || !isAdmin()) return showToast('سجل التدقيق والمتابعة متاح لمدير النسخة السحابية فقط');
   document.getElementById('auditWorkshopSub').textContent = settings.shopName || 'سجل محمي للتعديلات والحذف';
   document.getElementById('auditSearchInput').value = '';
   currentAuditFilter = 'all';
@@ -2972,30 +3003,13 @@ function getFreeOfflineMigrationInfo() {
   const realTxCount = unmigratedRecords.filter(r => !isCustomerStubRecord(r)).length;
 
   return {
-    hasData: unmigratedRecords.length > 0,
+    hasData: realTxCount > 0 && unmigratedRecords.length > 0,
     totalRawCount: freeRecords.length,
     unmigratedRecords,
     realTxCount,
     customerCount: uniqueCustomers.size,
     freeSettings
   };
-}
-
-function updateManualFreeMigrationButtonUI() {
-  const wrap = document.getElementById('migrateFreeManualWrap');
-  const btn = document.getElementById('migrateFreeManualBtn');
-  if (!wrap || !btn) return;
-  if (isFreeOfflineMode() || !isAdmin()) {
-    wrap.classList.add('hidden');
-    return;
-  }
-  wrap.classList.remove('hidden');
-  const info = getFreeOfflineMigrationInfo();
-  if (info.hasData) {
-    btn.textContent = `ترحيل بيانات الحساب المجاني للسحابة (${info.customerCount} زبون • ${info.realTxCount} حركة)`;
-  } else {
-    btn.textContent = 'ترحيل بيانات الحساب المجاني إلى السحابة';
-  }
 }
 
 function checkAndPromptFreeMigration(isAuto = false) {
@@ -3156,7 +3170,6 @@ async function executeFreeToCloudMigration() {
     persistData();
     closeModal('migrateFreeModal');
     processAndRender();
-    updateManualFreeMigrationButtonUI();
     triggerSyncOrOfflineToast(
       `تم ترحيل ${info.customerCount} زبون (${migratedCount} سجل) بنجاح، جاري الرفع للسحابة...`,
       `تم ترحيل ${info.customerCount} زبون محلياً وسيُرفع تلقائياً عند عودة الإنترنت`

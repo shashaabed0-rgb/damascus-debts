@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v26.0',
+  version: 'v27.0',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -305,7 +305,7 @@ function persistData() {
 const TRACKED_AUDIT_ACTIONS = new Set(['edit_tx', 'delete_tx', 'edit_customer', 'delete_customer', 'set_due_date']);
 
 function recordAuditEvent({ action_type, customer_name, summary, before_data = null, after_data = null }) {
-  if (!currentProfile) return null;
+  if (!currentProfile || isFreeOfflineMode()) return null;
   if (!TRACKED_AUDIT_ACTIONS.has(String(action_type || ''))) return null;
   const entry = {
     id: 'aud_' + genId(),
@@ -1035,9 +1035,8 @@ async function loadUserWorkspace(user, forceNetworkCheck = false) {
 function applyPermissionsUI() {
   const freeMode = isFreeOfflineMode();
   document.getElementById('drawerAccountsBtn').classList.toggle('hidden', !canManageAccounts());
-  document.getElementById('drawerAuditBtn')?.classList.toggle('hidden', !isAdmin());
+  document.getElementById('drawerAuditBtn')?.classList.toggle('hidden', freeMode || !isAdmin());
   document.getElementById('settingsAccountsShortcut').classList.toggle('hidden', !canManageAccounts());
-  document.getElementById('migrateFreeManualWrap')?.classList.toggle('hidden', isFreeOfflineMode() || !isAdmin());
   document.getElementById('detailDeleteCustomerBtn').classList.toggle('hidden', !canDeleteRecords());
   document.getElementById('workshopAdminSettingsWrap').classList.toggle('hidden', !isAdmin());
   document.getElementById('currencySettingField').classList.toggle('hidden', !isAdmin());
@@ -1051,6 +1050,17 @@ function applyPermissionsUI() {
       ? 'بيانات المحل واللوغو (تُحفظ على هذا الجهاز)'
       : 'بيانات المحل واللوغو (تتزامن مع جميع الأجهزة)';
   }
+}
+
+function clearSupabaseLocalAuthTokens() {
+  try {
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && /^sb-.*-auth-token/i.test(k)) toRemove.push(k);
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
 }
 
 async function handleLogout() {
@@ -1080,7 +1090,12 @@ async function handleLogout() {
   try {
     const client = ensureSupabaseClient();
     if (client && navigator.onLine) {
-      try { await client.rpc('release_my_device', { p_device_id: getOrCreateDeviceId() }); } catch (e) {}
+      try {
+        await Promise.race([
+          client.rpc('release_my_device', { p_device_id: getOrCreateDeviceId() }),
+          new Promise(res => setTimeout(res, 1800))
+        ]);
+      } catch (e) {}
     }
     if (realtimeChannel && client) { client.removeChannel(realtimeChannel); realtimeChannel = null; }
     if (presenceChannel && client) { client.removeChannel(presenceChannel); presenceChannel = null; }
@@ -1093,10 +1108,16 @@ async function handleLogout() {
   clearSavedForceLogoutVersion(logoutUid);
   try {
     const client = ensureSupabaseClient();
-    if (client) await client.auth.signOut({ scope: 'local' });
+    if (client) {
+      await Promise.race([
+        client.auth.signOut({ scope: 'local' }),
+        new Promise(res => setTimeout(res, 1500))
+      ]);
+    }
   } catch (e) {
     console.warn('SignOut warning:', e);
   }
+  clearSupabaseLocalAuthTokens();
   sessionStorage.removeItem('debt_unlocked_v3');
   currentUser = null;
   currentProfile = null;
