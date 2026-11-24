@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v1.1',
+  version: 'v1.1.1',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -480,7 +480,7 @@ function initHighEntropyDeviceModel() {
           const changed = resolvedDeviceModelName !== mdl;
           resolvedDeviceModelName = mdl;
           if (changed && presenceChannel && currentUser && currentProfile && !isFreeOfflineMode()) {
-            presenceChannel.track(buildPresenceTrackPayload()).catch(() => {});
+            Promise.resolve(presenceChannel.track(buildPresenceTrackPayload())).then(() => {}, () => {});
           }
         }
       }).catch(() => {});
@@ -2164,46 +2164,49 @@ async function syncData(silent) {
     persistData();
     processAndRender();
 
-    // 4. رفع سجل التدقيق المعلّق إلى Supabase بصمت عبر INSERT فقط (متوافق مع جدول محمي بدون UPDATE)
+    // 4. رفع سجل التدقيق المعلّق إلى Supabase بصمت عبر INSERT فقط (معزول تماماً حتى لا يعطّل مزامنة الديون)
     if (pendingAuditQueue.length > 0) {
-      while (pendingAuditQueue.length > 0) {
-        const aItem = pendingAuditQueue[0];
-        if (!TRACKED_AUDIT_ACTIONS.has(String(aItem.action_type || ''))) {
-          pendingAuditQueue.shift();
-          persistAuditData();
-          continue;
-        }
-        const { error: audErr } = await client
-          .from('audit_logs')
-          .insert({
-            id: String(aItem.id),
-            workshop_id: currentProfile.workshop_id,
-            actor_user_id: aItem.actor_user_id || currentUser.id,
-            actor_name: String(aItem.actor_name || currentProfile.display_name || ''),
-            action_type: String(aItem.action_type || 'edit_tx'),
-            customer_name: String(aItem.customer_name || ''),
-            summary: String(aItem.summary || ''),
-            before_data: aItem.before_data || null,
-            after_data: aItem.after_data || null,
-            created_at: aItem.created_at || new Date().toISOString()
-          });
-        if (audErr) {
-          const aMsg = String(audErr.message || '');
-          if (audErr.code === '23505' || aMsg.includes('duplicate key')) {
-            // مرفوع مسبقاً بنجاح
-            auditTableMissingOnServer = false;
+      try {
+        while (pendingAuditQueue.length > 0) {
+          const aItem = pendingAuditQueue[0];
+          if (!TRACKED_AUDIT_ACTIONS.has(String(aItem.action_type || ''))) {
             pendingAuditQueue.shift();
             persistAuditData();
             continue;
           }
-          if (aMsg.includes('audit_logs') || aMsg.includes('does not exist') || audErr.code === '42P01') {
-            auditTableMissingOnServer = true;
+          const { error: audErr } = await client
+            .from('audit_logs')
+            .insert({
+              id: String(aItem.id),
+              workshop_id: currentProfile.workshop_id,
+              actor_user_id: aItem.actor_user_id || currentUser.id,
+              actor_name: String(aItem.actor_name || currentProfile.display_name || ''),
+              action_type: String(aItem.action_type || 'edit_tx'),
+              customer_name: String(aItem.customer_name || ''),
+              summary: String(aItem.summary || ''),
+              before_data: aItem.before_data || null,
+              after_data: aItem.after_data || null,
+              created_at: aItem.created_at || new Date().toISOString()
+            });
+          if (audErr) {
+            const aMsg = String(audErr.message || '');
+            if (audErr.code === '23505' || aMsg.includes('duplicate key')) {
+              auditTableMissingOnServer = false;
+              pendingAuditQueue.shift();
+              persistAuditData();
+              continue;
+            }
+            if (aMsg.includes('audit_logs') || aMsg.includes('does not exist') || audErr.code === '42P01') {
+              auditTableMissingOnServer = true;
+            }
+            break;
           }
-          break;
+          auditTableMissingOnServer = false;
+          pendingAuditQueue.shift();
+          persistAuditData();
         }
-        auditTableMissingOnServer = false;
-        pendingAuditQueue.shift();
-        persistAuditData();
+      } catch (auditEx) {
+        console.warn('Audit sync skipped:', auditEx);
       }
     }
 
@@ -2211,7 +2214,9 @@ async function syncData(silent) {
     const nowMs = Date.now();
     if (nowMs - lastActivityTouchMs > 60 * 60 * 1000) {
       lastActivityTouchMs = nowMs;
-      client.rpc('touch_workshop_activity').catch(() => {});
+      try {
+        Promise.resolve(client.rpc('touch_workshop_activity')).then(() => {}, () => {});
+      } catch (e) {}
     }
 
     // عند المزامنة: إخفاء التاريخ والساعة (تظهر فقط في وضع الأوفلاين)
@@ -2234,9 +2239,16 @@ async function syncData(silent) {
     }
   } catch (err) {
     console.error('Sync error:', err);
+    const errMsg = String((err && (err.message || err.details)) || err || '');
+    const isJwtOrAuth = /jwt|token|not authenticated|401|permission denied|row-level security/i.test(errMsg);
     const lastTxt = getLastUpdateDisplayText();
-    updateSyncStatusUI(lastTxt ? `بدون اتصال • ${lastTxt}` : 'محفوظ على الجهاز (سيُزامن عند عودة الاتصال)', 'err');
-    if (!silent) showToast('محفوظ على الجهاز، وتعذّر الوصول للخادم حالياً');
+    if (isJwtOrAuth) {
+      updateSyncStatusUI('انتهت جلسة الدخول — سجّل الخروج ثم الدخول مجدداً', 'err');
+      if (!silent) showToast('انتهت جلسة الدخول، يرجى تسجيل الخروج والدخول مجدداً للمزامنة');
+    } else {
+      updateSyncStatusUI(lastTxt ? `بدون اتصال • ${lastTxt}` : 'محفوظ على الجهاز (سيُزامن عند عودة الاتصال)', 'err');
+      if (!silent) showToast('محفوظ على الجهاز، وتعذّر الوصول للخادم حالياً');
+    }
   } finally {
     isSyncing = false;
     syncBtn.classList.remove('spinning');

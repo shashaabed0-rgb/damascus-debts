@@ -1020,30 +1020,45 @@ function processAndRender() {
   );
   const showDualSummary = dual || disabledHasBalance;
 
-  document.getElementById('forMeFilesCount').textContent = formatArabicFileCount(forMeCount);
-  document.getElementById('onMeFilesCount').textContent = formatArabicFileCount(onMeCount);
+  const elForMeFiles = document.getElementById('forMeFilesCount');
+  const elOnMeFiles = document.getElementById('onMeFilesCount');
+  const elForMeVal = document.getElementById('totalForMeVal');
+  const elForMeDual = document.getElementById('totalForMeDual');
+  const elForMeUsd = document.getElementById('totalForMeUsd');
+  const elForMeSyp = document.getElementById('totalForMeSyp');
+  const elOnMeVal = document.getElementById('totalOnMeVal');
+  const elOnMeDual = document.getElementById('totalOnMeDual');
+  const elOnMeUsd = document.getElementById('totalOnMeUsd');
+  const elOnMeSyp = document.getElementById('totalOnMeSyp');
+
+  if (elForMeFiles) elForMeFiles.textContent = formatArabicFileCount(forMeCount);
+  if (elOnMeFiles) elOnMeFiles.textContent = formatArabicFileCount(onMeCount);
 
   if (showDualSummary) {
-    document.getElementById('totalForMeVal').classList.add('hidden');
-    document.getElementById('totalForMeDual').classList.remove('hidden');
-    document.getElementById('totalForMeUsd').innerHTML = `<span class="sum-num-txt">${formatNum(forMeUsd)}</span><span class="sum-curr-tag">$</span>`;
-    document.getElementById('totalForMeSyp').innerHTML = `<span class="sum-num-txt">${formatNum(forMeSyp)}</span><span class="sum-curr-tag">ل.س</span>`;
+    if (elForMeVal) elForMeVal.classList.add('hidden');
+    if (elForMeDual) elForMeDual.classList.remove('hidden');
+    if (elForMeUsd) elForMeUsd.innerHTML = `<span class="sum-num-txt">${formatNum(forMeUsd)}</span><span class="sum-curr-tag">$</span>`;
+    if (elForMeSyp) elForMeSyp.innerHTML = `<span class="sum-num-txt">${formatNum(forMeSyp)}</span><span class="sum-curr-tag">ل.س</span>`;
 
-    document.getElementById('totalOnMeVal').classList.add('hidden');
-    document.getElementById('totalOnMeDual').classList.remove('hidden');
-    document.getElementById('totalOnMeUsd').innerHTML = `<span class="sum-num-txt">${formatNum(onMeUsd)}</span><span class="sum-curr-tag">$</span>`;
-    document.getElementById('totalOnMeSyp').innerHTML = `<span class="sum-num-txt">${formatNum(onMeSyp)}</span><span class="sum-curr-tag">ل.س</span>`;
+    if (elOnMeVal) elOnMeVal.classList.add('hidden');
+    if (elOnMeDual) elOnMeDual.classList.remove('hidden');
+    if (elOnMeUsd) elOnMeUsd.innerHTML = `<span class="sum-num-txt">${formatNum(onMeUsd)}</span><span class="sum-curr-tag">$</span>`;
+    if (elOnMeSyp) elOnMeSyp.innerHTML = `<span class="sum-num-txt">${formatNum(onMeSyp)}</span><span class="sum-curr-tag">ل.س</span>`;
   } else {
     const forMeSingle = settings.currency === 'SYP' ? forMeSyp : forMeUsd;
     const onMeSingle = settings.currency === 'SYP' ? onMeSyp : onMeUsd;
 
-    document.getElementById('totalForMeVal').classList.remove('hidden');
-    document.getElementById('totalForMeDual').classList.add('hidden');
-    document.getElementById('totalForMeVal').innerHTML = `<span class="sum-num-txt">${formatNum(forMeSingle)}</span><span class="sum-curr-tag">${singleCurr.symbol}</span>`;
+    if (elForMeVal) {
+      elForMeVal.classList.remove('hidden');
+      elForMeVal.innerHTML = `<span class="sum-num-txt">${formatNum(forMeSingle)}</span><span class="sum-curr-tag">${singleCurr.symbol}</span>`;
+    }
+    if (elForMeDual) elForMeDual.classList.add('hidden');
 
-    document.getElementById('totalOnMeVal').classList.remove('hidden');
-    document.getElementById('totalOnMeDual').classList.add('hidden');
-    document.getElementById('totalOnMeVal').innerHTML = `<span class="sum-num-txt">${formatNum(onMeSingle)}</span><span class="sum-curr-tag">${singleCurr.symbol}</span>`;
+    if (elOnMeVal) {
+      elOnMeVal.classList.remove('hidden');
+      elOnMeVal.innerHTML = `<span class="sum-num-txt">${formatNum(onMeSingle)}</span><span class="sum-curr-tag">${singleCurr.symbol}</span>`;
+    }
+    if (elOnMeDual) elOnMeDual.classList.add('hidden');
   }
   const dlEl = document.getElementById('customersDatalist');
   if (dlEl) dlEl.innerHTML = '';
@@ -2892,7 +2907,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v1.1';
+  const ver = (APP_META && APP_META.version) || 'v1.1.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2923,7 +2938,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v1.1';
+  const ver = (APP_META && APP_META.version) || 'v1.1.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2955,7 +2970,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v1.1';
+  const ver = (APP_META && APP_META.version) || 'v1.1.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
