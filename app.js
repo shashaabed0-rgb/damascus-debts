@@ -1438,13 +1438,13 @@ function renderDetailSummaryCards(cust) {
     const labelTxt = code === 'USD' ? 'دولار' : 'ليرة سوري';
 
     let balCls = 'bal-zero';
-    let balVal = '0';
+    let balHtml = '<span class="num-ltr">0</span>';
     if (info.balance > 0.001) {
       balCls = 'bal-pos';
-      balVal = formatNum(info.balance);
+      balHtml = `<span class="num-ltr">${formatNum(info.balance)}</span>`;
     } else if (info.balance < -0.001) {
       balCls = 'bal-neg';
-      balVal = `له ${formatNum(Math.abs(info.balance))}`;
+      balHtml = `<span class="bal-for-lbl">له</span><span class="num-ltr">${formatNum(Math.abs(info.balance))}</span>`;
     }
 
     return `
@@ -1452,9 +1452,9 @@ function renderDetailSummaryCards(cust) {
         <div class="unified-curr-cell">
           <span class="unified-curr-pill ${pillCls}">${labelTxt}</span>
         </div>
-        <div class="unified-num debt">${formatNum(info.totalDebt)}</div>
-        <div class="unified-num pay">${formatNum(info.totalPay)}</div>
-        <div class="unified-num ${balCls}">${balVal}</div>
+        <div class="unified-num debt"><span class="num-ltr">${formatNum(info.totalDebt)}</span></div>
+        <div class="unified-num pay"><span class="num-ltr">${formatNum(info.totalPay)}</span></div>
+        <div class="unified-num ${balCls}">${balHtml}</div>
       </div>
     `;
   }).join('');
@@ -2922,7 +2922,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v1.2';
+  const ver = (APP_META && APP_META.version) || 'v1.2.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2953,7 +2953,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v1.2';
+  const ver = (APP_META && APP_META.version) || 'v1.2.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2985,7 +2985,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v1.2';
+  const ver = (APP_META && APP_META.version) || 'v1.2.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
