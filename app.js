@@ -2907,7 +2907,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v1.1.1';
+  const ver = (APP_META && APP_META.version) || 'v1.1.2';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2938,7 +2938,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v1.1.1';
+  const ver = (APP_META && APP_META.version) || 'v1.1.2';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2970,7 +2970,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v1.1.1';
+  const ver = (APP_META && APP_META.version) || 'v1.1.2';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
