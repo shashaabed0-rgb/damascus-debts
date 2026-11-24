@@ -776,7 +776,11 @@ function getDueControlIds(prefix) {
       textId: 'editDueSelectedText',
       clearBtnId: 'editDueClearBtn',
       chipsId: 'editDueChips',
-      calBtnId: 'editDueCalBtn'
+      calBtnId: 'editDueCalBtn',
+      accordionId: 'editDueAccordion',
+      toggleRowId: 'editDueToggleRow',
+      bodyWrapId: 'editDueBodyWrap',
+      toggleSubId: 'editDueToggleSub'
     };
   }
   return {
@@ -786,8 +790,36 @@ function getDueControlIds(prefix) {
     textId: 'txDueSelectedText',
     clearBtnId: 'txDueClearBtn',
     chipsId: 'txDueChips',
-    calBtnId: 'txDueCalBtn'
+    calBtnId: 'txDueCalBtn',
+    accordionId: 'txDueAccordion',
+    toggleRowId: 'txDueToggleRow',
+    bodyWrapId: 'txDueBodyWrap',
+    toggleSubId: 'txDueToggleSub'
   };
+}
+
+function setDuePanelOpen(prefix, isOpen, clearOnClose = false) {
+  const ids = getDueControlIds(prefix);
+  const acc = document.getElementById(ids.accordionId);
+  const row = document.getElementById(ids.toggleRowId);
+  const body = document.getElementById(ids.bodyWrapId);
+  const openFlag = Boolean(isOpen);
+  if (acc) acc.classList.toggle('is-open', openFlag);
+  if (row) {
+    row.classList.toggle('is-open', openFlag);
+    row.setAttribute('aria-expanded', openFlag ? 'true' : 'false');
+  }
+  if (body) body.classList.toggle('hidden', !openFlag);
+  if (!openFlag && clearOnClose) {
+    clearDueControl(prefix);
+  }
+}
+
+function toggleDuePanel(prefix) {
+  const ids = getDueControlIds(prefix);
+  const body = document.getElementById(ids.bodyWrapId);
+  const willOpen = body ? body.classList.contains('hidden') : true;
+  setDuePanelOpen(prefix, willOpen, !willOpen);
 }
 
 function openNativeDatePickerEl(inputEl) {
@@ -824,11 +856,17 @@ function updateDueControlUI(prefix, activeDays = null) {
   const calBtn = document.getElementById(ids.calBtnId);
   const chipsWrap = document.getElementById(ids.chipsId);
 
+  const toggleSubEl = document.getElementById(ids.toggleSubId);
   const val = dateEl ? String(dateEl.value || '').trim() : '';
   const hasVal = Boolean(val);
+  const formattedDue = hasVal ? fromInputDate(val) : '';
   if (textEl) {
-    textEl.textContent = hasVal ? fromInputDate(val) : 'بدون موعد محدد';
+    textEl.textContent = hasVal ? formattedDue : 'بدون موعد محدد';
     textEl.classList.toggle('is-empty', !hasVal);
+  }
+  if (toggleSubEl) {
+    toggleSubEl.textContent = hasVal ? formattedDue : 'اختياري';
+    toggleSubEl.classList.toggle('has-date', hasVal);
   }
   if (clearBtn) clearBtn.classList.toggle('hidden', !hasVal);
   if (calBtn) calBtn.classList.toggle('has-date', hasVal);
@@ -1746,6 +1784,7 @@ function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt',
   document.getElementById('txDate').value = toInputDate(todayString());
   document.getElementById('txDateField').classList.add('hidden');
   clearDueControl('tx');
+  setDuePanelOpen('tx', false);
   if (!isInsideCustomerCard) {
     checkDuplicateTxName();
   } else {
@@ -1785,6 +1824,7 @@ function openEditTxModal(id) {
   document.getElementById('txDate').value = toInputDate(rec.date);
   document.getElementById('txDateField').classList.remove('hidden');
   clearDueControl('tx');
+  setDuePanelOpen('tx', false);
   checkDuplicateTxName();
 
   const recCurr = getRecordCurrency(rec);
@@ -1943,11 +1983,13 @@ let editingCustomerTargetName = null;
 
 function populateEditCustomerDueControl(cust) {
   const existing = cust ? getCustomerDueEntry(cust.name) : null;
+  const hasDue = Boolean(existing && existing.date);
   const dateEl = document.getElementById('editCustDueDate');
   const noteEl = document.getElementById('editCustDueNote');
-  if (dateEl) dateEl.value = (existing && existing.date) ? toInputDate(existing.date) : '';
+  if (dateEl) dateEl.value = hasDue ? toInputDate(existing.date) : '';
   if (noteEl) noteEl.value = (existing && existing.note) ? existing.note : '';
   updateDueControlUI('edit', null);
+  setDuePanelOpen('edit', hasDue);
 }
 
 function openEditCustomerModalByName(encodedName) {
@@ -2922,7 +2964,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v1.3';
+  const ver = (APP_META && APP_META.version) || 'v1.4';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2953,7 +2995,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v1.3';
+  const ver = (APP_META && APP_META.version) || 'v1.4';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2985,7 +3027,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v1.3';
+  const ver = (APP_META && APP_META.version) || 'v1.4';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;

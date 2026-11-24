@@ -2070,6 +2070,219 @@
         font-size: 14.8px !important;
       }
     }
+    /* ===== v1.4: موعد تسديد الدين القابل للطي بأناقة + تنويه حول التطبيق ===== */
+    .due-accordion {
+      border: 1.5px dashed var(--border);
+      border-radius: 13px;
+      background: var(--bg);
+      overflow: hidden;
+      transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+    }
+    .due-accordion.is-open {
+      border-style: solid;
+      border-color: rgba(42, 69, 112, 0.36);
+      box-shadow: 0 3px 10px rgba(42, 69, 112, 0.08);
+    }
+    [data-theme="dark"] .due-accordion.is-open {
+      border-color: rgba(96, 165, 250, 0.42);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+    .due-toggle-row {
+      width: 100%;
+      border: none;
+      background: transparent;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      font-family: inherit;
+      text-align: right;
+      user-select: none;
+      transition: background .15s ease;
+    }
+    .due-toggle-row:active {
+      background: rgba(42, 69, 112, 0.05);
+    }
+    .due-toggle-right {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+    .due-toggle-ic {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: rgba(42, 69, 112, 0.10);
+      color: var(--primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background .18s ease, color .18s ease;
+    }
+    .due-toggle-row.is-open .due-toggle-ic {
+      background: var(--primary);
+      color: #ffffff;
+    }
+    [data-theme="dark"] .due-toggle-ic {
+      background: rgba(147, 197, 253, 0.14);
+      color: #93c5fd;
+    }
+    [data-theme="dark"] .due-toggle-row.is-open .due-toggle-ic {
+      background: #2563eb;
+      color: #ffffff;
+    }
+    .due-toggle-texts {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+    .due-toggle-title {
+      font-size: 13.2px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .due-toggle-sub {
+      font-size: 11.2px;
+      font-weight: 600;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+    .due-toggle-sub.has-date {
+      color: var(--primary);
+      font-weight: 800;
+    }
+    [data-theme="dark"] .due-toggle-sub.has-date {
+      color: #93c5fd;
+    }
+    .due-toggle-switch {
+      width: 40px;
+      height: 23px;
+      border-radius: 999px;
+      background: #cbd5e1;
+      position: relative;
+      flex-shrink: 0;
+      transition: background .2s ease;
+    }
+    [data-theme="dark"] .due-toggle-switch {
+      background: #334155;
+    }
+    .due-toggle-switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24);
+      transition: transform .2s cubic-bezier(.4, 0, .2, 1);
+    }
+    .due-toggle-row.is-open .due-toggle-switch {
+      background: var(--primary);
+    }
+    [data-theme="dark"] .due-toggle-row.is-open .due-toggle-switch {
+      background: #3b82f6;
+    }
+    .due-toggle-row.is-open .due-toggle-switch::after {
+      transform: translateX(-17px);
+    }
+    .due-accordion .due-box-shell {
+      border: none;
+      border-top: 1px solid var(--border);
+      border-radius: 0;
+      background: transparent;
+      padding: 9px 10px 10px;
+      animation: dueSlideIn .16s ease-out;
+    }
+    .due-accordion .due-box-shell.hidden {
+      display: none !important;
+    }
+    @keyframes dueSlideIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* بطاقة تنويه الذكاء الاصطناعي والنسخ الاحتياطي داخل «حول التطبيق» */
+    .about-ai-notice {
+      margin-top: 13px;
+      padding: 13px 13px 12px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+      border: 1px solid #fcd34d;
+      border-right: 4px solid #d97706;
+      text-align: right;
+      box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08);
+    }
+    [data-theme="dark"] .about-ai-notice {
+      background: linear-gradient(135deg, rgba(217, 119, 6, 0.16) 0%, rgba(180, 83, 9, 0.12) 100%);
+      border-color: rgba(251, 191, 36, 0.36);
+      border-right-color: #f59e0b;
+      box-shadow: none;
+    }
+    .about-ai-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .about-ai-ic {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      background: rgba(217, 119, 6, 0.15);
+      color: #b45309;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    [data-theme="dark"] .about-ai-ic {
+      background: rgba(245, 158, 11, 0.22);
+      color: #fcd34d;
+    }
+    .about-ai-title {
+      font-size: 13px;
+      font-weight: 900;
+      color: #92400e;
+      line-height: 1.35;
+    }
+    [data-theme="dark"] .about-ai-title {
+      color: #fde68a;
+    }
+    .about-ai-body {
+      margin: 0;
+      font-size: 12.3px;
+      font-weight: 600;
+      line-height: 1.75;
+      color: #78350f;
+    }
+    [data-theme="dark"] .about-ai-body {
+      color: #fef3c7;
+    }
+    .about-ai-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 7px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      font-size: 11.4px;
+      font-weight: 800;
+    }
+    [data-theme="dark"] .about-ai-pill {
+      background: rgba(15, 23, 42, 0.45);
+      border-color: rgba(251, 191, 36, 0.45);
+      color: #fde68a;
+    }
     #toast {
       z-index: 99999 !important;
     }
@@ -2188,7 +2401,7 @@
       <div class="login-dev-card">
         <div class="login-dev-head">
           <span class="login-dev-title">معلومات المطور والدعم الفني</span>
-          <span class="login-dev-ver" id="loginVersionBadge">v1.3</span>
+          <span class="login-dev-ver" id="loginVersionBadge">v1.4</span>
         </div>
         <div class="about-info-box" style="margin-top:0;">
           <div class="about-info-row">
@@ -2325,7 +2538,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v1.3</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v1.4</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -3060,7 +3273,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v1.3</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v1.4</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -3118,27 +3331,40 @@
       </div>
 
       <div class="field" id="txDueDateField">
-        <span class="due-field-title">موعد التسديد (اختياري)</span>
-        <div class="due-box-shell">
-          <div class="due-input-row">
-            <div class="due-display-box" onclick="openDueCalendarByPrefix('tx')">
-              <span id="txDueSelectedText" class="due-display-text is-empty">بدون موعد محدد</span>
-              <button type="button" id="txDueClearBtn" class="due-pill-clear hidden" title="مسح الموعد" onclick="event.stopPropagation(); clearDueControl('tx')">✕</button>
+        <div class="due-accordion" id="txDueAccordion">
+          <button type="button" class="due-toggle-row" id="txDueToggleRow" aria-expanded="false" onclick="toggleDuePanel('tx')">
+            <span class="due-toggle-right">
+              <span class="due-toggle-ic">
+                <svg class="ic ic-sm" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </span>
+              <span class="due-toggle-texts">
+                <span class="due-toggle-title">تحديد موعد تسديد الدين</span>
+                <span class="due-toggle-sub" id="txDueToggleSub">اختياري</span>
+              </span>
+            </span>
+            <span class="due-toggle-switch" aria-hidden="true"></span>
+          </button>
+          <div class="due-box-shell hidden" id="txDueBodyWrap">
+            <div class="due-input-row">
+              <div class="due-display-box" onclick="openDueCalendarByPrefix('tx')">
+                <span id="txDueSelectedText" class="due-display-text is-empty">بدون موعد محدد</span>
+                <button type="button" id="txDueClearBtn" class="due-pill-clear hidden" title="مسح الموعد" onclick="event.stopPropagation(); clearDueControl('tx')">✕</button>
+              </div>
+              <div class="due-cal-btn" id="txDueCalBtn" title="فتح الروزنامة واختيار تاريخ التسديد">
+                <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <input type="date" id="txDueDate" class="due-cal-native-input" onclick="openNativeDatePickerEl(this)" onchange="onNativeDueDatePicked('tx')" />
+              </div>
             </div>
-            <div class="due-cal-btn" id="txDueCalBtn" title="فتح الروزنامة واختيار تاريخ التسديد">
-              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <input type="date" id="txDueDate" class="due-cal-native-input" onclick="openNativeDatePickerEl(this)" onchange="onNativeDueDatePicked('tx')" />
+            <div class="due-chips-grid" id="txDueChips">
+              <button type="button" class="due-chip-btn" data-days="3" onclick="selectQuickDueChip('tx', 3, this)">3 أيام</button>
+              <button type="button" class="due-chip-btn" data-days="7" onclick="selectQuickDueChip('tx', 7, this)">أسبوع</button>
+              <button type="button" class="due-chip-btn" data-days="15" onclick="selectQuickDueChip('tx', 15, this)">15 يوم</button>
+              <button type="button" class="due-chip-btn" data-days="30" onclick="selectQuickDueChip('tx', 30, this)">شهر</button>
             </div>
-          </div>
-          <div class="due-chips-grid" id="txDueChips">
-            <button type="button" class="due-chip-btn" data-days="3" onclick="selectQuickDueChip('tx', 3, this)">3 أيام</button>
-            <button type="button" class="due-chip-btn" data-days="7" onclick="selectQuickDueChip('tx', 7, this)">أسبوع</button>
-            <button type="button" class="due-chip-btn" data-days="15" onclick="selectQuickDueChip('tx', 15, this)">15 يوم</button>
-            <button type="button" class="due-chip-btn" data-days="30" onclick="selectQuickDueChip('tx', 30, this)">شهر</button>
-          </div>
-          <div id="txDueNoteWrap" class="due-note-wrap hidden">
-            <input type="text" id="txDueNote" class="input" autocomplete="off" placeholder="ملاحظة موعد التسديد (اختياري)" />
-            <button type="button" class="due-clear-btn" onclick="clearDueControl('tx')">مسح</button>
+            <div id="txDueNoteWrap" class="due-note-wrap hidden">
+              <input type="text" id="txDueNote" class="input" autocomplete="off" placeholder="ملاحظة موعد التسديد (اختياري)" />
+              <button type="button" class="due-clear-btn" onclick="clearDueControl('tx')">مسح</button>
+            </div>
           </div>
         </div>
       </div>
@@ -3164,27 +3390,40 @@
         <input type="tel" id="editCustPhoneInput" class="input" inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="cust_phone_edit" placeholder="09xxxxxxxx (بدون رمز دولي)" />
       </div>
       <div class="field" id="editCustDueField">
-        <span class="due-field-title">موعد التسديد للتذكير (اختياري)</span>
-        <div class="due-box-shell">
-          <div class="due-input-row">
-            <div class="due-display-box" onclick="openDueCalendarByPrefix('edit')">
-              <span id="editDueSelectedText" class="due-display-text is-empty">بدون موعد محدد</span>
-              <button type="button" id="editDueClearBtn" class="due-pill-clear hidden" title="مسح الموعد" onclick="event.stopPropagation(); clearDueControl('edit')">✕</button>
+        <div class="due-accordion" id="editDueAccordion">
+          <button type="button" class="due-toggle-row" id="editDueToggleRow" aria-expanded="false" onclick="toggleDuePanel('edit')">
+            <span class="due-toggle-right">
+              <span class="due-toggle-ic">
+                <svg class="ic ic-sm" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </span>
+              <span class="due-toggle-texts">
+                <span class="due-toggle-title">موعد تسديد الدين للتذكير</span>
+                <span class="due-toggle-sub" id="editDueToggleSub">اختياري</span>
+              </span>
+            </span>
+            <span class="due-toggle-switch" aria-hidden="true"></span>
+          </button>
+          <div class="due-box-shell hidden" id="editDueBodyWrap">
+            <div class="due-input-row">
+              <div class="due-display-box" onclick="openDueCalendarByPrefix('edit')">
+                <span id="editDueSelectedText" class="due-display-text is-empty">بدون موعد محدد</span>
+                <button type="button" id="editDueClearBtn" class="due-pill-clear hidden" title="مسح الموعد" onclick="event.stopPropagation(); clearDueControl('edit')">✕</button>
+              </div>
+              <div class="due-cal-btn" id="editDueCalBtn" title="فتح الروزنامة واختيار تاريخ التسديد">
+                <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <input type="date" id="editCustDueDate" class="due-cal-native-input" onclick="openNativeDatePickerEl(this)" onchange="onNativeDueDatePicked('edit')" />
+              </div>
             </div>
-            <div class="due-cal-btn" id="editDueCalBtn" title="فتح الروزنامة واختيار تاريخ التسديد">
-              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <input type="date" id="editCustDueDate" class="due-cal-native-input" onclick="openNativeDatePickerEl(this)" onchange="onNativeDueDatePicked('edit')" />
+            <div class="due-chips-grid" id="editDueChips">
+              <button type="button" class="due-chip-btn" data-days="3" onclick="selectQuickDueChip('edit', 3, this)">3 أيام</button>
+              <button type="button" class="due-chip-btn" data-days="7" onclick="selectQuickDueChip('edit', 7, this)">أسبوع</button>
+              <button type="button" class="due-chip-btn" data-days="15" onclick="selectQuickDueChip('edit', 15, this)">15 يوم</button>
+              <button type="button" class="due-chip-btn" data-days="30" onclick="selectQuickDueChip('edit', 30, this)">شهر</button>
             </div>
-          </div>
-          <div class="due-chips-grid" id="editDueChips">
-            <button type="button" class="due-chip-btn" data-days="3" onclick="selectQuickDueChip('edit', 3, this)">3 أيام</button>
-            <button type="button" class="due-chip-btn" data-days="7" onclick="selectQuickDueChip('edit', 7, this)">أسبوع</button>
-            <button type="button" class="due-chip-btn" data-days="15" onclick="selectQuickDueChip('edit', 15, this)">15 يوم</button>
-            <button type="button" class="due-chip-btn" data-days="30" onclick="selectQuickDueChip('edit', 30, this)">شهر</button>
-          </div>
-          <div id="editDueNoteWrap" class="due-note-wrap hidden">
-            <input type="text" id="editCustDueNote" class="input" autocomplete="off" placeholder="ملاحظة موعد التسديد (اختياري)" />
-            <button type="button" class="due-clear-btn" onclick="clearDueControl('edit')">مسح</button>
+            <div id="editDueNoteWrap" class="due-note-wrap hidden">
+              <input type="text" id="editCustDueNote" class="input" autocomplete="off" placeholder="ملاحظة موعد التسديد (اختياري)" />
+              <button type="button" class="due-clear-btn" onclick="clearDueControl('edit')">مسح</button>
+            </div>
           </div>
         </div>
       </div>
@@ -3333,7 +3572,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v1.3</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v1.4</span>
         <p class="about-desc">نظام عملي ومتكامل لإدارة ديون ودفعات الزبائن بالعملتين، يعمل بدون إنترنت وبمزامنة سحابية فورية مع كشوفات PDF وواتساب.</p>
       </div>
 
@@ -3361,6 +3600,21 @@
           <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           <span>واتساب</span>
         </a>
+      </div>
+
+      <!-- تنويه حول تطوير التطبيق والنسخ الاحتياطي -->
+      <div class="about-ai-notice">
+        <div class="about-ai-head">
+          <span class="about-ai-ic">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </span>
+          <div class="about-ai-title">تنويه مهم لحماية بياناتك</div>
+        </div>
+        <p class="about-ai-body">
+          تم تطوير هذا البرنامج بالذكاء الاصطناعي ويعمل على منصّات سحابية مجانية.<br>
+          لحماية بياناتك بشكل دائم، يُنصح بأخذ <strong>نسخة احتياطية</strong> يدوياً عند انتهاء العمل.
+        </p>
+        <div class="about-ai-pill">🕛 علماً أن التطبيق يأخذ نسخة احتياطية تلقائية يومياً الساعة 12:00 ليلاً</div>
       </div>
 
       <!-- كيف يعمل التطبيق -->

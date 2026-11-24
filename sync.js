@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v1.3',
+  version: 'v1.4',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -3115,24 +3115,7 @@ function renderIsolatedWorkshopsList(list) {
       : '';
 
     const safeWsId = escapeHtml(w.id);
-    workshopCredsMap.set(w.id, { email: mgrEmail || '' });
-    const credsBoxHtml = !isOwnWs ? `
-      <div class="ws-creds-box">
-        <div class="ws-cred-row">
-          <span class="ws-cred-lbl">البريد الإلكتروني:</span>
-          <span class="ws-cred-val">${escapeHtml(mgrEmail || '—')}</span>
-          ${mgrEmail ? `<button type="button" class="ws-cred-mini-btn" onclick="copyWorkshopCred('${safeWsId}', 'email')">نسخ</button>` : ''}
-        </div>
-        <div class="ws-cred-row">
-          <span class="ws-cred-lbl">كلمة المرور:</span>
-          ${mgrMustChange
-            ? `<span class="ws-pass-status temp">⏳ مؤقتة — سيُطلب تغييرها عند الدخول</span>`
-            : (mgrPassUpdatedAt
-                ? `<span class="ws-pass-status private">✓ محمية (غُيّرت: ${escapeHtml(formatIsoDateTimeShort(mgrPassUpdatedAt))})</span>`
-                : `<span class="ws-pass-status private">🔒 محمية ومشفّرة (خاصة بصاحب الحساب)</span>`)
-          }
-        </div>
-      </div>` : '';
+    const credsBoxHtml = '';
 
     const actionsHtml = isOwnWs
       ? `<div class="member-actions">
@@ -3142,12 +3125,6 @@ function renderIsolatedWorkshopsList(list) {
            <button class="btn ${isPinned ? 'btn-pin-on' : 'btn-light'} btn-sm" onclick="toggleWorkshopPin('${safeWsId}')">
              ${isPinned ? '📌 مثبّت (إلغاء التثبيت)' : '📌 تثبيت (لا يُحذف)'}
            </button>
-           <button class="btn btn-primary btn-sm" onclick="openEditWorkshopModal('${safeWsId}')">تعديل / كلمة مؤقتة</button>
-           ${adminMember ? `<button class="btn btn-warn-sm btn-sm" onclick="forceLogoutWorkshopAdmin('${escapeHtml(adminMember.user_id)}', '${escapeHtml(w.name)}')">إخراج من الجهاز</button>` : ''}
-           <button class="btn btn-light btn-sm" onclick="toggleWorkshopFreeze('${safeWsId}')">
-             ${isFrozen ? 'فك التجميد' : 'تجميد الحساب'}
-           </button>
-           <button class="btn btn-danger btn-sm" onclick="deleteIsolatedWorkshop('${safeWsId}')">إزالة</button>
          </div>`;
 
     return `
