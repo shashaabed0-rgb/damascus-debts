@@ -984,35 +984,69 @@ function processAndRender() {
   updateDuplicateConflictBannerUI();
   updateDueReminderBannerUI();
 
-  let grandUsd = 0;
-  let grandSyp = 0;
-  let indebtedCount = 0;
+  function formatArabicFileCount(n) {
+    const num = Number(n) || 0;
+    if (num <= 0) return '0 ملفات';
+    if (num === 1) return 'ملف واحد';
+    if (num === 2) return 'ملفان';
+    if (num >= 3 && num <= 10) return `${num} ملفات`;
+    return `${num} ملفاً`;
+  }
+
+  let forMeUsd = 0;
+  let forMeSyp = 0;
+  let onMeUsd = 0;
+  let onMeSyp = 0;
+  let forMeCount = 0;
+  let onMeCount = 0;
 
   groupedCustomers.forEach(c => {
-    if (c.byCurrency.USD.balance > 0.001) grandUsd += c.byCurrency.USD.balance;
-    if (c.byCurrency.SYP.balance > 0.001) grandSyp += c.byCurrency.SYP.balance;
-    if (c.hasDebt) indebtedCount++;
+    const uBal = c.byCurrency.USD.balance;
+    const sBal = c.byCurrency.SYP.balance;
+    if (uBal > 0.001) forMeUsd += uBal;
+    else if (uBal < -0.001) onMeUsd += Math.abs(uBal);
+
+    if (sBal > 0.001) forMeSyp += sBal;
+    else if (sBal < -0.001) onMeSyp += Math.abs(sBal);
+
+    if (c.hasDebt) forMeCount++;
+    if (c.hasCredit) onMeCount++;
   });
 
-  // إذا كانت العملة الملغاة ما زال عليها ديون غير مسدّدة، نظهرها في الإجمالي لحين تسديدها
-  const disabledHasDebt = (!dual) && ((settings.currency === 'USD' && grandSyp > 0.001) || (settings.currency === 'SYP' && grandUsd > 0.001));
-  const showDualSummary = dual || disabledHasDebt;
+  // إذا كانت العملة الملغاة ما زال عليها رصيد مفتوح (لك أو عليك)، نظهر العملتين معاً
+  const disabledHasBalance = (!dual) && (
+    (settings.currency === 'USD' && (forMeSyp > 0.001 || onMeSyp > 0.001)) ||
+    (settings.currency === 'SYP' && (forMeUsd > 0.001 || onMeUsd > 0.001))
+  );
+  const showDualSummary = dual || disabledHasBalance;
+
+  document.getElementById('forMeFilesCount').textContent = formatArabicFileCount(forMeCount);
+  document.getElementById('onMeFilesCount').textContent = formatArabicFileCount(onMeCount);
 
   if (showDualSummary) {
     document.getElementById('activeCurrName').textContent = dual ? 'العملتين' : `${singleCurr.name} + أرصدة مفتوحة`;
-    document.getElementById('totalDebtVal').classList.add('hidden');
-    document.getElementById('totalDebtDual').classList.remove('hidden');
-    document.getElementById('totalDebtUsd').innerHTML = `<span class="num-ltr">${formatNum(grandUsd)}</span><span class="sum-unit">$</span>`;
-    document.getElementById('totalDebtSyp').innerHTML = `<span class="num-ltr">${formatNum(grandSyp)}</span><span class="sum-unit">ل.س</span>`;
+    document.getElementById('totalForMeVal').classList.add('hidden');
+    document.getElementById('totalForMeDual').classList.remove('hidden');
+    document.getElementById('totalForMeUsd').innerHTML = `<span class="num-ltr">${formatNum(forMeUsd)}</span><span class="sum-unit">$</span>`;
+    document.getElementById('totalForMeSyp').innerHTML = `<span class="num-ltr">${formatNum(forMeSyp)}</span><span class="sum-unit">ل.س</span>`;
+
+    document.getElementById('totalOnMeVal').classList.add('hidden');
+    document.getElementById('totalOnMeDual').classList.remove('hidden');
+    document.getElementById('totalOnMeUsd').innerHTML = `<span class="num-ltr">${formatNum(onMeUsd)}</span><span class="sum-unit">$</span>`;
+    document.getElementById('totalOnMeSyp').innerHTML = `<span class="num-ltr">${formatNum(onMeSyp)}</span><span class="sum-unit">ل.س</span>`;
   } else {
     document.getElementById('activeCurrName').textContent = singleCurr.name;
-    document.getElementById('totalDebtVal').classList.remove('hidden');
-    document.getElementById('totalDebtDual').classList.add('hidden');
-    const grandVal = settings.currency === 'SYP' ? grandSyp : grandUsd;
-    document.getElementById('totalDebtVal').innerHTML = `<span class="num-ltr">${formatNum(grandVal)}</span><span class="sum-unit">${singleCurr.symbol}</span>`;
-  }
+    const forMeSingle = settings.currency === 'SYP' ? forMeSyp : forMeUsd;
+    const onMeSingle = settings.currency === 'SYP' ? onMeSyp : onMeUsd;
 
-  document.getElementById('indebtedCount').textContent = indebtedCount;
+    document.getElementById('totalForMeVal').classList.remove('hidden');
+    document.getElementById('totalForMeDual').classList.add('hidden');
+    document.getElementById('totalForMeVal').innerHTML = `<span class="num-ltr">${formatNum(forMeSingle)}</span><span class="sum-unit">${singleCurr.symbol}</span>`;
+
+    document.getElementById('totalOnMeVal').classList.remove('hidden');
+    document.getElementById('totalOnMeDual').classList.add('hidden');
+    document.getElementById('totalOnMeVal').innerHTML = `<span class="num-ltr">${formatNum(onMeSingle)}</span><span class="sum-unit">${singleCurr.symbol}</span>`;
+  }
   const dlEl = document.getElementById('customersDatalist');
   if (dlEl) dlEl.innerHTML = '';
 
@@ -1131,21 +1165,34 @@ function setCustomerSort(mode) {
   }
 }
 
+let mainSearchDebounceTimer = null;
+
 function onMainSearchInput() {
   const inp = document.getElementById('searchInput');
   const clr = document.getElementById('mainSearchClearBtn');
+  const rawLen = inp ? inp.value.trim().length : 0;
   if (clr) clr.classList.toggle('hidden', !(inp && inp.value.length > 0));
-  renderCustomers();
+  clearTimeout(mainSearchDebounceTimer);
+  if (rawLen <= 1) {
+    renderCustomers();
+    return;
+  }
+  mainSearchDebounceTimer = setTimeout(() => {
+    renderCustomers();
+  }, 120);
 }
 
 function clearMainSearch() {
+  clearTimeout(mainSearchDebounceTimer);
   const inp = document.getElementById('searchInput');
   const clr = document.getElementById('mainSearchClearBtn');
+  const hint = document.getElementById('searchMinHint');
   if (inp) {
     inp.value = '';
     inp.focus();
   }
   if (clr) clr.classList.add('hidden');
+  if (hint) hint.classList.add('hidden');
   renderCustomers();
 }
 
@@ -1255,7 +1302,11 @@ function toggleConflictsOnlyFilter() {
 }
 
 function renderCustomers() {
-  const q = normalizeDigits(document.getElementById('searchInput').value).trim().toLowerCase();
+  const rawQ = normalizeDigits(document.getElementById('searchInput').value).trim().toLowerCase();
+  const hintEl = document.getElementById('searchMinHint');
+  if (hintEl) hintEl.classList.toggle('hidden', rawQ.length !== 1);
+  // البحث يبدأ من حرفين على الأقل لتفادي زحمة نتائج الحرف الواحد
+  const q = rawQ.length >= 2 ? rawQ : '';
 
   visibleCustomers = groupedCustomers.filter(c => {
     if (showConflictsOnly && !c.isDuplicateConflict) return false;
@@ -2210,6 +2261,14 @@ function openSettingsView() {
   document.getElementById('setAccountRole').textContent = currentProfile ? getRoleLabel(currentProfile.role) : '—';
   if (!isFreeOfflineMode()) {
     updateSettingsLiveDevicesSummary();
+    const retNote = document.getElementById('cloudRetentionNote');
+    if (retNote) {
+      const pinnedOrSuper = isSuperAdmin() || Boolean(currentWorkshop && currentWorkshop.is_pinned);
+      retNote.classList.toggle('is-pinned', pinnedOrSuper);
+      retNote.textContent = pinnedOrSuper
+        ? '📌 حسابك مثبّت ومحمي من الحذف التلقائي للخمول.'
+        : 'تنبيه: الحسابات غير المثبّتة التي لا يُستخدم فيها التطبيق لمدة 90 يوماً متواصلة تُحذف تلقائياً مع بياناتها لتوفير المساحة؛ يُنصح بأخذ نسخة احتياطية دورياً.';
+    }
   }
   if (isFreeOfflineMode()) {
     updateFreeOfflineStatusBar();
@@ -2341,7 +2400,9 @@ async function saveSettings() {
     settings.shopAddress = document.getElementById('setShopAddress').value.trim();
     settings.shopPhones = collectedPhones;
     settings.shopPhone = collectedPhones.join(' - ');
+    // الشعار يُحفظ محلياً على هذا الجهاز فقط ولا يُرفع إلى السحابة لتوفير المساحة ونقل البيانات
     settings.shopLogo = tempLogoData;
+    saveLocalShopLogo(tempLogoData);
     settings.generalNote = document.getElementById('setGeneralNote').value.trim();
     settings.shamCashEnabled = document.getElementById('setShamCashToggle').checked;
     settings.shamCashCode = document.getElementById('setShamCashCode').value.trim();
@@ -2356,7 +2417,6 @@ async function saveSettings() {
       shopAddress: settings.shopAddress,
       shopPhone: settings.shopPhone,
       shopPhones: settings.shopPhones,
-      shopLogo: settings.shopLogo,
       generalNote: settings.generalNote,
       shamCashEnabled: settings.shamCashEnabled,
       shamCashCode: settings.shamCashCode,
@@ -2367,6 +2427,7 @@ async function saveSettings() {
       frozen: Boolean(currentWorkshop && currentWorkshop.settings && currentWorkshop.settings.frozen)
     };
     delete wsSettingsObj.managerPassword;
+    delete wsSettingsObj.shopLogo;
 
     if (currentWorkshop) {
       currentWorkshop.name = settings.shopName;
@@ -2819,7 +2880,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v28.0';
+  const ver = (APP_META && APP_META.version) || 'v1.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2850,7 +2911,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v28.0';
+  const ver = (APP_META && APP_META.version) || 'v1.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2882,7 +2943,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v28.0';
+  const ver = (APP_META && APP_META.version) || 'v1.0';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
@@ -3032,7 +3093,8 @@ let currentAuditFilter = 'all';
 
 function openAuditLogView() {
   if (isFreeOfflineMode() || !isAdmin()) return showToast('سجل التدقيق والمتابعة متاح لمدير النسخة السحابية فقط');
-  document.getElementById('auditWorkshopSub').textContent = settings.shopName || 'سجل محمي للتعديلات والحذف';
+  pruneOldLocalAuditLogs();
+  document.getElementById('auditWorkshopSub').textContent = `${settings.shopName || 'دفتر الديون'} • آخر 14 يوماً`;
   document.getElementById('auditSearchInput').value = '';
   currentAuditFilter = 'all';
   document.querySelectorAll('#auditFilterTabs .audit-filter-btn').forEach((b, idx) => b.classList.toggle('active', idx === 0));
@@ -3284,7 +3346,10 @@ async function executeFreeToCloudMigration() {
         settings.shopPhones = fs.shopPhones;
         settings.shopPhone = fs.shopPhones.join(' - ');
       }
-      if (fs.shopLogo) settings.shopLogo = fs.shopLogo;
+      if (fs.shopLogo) {
+        settings.shopLogo = fs.shopLogo;
+        saveLocalShopLogo(fs.shopLogo);
+      }
       if (fs.generalNote) settings.generalNote = fs.generalNote;
       if (fs.shamCashEnabled && fs.shamCashCode) {
         settings.shamCashEnabled = true;
@@ -3304,7 +3369,6 @@ async function executeFreeToCloudMigration() {
         shopAddress: settings.shopAddress,
         shopPhone: settings.shopPhone,
         shopPhones: settings.shopPhones,
-        shopLogo: settings.shopLogo,
         generalNote: settings.generalNote,
         shamCashEnabled: settings.shamCashEnabled,
         shamCashCode: settings.shamCashCode,

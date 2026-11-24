@@ -1391,6 +1391,424 @@
       color: var(--muted);
       line-height: 1.5;
     }
+    /* ===== v1.0: التسجيل بالإيميل + لوحة المراقبة والمساحة + تثبيت الحسابات + بحث حرفين ===== */
+    .auth-mode-tabs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 13px;
+    }
+    .auth-mode-btn {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 9px 6px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: background .15s ease, color .15s ease;
+    }
+    .auth-mode-btn.active {
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(42, 69, 112, 0.22);
+    }
+    .auth-sub-link-btn {
+      margin-top: 9px;
+      background: transparent;
+      border: none;
+      color: var(--primary);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 4px 8px;
+      text-decoration: underline;
+    }
+    [data-theme="dark"] .auth-sub-link-btn {
+      color: #93c5fd;
+    }
+    .reg-policy-box {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 9px 10px;
+      border-radius: 10px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+      font-size: 11.8px;
+      font-weight: 700;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      text-align: right;
+      cursor: pointer;
+    }
+    .reg-policy-box input[type="checkbox"] {
+      margin-top: 3px;
+      flex-shrink: 0;
+      width: 17px;
+      height: 17px;
+      accent-color: var(--primary);
+    }
+    [data-theme="dark"] .reg-policy-box {
+      background: rgba(217, 119, 6, 0.14);
+      border-color: rgba(251, 191, 36, 0.35);
+      color: #fde68a;
+    }
+    .email-confirm-box {
+      background: #f0fdf4;
+      border: 1.5px solid #86efac;
+      color: #166534;
+      border-radius: 12px;
+      padding: 13px 12px;
+      text-align: right;
+      margin-bottom: 10px;
+      line-height: 1.7;
+      font-size: 12.8px;
+    }
+    [data-theme="dark"] .email-confirm-box {
+      background: rgba(22, 163, 74, 0.14);
+      border-color: rgba(74, 222, 128, 0.4);
+      color: #bbf7d0;
+    }
+    .email-confirm-box strong {
+      display: block;
+      font-size: 13.8px;
+      margin-bottom: 4px;
+    }
+    .search-min-hint {
+      font-size: 11.8px;
+      font-weight: 700;
+      color: var(--muted);
+      margin: -6px 4px 10px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .search-min-hint.hidden {
+      display: none !important;
+    }
+    /* لوحة المراقبة والمساحة السحابية للمدير العام */
+    .sys-dash-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+    }
+    .sys-dash-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 11px;
+    }
+    .sys-dash-title {
+      font-size: 14.2px;
+      font-weight: 800;
+      color: var(--primary);
+      margin: 0;
+    }
+    .sys-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .sys-kpi-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 9px 10px;
+    }
+    .sys-kpi-lbl {
+      font-size: 11.4px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .sys-kpi-val {
+      font-size: 16px;
+      font-weight: 900;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sys-meter-wrap {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 10px 11px;
+      margin-bottom: 10px;
+    }
+    .sys-meter-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 7px;
+      flex-wrap: wrap;
+    }
+    .sys-meter-track {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--border);
+      overflow: hidden;
+    }
+    .sys-meter-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: #16a34a;
+      transition: width .3s ease;
+    }
+    .sys-meter-fill.warn { background: #ea580c; }
+    .sys-meter-fill.full { background: #dc2626; }
+    .sys-meter-sub {
+      margin-top: 7px;
+      font-size: 11.4px;
+      color: var(--muted);
+      line-height: 1.65;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+    }
+    .sys-cleanup-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 9px 11px;
+      border-radius: 11px;
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      font-size: 12px;
+      font-weight: 700;
+      color: #9a3412;
+    }
+    [data-theme="dark"] .sys-cleanup-bar {
+      background: rgba(234, 88, 12, 0.15);
+      border-color: rgba(251, 146, 60, 0.45);
+      color: #fdba74;
+    }
+    .m-badge.m-pinned {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #93c5fd;
+    }
+    [data-theme="dark"] .m-badge.m-pinned {
+      background: rgba(37, 99, 235, 0.22);
+      color: #93c5fd;
+      border-color: rgba(96, 165, 250, 0.45);
+    }
+    .m-badge.m-stale {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+    }
+    [data-theme="dark"] .m-badge.m-stale {
+      background: rgba(220, 38, 38, 0.22);
+      color: #fca5a5;
+      border-color: rgba(248, 113, 113, 0.45);
+    }
+    .m-badge.m-warn-idle {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+    }
+    [data-theme="dark"] .m-badge.m-warn-idle {
+      background: rgba(217, 119, 6, 0.2);
+      color: #fde68a;
+      border-color: rgba(251, 191, 36, 0.4);
+    }
+    .btn-pin-on {
+      background: #eff6ff !important;
+      color: #1d4ed8 !important;
+      border: 1px solid #93c5fd !important;
+    }
+    [data-theme="dark"] .btn-pin-on {
+      background: rgba(37, 99, 235, 0.22) !important;
+      color: #93c5fd !important;
+      border-color: rgba(96, 165, 250, 0.45) !important;
+    }
+    .cloud-retention-note {
+      margin: 10px 0;
+      padding: 8px 10px;
+      border-radius: 9px;
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      font-size: 11.8px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .cloud-retention-note.is-pinned {
+      background: #eff6ff;
+      border-color: #93c5fd;
+      color: #1e40af;
+      font-weight: 700;
+    }
+    [data-theme="dark"] .cloud-retention-note.is-pinned {
+      background: rgba(37, 99, 235, 0.16);
+      border-color: rgba(96, 165, 250, 0.4);
+      color: #93c5fd;
+    }
+    /* ===== بطاقة ملخص الواجهة الرئيسية: لي / عليّ + عدد الملفات بدون جمع ===== */
+    .summary-card.sum-split-card {
+      display: block !important;
+      padding: 11px !important;
+      background: var(--card) !important;
+      border: 1px solid var(--border) !important;
+      color: var(--text) !important;
+      box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06) !important;
+    }
+    .sum-split-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 9px;
+      padding: 0 2px;
+    }
+    .sum-split-title {
+      font-size: 12.2px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+    .sum-split-curr-tag {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(42, 69, 112, 0.1);
+      color: var(--primary);
+    }
+    [data-theme="dark"] .sum-split-curr-tag {
+      background: rgba(147, 197, 253, 0.16);
+      color: #93c5fd;
+    }
+    .sum-split-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .sum-box {
+      border-radius: 12px;
+      padding: 10px 10px 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .sum-box.for-me {
+      background: #eff6ff;
+      border: 1.5px solid #bfdbfe;
+    }
+    .sum-box.on-me {
+      background: #fef2f2;
+      border: 1.5px solid #fecaca;
+    }
+    [data-theme="dark"] .sum-box.for-me {
+      background: rgba(37, 99, 235, 0.14);
+      border-color: rgba(96, 165, 250, 0.36);
+    }
+    [data-theme="dark"] .sum-box.on-me {
+      background: rgba(220, 38, 38, 0.14);
+      border-color: rgba(248, 113, 113, 0.36);
+    }
+    .sum-box-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .sum-box-lbl {
+      font-size: 13.5px;
+      font-weight: 900;
+    }
+    .sum-box.for-me .sum-box-lbl { color: #1d4ed8; }
+    .sum-box.on-me .sum-box-lbl { color: #b91c1c; }
+    [data-theme="dark"] .sum-box.for-me .sum-box-lbl { color: #93c5fd; }
+    [data-theme="dark"] .sum-box.on-me .sum-box-lbl { color: #fca5a5; }
+    .sum-files-pill {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .sum-box.for-me .sum-files-pill {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .sum-box.on-me .sum-files-pill {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    [data-theme="dark"] .sum-box.for-me .sum-files-pill {
+      background: rgba(59, 130, 246, 0.25);
+      color: #bfdbfe;
+    }
+    [data-theme="dark"] .sum-box.on-me .sum-files-pill {
+      background: rgba(239, 68, 68, 0.25);
+      color: #fecaca;
+    }
+    .sum-box-val {
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--text);
+      direction: rtl;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      flex-wrap: wrap;
+      line-height: 1.25;
+    }
+    .sum-box-val.hidden { display: none !important; }
+    .sum-box-dual {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .sum-box-dual.hidden { display: none !important; }
+    .sum-box-dual-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 14.5px;
+      font-weight: 900;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .sum-box-dual-row .mini-curr {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .sum-box-dual-row .mini-amt {
+      direction: rtl;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     #toast {
       z-index: 99999 !important;
     }
@@ -1425,18 +1843,68 @@
         <svg class="ic" style="width:28px;height:28px" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       </div>
       <h2>دفتر الديون السحابي</h2>
-      <p>سجّل الدخول بحساب الورشة السحابي أو جرّب الحساب المجاني أوفلاين</p>
+      <p id="authSubtitleText">سجّل الدخول بحسابك أو أنشئ حساباً جديداً بالإيميل لمزامنة عدة أجهزة</p>
+
+      <div class="auth-mode-tabs" role="tablist">
+        <button type="button" id="authTabLoginBtn" class="auth-mode-btn active" onclick="switchAuthMode('login')">تسجيل الدخول</button>
+        <button type="button" id="authTabRegBtn" class="auth-mode-btn" onclick="switchAuthMode('register')">إنشاء حساب جديد</button>
+      </div>
+
       <div id="loginErr" class="lock-err"></div>
+
+      <!-- رسالة انتظار تأكيد البريد الإلكتروني -->
+      <div id="emailConfirmBox" class="email-confirm-box hidden">
+        <strong>✉️ يرجى تأكيد بريدك الإلكتروني</strong>
+        <div id="emailConfirmText">تم إرسال رابط التفعيل إلى بريدك الإلكتروني. افتح الرسالة (وتفقد مجلد الرسائل غير المرغوب فيها Spam) واضغط رابط التأكيد، ثم سجّل الدخول.</div>
+        <div class="toggle-2" style="margin-top:10px;">
+          <button type="button" id="resendConfirmBtn" class="btn btn-primary btn-sm" onclick="resendConfirmationEmail()">إعادة إرسال الرسالة</button>
+          <button type="button" class="btn btn-light btn-sm" onclick="switchAuthMode('login')">العودة للدخول</button>
+        </div>
+      </div>
+
+      <!-- نموذج تسجيل الدخول -->
       <form id="loginForm" class="login-form-box" onsubmit="handleLogin(event)">
         <div class="field">
           <label>البريد الإلكتروني</label>
-          <input type="email" id="loginEmail" class="input" dir="ltr" placeholder="admin@dimashqi.com" required autocomplete="username" />
+          <input type="email" id="loginEmail" class="input" dir="ltr" placeholder="name@example.com" required autocomplete="username" />
         </div>
         <div class="field">
           <label>كلمة المرور</label>
           <input type="password" id="loginPassword" class="input" dir="ltr" placeholder="••••••••" required autocomplete="current-password" />
         </div>
         <button type="submit" id="loginBtn" class="btn btn-primary">تسجيل الدخول (النسخة السحابية)</button>
+        <div style="text-align:center;">
+          <button type="button" class="auth-sub-link-btn" onclick="handleForgotPassword()">نسيت كلمة المرور؟</button>
+        </div>
+      </form>
+
+      <!-- نموذج إنشاء حساب جديد بالبريد الإلكتروني -->
+      <form id="registerForm" class="login-form-box hidden" onsubmit="handleSelfRegister(event)">
+        <div class="field">
+          <label>اسم المحل أو الحساب</label>
+          <input type="text" id="regShopName" class="input" placeholder="مثال: محل النور للصيانة" required />
+        </div>
+        <div class="field">
+          <label>اسمك</label>
+          <input type="text" id="regDisplayName" class="input" placeholder="مثال: أبو محمد" required />
+        </div>
+        <div class="field">
+          <label>البريد الإلكتروني (سيصلك عليه رابط التأكيد)</label>
+          <input type="email" id="regEmail" class="input" dir="ltr" placeholder="name@example.com" required autocomplete="email" />
+        </div>
+        <div class="field">
+          <label>كلمة المرور (6 أحرف أو أرقام على الأقل)</label>
+          <input type="password" id="regPassword" class="input" dir="ltr" minlength="6" placeholder="••••••••" required autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label>تأكيد كلمة المرور</label>
+          <input type="password" id="regPassword2" class="input" dir="ltr" minlength="6" placeholder="••••••••" required autocomplete="new-password" />
+        </div>
+        <label class="reg-policy-box">
+          <input type="checkbox" id="regPolicyAgree" required />
+          <span>أوافق على أنه في حال عدم استخدام التطبيق لمدة <strong>90 يوماً متواصلة</strong>، يحق للإدارة حذف الحساب وبياناته لتوفير المساحة (ما لم يكن الحساب مثبّتاً)، ويُنصح بحفظ نسخة احتياطية دورياً.</span>
+        </label>
+        <button type="submit" id="registerBtn" class="btn btn-primary">إنشاء الحساب وإرسال رسالة التأكيد</button>
       </form>
 
       <div class="login-or-divider"><span>أو بدون إنترنت</span></div>
@@ -1450,7 +1918,7 @@
       <div class="login-dev-card">
         <div class="login-dev-head">
           <span class="login-dev-title">معلومات المطور والدعم الفني</span>
-          <span class="login-dev-ver" id="loginVersionBadge">v28.0</span>
+          <span class="login-dev-ver" id="loginVersionBadge">v1.0</span>
         </div>
         <div class="about-info-box" style="margin-top:0;">
           <div class="about-info-row">
@@ -1587,7 +2055,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v28.0</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v1.0</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -1636,24 +2104,47 @@
     </header>
 
     <main class="container">
-      <div class="summary-card">
-        <div style="min-width:0;flex:1;">
-          <div class="sum-lbl" id="totalDebtLbl">إجمالي الديون المستحقة (<span id="activeCurrName">العملتين</span>)</div>
-          <div class="sum-val" id="totalDebtVal">0 $</div>
-          <div class="sum-dual hidden" id="totalDebtDual">
-            <div class="sum-dual-row">
-              <span class="curr-chip curr-usd">دولار</span>
-              <strong class="sum-dual-num" id="totalDebtUsd">0 $</strong>
+      <div class="summary-card sum-split-card">
+        <div class="sum-split-header">
+          <span class="sum-split-title" id="totalDebtLbl">ملخص الأرصدة (لي / عليّ)</span>
+          <span class="sum-split-curr-tag" id="activeCurrName">العملتين</span>
+        </div>
+        <div class="sum-split-grid">
+          <div class="sum-box for-me">
+            <div class="sum-box-top">
+              <span class="sum-box-lbl">لي</span>
+              <span class="sum-files-pill" id="forMeFilesCount">0 ملفات</span>
             </div>
-            <div class="sum-dual-row">
-              <span class="curr-chip curr-syp">ليرة سوري</span>
-              <strong class="sum-dual-num" id="totalDebtSyp">0 ل.س</strong>
+            <div class="sum-box-val" id="totalForMeVal">0 $</div>
+            <div class="sum-box-dual hidden" id="totalForMeDual">
+              <div class="sum-box-dual-row">
+                <span class="mini-curr">دولار</span>
+                <span class="mini-amt" id="totalForMeUsd">0 $</span>
+              </div>
+              <div class="sum-box-dual-row">
+                <span class="mini-curr">ليرة</span>
+                <span class="mini-amt" id="totalForMeSyp">0 ل.س</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="sum-pill">
-          <strong id="indebtedCount">0</strong>
-          <span>عليهم دين</span>
+
+          <div class="sum-box on-me">
+            <div class="sum-box-top">
+              <span class="sum-box-lbl">عليّ</span>
+              <span class="sum-files-pill" id="onMeFilesCount">0 ملفات</span>
+            </div>
+            <div class="sum-box-val" id="totalOnMeVal">0 $</div>
+            <div class="sum-box-dual hidden" id="totalOnMeDual">
+              <div class="sum-box-dual-row">
+                <span class="mini-curr">دولار</span>
+                <span class="mini-amt" id="totalOnMeUsd">0 $</span>
+              </div>
+              <div class="sum-box-dual-row">
+                <span class="mini-curr">ليرة</span>
+                <span class="mini-amt" id="totalOnMeSyp">0 ل.س</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1684,6 +2175,8 @@
           </div>
         </div>
       </div>
+
+      <div id="searchMinHint" class="search-min-hint hidden">🔍 اكتب حرفين على الأقل للبحث في قائمة الزبائن...</div>
 
       <div id="mainFilterTabs" class="segmented hidden">
         <button class="seg-btn active" onclick="setFilter('all', this)">الكل</button>
@@ -1799,8 +2292,8 @@
 
     <div class="view-body">
       <div id="accTabsWrap" class="segmented cols-2 hidden">
-        <button class="seg-btn active" id="accTabStaffBtn" onclick="switchAccTab('staff')">موظفو وأجهزة الورشة</button>
-        <button class="seg-btn" id="accTabWorkshopsBtn" onclick="switchAccTab('workshops')">الورشات المعزولة</button>
+        <button class="seg-btn active" id="accTabStaffBtn" onclick="switchAccTab('staff')">أجهزة وموظفو الحساب</button>
+        <button class="seg-btn" id="accTabWorkshopsBtn" onclick="switchAccTab('workshops')">الحسابات المسجّلة</button>
       </div>
 
       <div id="accAlert" class="alert-banner hidden"></div>
@@ -1855,35 +2348,50 @@
         <div id="membersListBox"></div>
       </div>
 
-      <!-- تبويب الورشات المعزولة (للمدير العام فقط) -->
+      <!-- تبويب الحسابات المسجّلة ولوحة المراقبة والمساحة (للمدير العام فقط) -->
       <div id="accWorkshopsPanel" class="hidden">
-        <div class="set-card">
-          <h4 class="set-title">إنشاء ورشة جديدة معزولة تماماً</h4>
-          <form id="addWorkshopForm" onsubmit="createIsolatedWorkshop(event)">
-            <div class="field">
-              <label>اسم الورشة الجديدة</label>
-              <input type="text" id="wsNewName" class="input" placeholder="مثال: ورشة النور للصيانة" required />
+        <div class="sys-dash-card" id="adminSystemStatsCard">
+          <div class="sys-dash-head">
+            <h4 class="sys-dash-title">لوحة المراقبة والمساحة السحابية</h4>
+            <button type="button" class="btn btn-light btn-sm" id="refreshSysStatsBtn" onclick="loadSystemUsageStats(true)">تحديث</button>
+          </div>
+
+          <div class="sys-kpi-grid">
+            <div class="sys-kpi-box">
+              <div class="sys-kpi-lbl">الحسابات المتصلة الآن</div>
+              <div class="sys-kpi-val">
+                <span class="presence-dot online"></span>
+                <span id="sysLiveWorkshopsVal">0 / 0</span>
+              </div>
             </div>
-            <div class="field">
-              <label>اسم مدير الورشة</label>
-              <input type="text" id="wsAdminName" class="input" placeholder="المدير" required />
+            <div class="sys-kpi-box">
+              <div class="sys-kpi-lbl">الأجهزة المتصلة الآن</div>
+              <div class="sys-kpi-val">
+                <span id="sysLiveDevicesVal">0</span>
+              </div>
             </div>
-            <div class="field">
-              <label>بريد مدير الورشة</label>
-              <input type="email" id="wsAdminEmail" class="input" dir="ltr" autocomplete="off" data-lpignore="true" data-form-type="other" name="new_ws_admin_mail" placeholder="owner@shop.com" required />
+          </div>
+
+          <div class="sys-meter-wrap">
+            <div class="sys-meter-top">
+              <span>مساحة قاعدة البيانات (المجاني 500 MB)</span>
+              <span id="sysStorageText" dir="ltr">— / 500 MB</span>
             </div>
-            <div class="field">
-              <label>كلمة مرور مؤقتة لأول دخول (6 أحرف فأكثر)</label>
-              <input type="text" id="wsAdminPass" class="input" dir="ltr" minlength="6" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="new_ws_admin_secret" placeholder="كلمة مرور مؤقتة لتسليمها لصاحب الورشة" required />
-              <div class="field-hint">تُستخدم لأول دخول فقط — سيُجبر التطبيق صاحب الورشة على تغييرها فوراً، ولن تُحفظ أو تظهر لديك بعد الإنشاء.</div>
+            <div class="sys-meter-track">
+              <div class="sys-meter-fill" id="sysStorageBar" style="width:0%;"></div>
             </div>
-            <button type="submit" id="addWorkshopSubmitBtn" class="btn btn-primary">إنشاء الورشة وحساب مديرها</button>
-          </form>
+            <div class="sys-meter-sub" id="sysStorageDetails">جاري حساب الاستهلاك من السيرفر...</div>
+          </div>
+
+          <div class="sys-cleanup-bar" id="sysCleanupBar">
+            <div id="sysCleanupSummary">الحسابات الخاملة (+90 يوماً غير المثبّتة): —</div>
+            <button type="button" id="cleanupInactiveBtn" class="btn btn-danger btn-sm" style="width:auto;" onclick="cleanupInactiveAccounts90()">حذف الخاملين (+90 يوم)</button>
+          </div>
         </div>
 
         <div id="onlineWorkshopsBanner" class="online-banner hidden"></div>
         <div class="section-head">
-          <span>الورشات المسجلة</span>
+          <span>الحسابات المسجّلة بالإيميل</span>
           <span id="workshopsCountLbl"></span>
         </div>
         <div id="workshopsListBox"></div>
@@ -1902,7 +2410,7 @@
           </button>
           <div style="min-width:0;">
             <div class="view-title">سجل التدقيق والمتابعة</div>
-            <div class="view-sub" id="auditWorkshopSub">سجل محمي للتعديلات والحذف</div>
+            <div class="view-sub" id="auditWorkshopSub">يحفظ آخر 14 يوماً تلقائياً</div>
           </div>
         </div>
         <div class="view-bar-actions">
@@ -1920,8 +2428,8 @@
             <svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
           </div>
           <div class="audit-note-content">
-            <div class="audit-note-title">سجل متابعة محمي (للقراءة فقط)</div>
-            <div class="audit-note-desc">يوثّق تلقائياً التعديلات والحذف وتغيير مواعيد التسديد مع القيم قبل وبعد واسم المستخدم والتوقيت، ولا يمكن حذفه.</div>
+            <div class="audit-note-title">سجل متابعة محمي — آخر 14 يوماً (يتجدد تلقائياً)</div>
+            <div class="audit-note-desc">يوثّق تلقائياً التعديلات والحذف وتغيير مواعيد التسديد مع القيم قبل وبعد واسم المستخدم والتوقيت. يحتفظ بآخر 14 يوماً ويتجدد تلقائياً لتوفير المساحة، ولا يمكن حذفه يدوياً.</div>
           </div>
         </div>
         <div id="auditServerWarn" class="alert-banner alert-err hidden"></div>
@@ -1968,7 +2476,7 @@
           <div class="logo-row">
             <img id="setLogoPreview" class="logo-prev hidden" alt="معاينة الشعار" />
             <div style="flex:1;">
-              <div style="font-size:13px;font-weight:700;margin-bottom:6px;">لوغو المحل (يظهر بالتطبيق وكشف PDF)</div>
+              <div style="font-size:13px;font-weight:700;margin-bottom:6px;">لوغو المحل (يُحفظ على هذا الجهاز فقط — يظهر بالتطبيق وكشف PDF)</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <label class="btn btn-light" style="width:auto;padding:8px 14px;font-size:13px;">
                   اختيار صورة
@@ -2263,6 +2771,9 @@
           <div><strong>الصلاحية:</strong> <span id="setAccountRole">—</span></div>
           <div><strong>الأجهزة المتصلة بحسابك الآن:</strong> <span id="setAccountLiveDevices">—</span></div>
         </div>
+        <div id="cloudRetentionNote" class="cloud-retention-note">
+          تنبيه: الحسابات غير المثبّتة التي لا يُستخدم فيها التطبيق لمدة 90 يوماً متواصلة تُحذف تلقائياً مع بياناتها لتوفير المساحة؛ يُنصح بأخذ نسخة احتياطية دورياً.
+        </div>
 
         <div class="field" id="settingsChangePassField">
           <label>تغيير كلمة مرور حسابك</label>
@@ -2288,7 +2799,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v28.0</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v1.0</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -2424,16 +2935,16 @@
   <div class="modal-backdrop" id="editWorkshopModal">
     <div class="modal-sheet" style="max-width:440px;">
       <div class="sheet-head">
-        <h3>تعديل الورشة وبيانات المدير</h3>
+        <h3>تعديل الحساب وبيانات الدخول</h3>
         <button class="close-btn" onclick="closeModal('editWorkshopModal')">✕</button>
       </div>
       <div class="field">
-        <label>اسم الورشة</label>
+        <label>اسم المحل / الحساب</label>
         <input type="text" id="editWsNameInput" class="input" autocomplete="off" data-lpignore="true" placeholder="اكتب اسم الورشة" />
       </div>
       <div id="editWsCredsWrap">
         <div class="field">
-          <label>إيميل مدير الورشة</label>
+          <label>البريد الإلكتروني للحساب</label>
           <input type="text" id="editWsEmailInput" class="input" dir="ltr" inputmode="email" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="ws_mgr_email_edit" placeholder="owner@shop.com" />
         </div>
         <div class="field">
@@ -2561,7 +3072,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v28.0</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v1.0</span>
         <p class="about-desc">نظام عملي ومتكامل لإدارة ديون ودفعات الزبائن بالعملتين، يعمل بدون إنترنت وبمزامنة سحابية فورية مع كشوفات PDF وواتساب.</p>
       </div>
 
@@ -2595,7 +3106,7 @@
       <div class="about-section-box">
         <div class="about-section-title">كيف يعمل التطبيق؟</div>
         <ol class="about-steps-list">
-          <li><strong>اختر طريقة التشغيل:</strong> سجّل الدخول بحسابك السحابي للعمل بعدد زبائن غير محدود ومزامنة فورية بين الأجهزة، أو ادخل بـ <strong>الحساب المجاني الأوفلاين</strong> مباشرةً على جهازك (حتى 25 زبوناً بدون إنترنت).</li>
+          <li><strong>اختر طريقة التشغيل:</strong> أنشئ حسابك السحابي مباشرةً بالبريد الإلكتروني وأكّده عبر الرسالة للعمل على عدة أجهزة معزولاً بالكامل (مع التنويه أن الحسابات غير المستخدمة لمدة 90 يوماً متواصلة تُحذف لتوفير المساحة ما لم تكن مثبّتة)، أو استخدم <strong>الحساب المجاني الأوفلاين</strong> مباشرةً على جهازك (حتى 25 زبوناً).</li>
           <li><strong>سجّل الديون والدفعات:</strong> اضغط «عملية جديدة» أو افتح ملف أي زبون لتسجيل دين أو دفعة بالدولار أو الليرة السورية مع الملاحظة.</li>
           <li><strong>أرشفة ذكية تلقائية:</strong> بمجرد تسديد الزبون كامل حسابه تُطوى الدورة تلقائياً في درج الأرشيف ليبقى الكشف الجديد نظيفاً وواضحاً.</li>
           <li><strong>المشاركة والمطابقة:</strong> أرسل للزبون إشعاراً فورياً عبر واتساب أو كشف حساب PDF (حالي أو شامل مع الأرشيف) بضغطة زر واحدة حتى بدون إنترنت.</li>
@@ -2635,16 +3146,16 @@
             قفل التطبيق بالرمز السري (PIN) أو البصمة، الوضع الليلي والنهاري والتلقائي حسب الجهاز، خيار إخفاء وإظهار أزرار التصنيفات في الشاشة الرئيسية، وتأكيد الخروج بالرجوع مرتين.
           </div>
           <div class="about-feat-item">
-            <strong>8. النسخة السحابية وإدارة الأجهزة والورشات</strong>
-            مزامنة لحظية عبر Supabase، عزل كامل لكل ورشة، قفل حساب الموظف على جوال واحد فقط مع تنبيه فوري عند محاولة فتحه من جهاز ثاني، زر «إخراج من الجهاز» لحماية البيانات عند فقدان الجوال، إظهار ونسخ بيانات الدخول، وحذف الحساب نهائياً من السيرفر.
+            <strong>8. حسابات سحابية مستقلة بالإيميل ومزامنة عدة أجهزة</strong>
+            إنشاء حساب مستقل لأي مستخدم بالبريد الإلكتروني مع تأكيد عبر رسالة بريدية، عزل كامل للبيانات بين الحسابات، إمكانية فتح الحساب على عدة أجهزة معاً، وإضافة موظفين مع قفل الجهاز الواحد وزر «إخراج من الجهاز».
           </div>
           <div class="about-feat-item">
             <strong>9. الحساب المجاني الأوفلاين والترحيل للسحابة</strong>
             يعمل مجاناً بالكامل بدون إنترنت حتى 25 زبوناً، وعند تسجيل الدخول بحساب سحابي لأول مرة يعرض ترحيل الحركات تلقائياً في حال وجود بيانات محفوظة.
           </div>
           <div class="about-feat-item">
-            <strong>10. سجل التدقيق والمتابعة (للمدير)</strong>
-            سجل تلقائي محمي غير قابل للحذف يوثّق كل تعديل أو حذف أو تغيير موعد تسديد مع التفاصيل قبل وبعد واسم الموظف والتاريخ والساعة.
+            <strong>10. سجل التدقيق والمتابعة (آخر 14 يوماً)</strong>
+            سجل تلقائي محمي يوثّق كل تعديل أو حذف أو تغيير موعد تسديد مع التفاصيل قبل وبعد واسم المستخدم والتوقيت، ويتجدد تلقائياً كل 14 يوماً لتوفير المساحة.
           </div>
           <div class="about-feat-item">
             <strong>11. تذكير بالديون المتأخرة ومواعيد التسديد</strong>
