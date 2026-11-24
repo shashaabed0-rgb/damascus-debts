@@ -6,7 +6,11 @@
   <meta name="theme-color" content="#2a4570" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="دفتر الديون السحابي" />
   <meta name="apple-mobile-web-app-title" content="دفتر الديون السحابي" />
+  <meta name="description" content="تطبيق دفتر الديون السحابي لإدارة ديون ودفعات الزبائن بالعملتين ومزامنة الأجهزة" />
+  <meta property="og:title" content="دفتر الديون السحابي" />
+  <meta property="og:site_name" content="دفتر الديون السحابي" />
   <title>دفتر الديون السحابي</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" href="icon-192.png" />
@@ -1183,12 +1187,89 @@
         max-width: 440px;
       }
     }
+    /* ===== معاملة التطبيق كتطبيق أصلي (منع السحب للتحديث + تثبيت الرأس وشريط البحث) ===== */
+    html, body {
+      overscroll-behavior: none !important;
+      overscroll-behavior-y: none !important;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-text-size-adjust: 100%;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, textarea, select, [contenteditable="true"], .qc-code-box, .temp-cred-code {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -webkit-touch-callout: default !important;
+    }
+    #mainView:not(.hidden) {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+      overscroll-behavior: none;
+      z-index: 10;
+    }
+    #mainView > .top-header {
+      position: relative !important;
+      top: auto !important;
+      flex-shrink: 0;
+      z-index: 30;
+    }
+    .main-sticky-search-dock {
+      flex-shrink: 0;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px 10px;
+      position: relative;
+      z-index: 25;
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
+    }
+    [data-theme="dark"] .main-sticky-search-dock {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+    }
+    .main-dock-inner {
+      width: 100%;
+    }
+    .main-scroll-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      overscroll-behavior-y: contain;
+      position: relative;
+      z-index: 1;
+    }
+    .main-scroll-body > main.container {
+      padding-top: 12px !important;
+      padding-bottom: 94px !important;
+    }
+    .view-body, .modal-sheet, .side-menu-drawer {
+      overscroll-behavior: contain;
+      overscroll-behavior-y: contain;
+    }
+    @media (min-width: 900px) {
+      .main-sticky-search-dock {
+        padding-inline: 0 !important;
+      }
+      .main-dock-inner {
+        max-width: 1100px !important;
+        margin-inline: auto !important;
+        padding-inline: 22px !important;
+        box-sizing: border-box;
+      }
+    }
+
     /* ===== شريط البحث الواضح + زر الترتيب المنسدل على اليسار ===== */
     .search-sort-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 0;
       position: relative;
       z-index: 20;
     }
@@ -1208,16 +1289,16 @@
       background: var(--card) !important;
       border: 1.8px solid rgba(42, 69, 112, 0.30) !important;
       border-radius: 14px !important;
-      min-height: 48px !important;
+      min-height: 46px !important;
       font-size: 14.5px !important;
       font-weight: 600;
       padding-left: 40px !important;
-      box-shadow: 0 4px 14px rgba(42, 69, 112, 0.09) !important;
+      box-shadow: 0 3px 10px rgba(42, 69, 112, 0.08) !important;
       transition: border-color .16s ease, box-shadow .16s ease;
     }
     #mainView .search-input:focus {
       border-color: var(--primary) !important;
-      box-shadow: 0 0 0 3.5px rgba(42, 69, 112, 0.15), 0 4px 14px rgba(42, 69, 112, 0.12) !important;
+      box-shadow: 0 0 0 3.5px rgba(42, 69, 112, 0.15), 0 3px 10px rgba(42, 69, 112, 0.12) !important;
       outline: none;
     }
     [data-theme="dark"] #mainView .search-wrap > svg.ic {
@@ -1225,7 +1306,7 @@
     }
     [data-theme="dark"] #mainView .search-input {
       border-color: rgba(147, 197, 253, 0.38) !important;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25) !important;
     }
     [data-theme="dark"] #mainView .search-input:focus {
       border-color: #60a5fa !important;
@@ -1261,8 +1342,8 @@
       flex-shrink: 0;
     }
     .sort-icon-btn {
-      width: 48px;
-      height: 48px;
+      width: 46px;
+      height: 46px;
       border-radius: 14px;
       background: var(--card);
       border: 1.8px solid rgba(42, 69, 112, 0.30);
@@ -1272,7 +1353,7 @@
       justify-content: center;
       padding: 0;
       cursor: pointer;
-      box-shadow: 0 4px 14px rgba(42, 69, 112, 0.09);
+      box-shadow: 0 3px 10px rgba(42, 69, 112, 0.08);
       transition: background .15s ease, color .15s ease, border-color .15s ease, transform .12s ease;
     }
     .sort-icon-btn:active {
@@ -1286,7 +1367,7 @@
     [data-theme="dark"] .sort-icon-btn {
       border-color: rgba(147, 197, 253, 0.38);
       color: #93c5fd;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
     }
     [data-theme="dark"] .sort-icon-btn.open {
       background: var(--primary);
@@ -1306,7 +1387,7 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-      z-index: 40;
+      z-index: 60;
       animation: sortDropIn .14s ease-out;
     }
     .sort-dropdown.hidden {
@@ -1487,10 +1568,14 @@
       font-size: 11.8px;
       font-weight: 700;
       color: var(--muted);
-      margin: -6px 4px 10px;
+      margin: 7px 4px 0;
       display: flex;
       align-items: center;
       gap: 5px;
+    }
+    .main-sticky-search-dock .segmented {
+      margin-top: 8px;
+      margin-bottom: 0;
     }
     .search-min-hint.hidden {
       display: none !important;
@@ -1964,7 +2049,7 @@
       <div class="login-dev-card">
         <div class="login-dev-head">
           <span class="login-dev-title">معلومات المطور والدعم الفني</span>
-          <span class="login-dev-ver" id="loginVersionBadge">v1.1.2</span>
+          <span class="login-dev-ver" id="loginVersionBadge">v1.2</span>
         </div>
         <div class="about-info-box" style="margin-top:0;">
           <div class="about-info-row">
@@ -2101,7 +2186,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v1.1.2</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v1.2</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -2149,76 +2234,82 @@
       </div>
     </header>
 
-    <main class="container">
-      <div class="summary-card sum-split-card">
-        <div class="sum-split-grid">
-          <div class="sum-box for-me">
-            <div class="sum-box-top">
-              <span class="sum-box-lbl">لي</span>
-              <span class="sum-files-pill" id="forMeFilesCount">0 ملفات</span>
-            </div>
-            <div class="sum-box-val" id="totalForMeVal"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
-            <div class="sum-box-dual hidden" id="totalForMeDual">
-              <div class="sum-box-dual-row" id="totalForMeUsd"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
-              <div class="sum-box-dual-row" id="totalForMeSyp"><span class="sum-num-txt">0</span><span class="sum-curr-tag">ل.س</span></div>
-            </div>
+    <div class="main-sticky-search-dock">
+      <div class="main-dock-inner">
+        <div class="search-sort-row">
+          <div class="search-wrap">
+            <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="search" id="searchInput" class="search-input" placeholder="ابحث باسم الزبون أو رقم الهاتف..." oninput="onMainSearchInput()" />
+            <button type="button" id="mainSearchClearBtn" class="search-clear-btn hidden" title="مسح البحث" onclick="clearMainSearch()">✕</button>
           </div>
 
-          <div class="sum-box on-me">
-            <div class="sum-box-top">
-              <span class="sum-box-lbl">عليّ</span>
-              <span class="sum-files-pill" id="onMeFilesCount">0 ملفات</span>
+          <div class="sort-menu-anchor" id="sortMenuAnchor">
+            <button type="button" id="sortMenuBtn" class="sort-icon-btn" title="ترتيب القائمة" aria-haspopup="true" aria-expanded="false" onclick="toggleSortMenu(event)">
+              <svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="15" y2="12"/><line x1="4" y1="18" x2="10" y2="18"/></svg>
+            </button>
+            <div id="sortDropdownMenu" class="sort-dropdown hidden" role="menu" aria-label="ترتيب قائمة الزبائن">
+              <button type="button" id="sortBtnLatest" class="sort-drop-item active" role="menuitem" onclick="setCustomerSort('latest')">
+                <span>الأحدث</span>
+                <span class="sort-drop-chk">✓</span>
+              </button>
+              <button type="button" id="sortBtnAlpha" class="sort-drop-item" role="menuitem" onclick="setCustomerSort('alpha')">
+                <span>أبجدي (أ ← ي)</span>
+                <span class="sort-drop-chk">✓</span>
+              </button>
+              <button type="button" id="sortBtnDate" class="sort-drop-item" role="menuitem" onclick="setCustomerSort('date')">
+                <span id="sortBtnDateTxt">حسب التاريخ ↑</span>
+                <span class="sort-drop-chk">✓</span>
+              </button>
             </div>
-            <div class="sum-box-val" id="totalOnMeVal"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
-            <div class="sum-box-dual hidden" id="totalOnMeDual">
-              <div class="sum-box-dual-row" id="totalOnMeUsd"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
-              <div class="sum-box-dual-row" id="totalOnMeSyp"><span class="sum-num-txt">0</span><span class="sum-curr-tag">ل.س</span></div>
+          </div>
+        </div>
+
+        <div id="searchMinHint" class="search-min-hint hidden">🔍 اكتب حرفين على الأقل للبحث في قائمة الزبائن...</div>
+
+        <div id="mainFilterTabs" class="segmented hidden">
+          <button class="seg-btn active" onclick="setFilter('all', this)">الكل</button>
+          <button class="seg-btn" onclick="setFilter('debt', this)">عليهم دين</button>
+          <button class="seg-btn" onclick="setFilter('zero', this)">خالصين</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-scroll-body" id="mainScrollBody">
+      <main class="container">
+        <div class="summary-card sum-split-card">
+          <div class="sum-split-grid">
+            <div class="sum-box for-me">
+              <div class="sum-box-top">
+                <span class="sum-box-lbl">لي</span>
+                <span class="sum-files-pill" id="forMeFilesCount">0 ملفات</span>
+              </div>
+              <div class="sum-box-val" id="totalForMeVal"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
+              <div class="sum-box-dual hidden" id="totalForMeDual">
+                <div class="sum-box-dual-row" id="totalForMeUsd"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
+                <div class="sum-box-dual-row" id="totalForMeSyp"><span class="sum-num-txt">0</span><span class="sum-curr-tag">ل.س</span></div>
+              </div>
+            </div>
+
+            <div class="sum-box on-me">
+              <div class="sum-box-top">
+                <span class="sum-box-lbl">عليّ</span>
+                <span class="sum-files-pill" id="onMeFilesCount">0 ملفات</span>
+              </div>
+              <div class="sum-box-val" id="totalOnMeVal"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
+              <div class="sum-box-dual hidden" id="totalOnMeDual">
+                <div class="sum-box-dual-row" id="totalOnMeUsd"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
+                <div class="sum-box-dual-row" id="totalOnMeSyp"><span class="sum-num-txt">0</span><span class="sum-curr-tag">ل.س</span></div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="search-sort-row">
-        <div class="search-wrap">
-          <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="search" id="searchInput" class="search-input" placeholder="ابحث باسم الزبون أو رقم الهاتف..." oninput="onMainSearchInput()" />
-          <button type="button" id="mainSearchClearBtn" class="search-clear-btn hidden" title="مسح البحث" onclick="clearMainSearch()">✕</button>
-        </div>
+        <div id="duplicateConflictBanner" class="dup-banner hidden"></div>
+        <div id="dueReminderBanner" class="due-banner hidden"></div>
 
-        <div class="sort-menu-anchor" id="sortMenuAnchor">
-          <button type="button" id="sortMenuBtn" class="sort-icon-btn" title="ترتيب القائمة" aria-haspopup="true" aria-expanded="false" onclick="toggleSortMenu(event)">
-            <svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="15" y2="12"/><line x1="4" y1="18" x2="10" y2="18"/></svg>
-          </button>
-          <div id="sortDropdownMenu" class="sort-dropdown hidden" role="menu" aria-label="ترتيب قائمة الزبائن">
-            <button type="button" id="sortBtnLatest" class="sort-drop-item active" role="menuitem" onclick="setCustomerSort('latest')">
-              <span>الأحدث</span>
-              <span class="sort-drop-chk">✓</span>
-            </button>
-            <button type="button" id="sortBtnAlpha" class="sort-drop-item" role="menuitem" onclick="setCustomerSort('alpha')">
-              <span>أبجدي (أ ← ي)</span>
-              <span class="sort-drop-chk">✓</span>
-            </button>
-            <button type="button" id="sortBtnDate" class="sort-drop-item" role="menuitem" onclick="setCustomerSort('date')">
-              <span id="sortBtnDateTxt">حسب التاريخ ↑</span>
-              <span class="sort-drop-chk">✓</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div id="searchMinHint" class="search-min-hint hidden">🔍 اكتب حرفين على الأقل للبحث في قائمة الزبائن...</div>
-
-      <div id="mainFilterTabs" class="segmented hidden">
-        <button class="seg-btn active" onclick="setFilter('all', this)">الكل</button>
-        <button class="seg-btn" onclick="setFilter('debt', this)">عليهم دين</button>
-        <button class="seg-btn" onclick="setFilter('zero', this)">خالصين</button>
-      </div>
-
-      <div id="duplicateConflictBanner" class="dup-banner hidden"></div>
-      <div id="dueReminderBanner" class="due-banner hidden"></div>
-
-      <div id="customerList"></div>
-    </main>
+        <div id="customerList"></div>
+      </main>
+    </div>
 
     <button class="fab" onclick="openAddModal()">
       <svg class="ic" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -2346,7 +2437,7 @@
             </div>
             <div class="field">
               <label>بريد الدخول (يمكن ابتكار أي بريد بصيغة إيميل)</label>
-              <input type="email" id="memEmailInput" class="input" dir="ltr" autocomplete="off" data-lpignore="true" data-form-type="other" name="new_member_mail" placeholder="pc1@dimashqi.com" required />
+              <input type="email" id="memEmailInput" class="input" dir="ltr" autocomplete="off" data-lpignore="true" data-form-type="other" name="new_member_mail" placeholder="pc1@shop.com" required />
             </div>
             <div class="field">
               <label>كلمة المرور (6 أحرف أو أرقام على الأقل)</label>
@@ -2829,7 +2920,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v1.1.2</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v1.2</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -2845,14 +2936,14 @@
         <button class="close-btn" onclick="closeModal('addModal')">✕</button>
       </div>
 
-      <div class="field">
+      <div class="field" id="txNameField">
         <label>اسم الزبون</label>
         <input type="text" id="txName" class="input" autocomplete="off" data-lpignore="true" data-form-type="other" name="new_cust_name_tx" placeholder="اكتب اسم الزبون" oninput="onTxNameInput()" />
         <datalist id="customersDatalist"></datalist>
         <div id="txNameDupWarn" class="alert-banner alert-err hidden" style="margin-top:8px;margin-bottom:0;font-size:12.5px;line-height:1.55;"></div>
       </div>
 
-      <div class="field">
+      <div class="field" id="txPhoneField">
         <label>رقم الهاتف (اختياري)</label>
         <input type="tel" id="txPhone" class="input" inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" name="cust_phone_tx" placeholder="09xxxxxxxx (بدون رمز دولي)" />
       </div>
@@ -3102,7 +3193,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v1.1.2</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v1.2</span>
         <p class="about-desc">نظام عملي ومتكامل لإدارة ديون ودفعات الزبائن بالعملتين، يعمل بدون إنترنت وبمزامنة سحابية فورية مع كشوفات PDF وواتساب.</p>
       </div>
 

@@ -1729,16 +1729,31 @@ function openAddModal(prefillName = '', prefillPhone = '', defaultKind = 'debt',
   txOriginCustomerName = String(prefillName || '').trim();
   txOriginDisplayName = cleanDisplayCustomerName(txOriginCustomerName);
   txOriginCustomerPhone = txOriginCustomerName ? normalizeLocalPhoneInput(prefillPhone) : '';
-  document.getElementById('txModalTitle').textContent = 'تسجيل عملية جديدة';
+  const isInsideCustomerCard = Boolean(txOriginCustomerName);
+
+  document.getElementById('txModalTitle').textContent = isInsideCustomerCard
+    ? txOriginDisplayName
+    : 'تسجيل عملية جديدة';
   document.getElementById('saveTxBtn').textContent = 'حفظ العملية';
   document.getElementById('txName').value = txOriginDisplayName;
   document.getElementById('txPhone').value = txOriginCustomerPhone;
+  document.getElementById('txNameField')?.classList.remove('hidden');
+  document.getElementById('txPhoneField')?.classList.remove('hidden');
+  document.getElementById('txNameField')?.classList.toggle('hidden', isInsideCustomerCard);
+  document.getElementById('txPhoneField')?.classList.toggle('hidden', isInsideCustomerCard);
   document.getElementById('txAmount').value = '';
   document.getElementById('txNote').value = '';
   document.getElementById('txDate').value = toInputDate(todayString());
   document.getElementById('txDateField').classList.add('hidden');
   clearDueControl('tx');
-  checkDuplicateTxName();
+  if (!isInsideCustomerCard) {
+    checkDuplicateTxName();
+  } else {
+    const warnEl = document.getElementById('txNameDupWarn');
+    if (warnEl) { warnEl.classList.add('hidden'); warnEl.innerHTML = ''; }
+    const nameInp = document.getElementById('txName');
+    if (nameInp) nameInp.style.borderColor = '';
+  }
 
   const initialCurr = (isDualCurrencyMode() || allowCurrSwitch)
     ? (preferredCurrency || lastUsedTxCurrency || (settings.currency === 'SYP' ? 'SYP' : 'USD'))
@@ -2907,7 +2922,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v1.1.2';
+  const ver = (APP_META && APP_META.version) || 'v1.2';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2938,7 +2953,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v1.1.2';
+  const ver = (APP_META && APP_META.version) || 'v1.2';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2970,7 +2985,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v1.1.2';
+  const ver = (APP_META && APP_META.version) || 'v1.2';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;
@@ -3113,6 +3128,46 @@ document.addEventListener('selectstart', (e) => {
     e.preventDefault();
   }
 });
+
+// ==================== منع السحب للتحديث (Pull-to-Refresh) ومعاملة الواجهة كتطبيق أصلي ====================
+(function initNativeAppOverscrollGuard() {
+  let touchStartY = 0;
+  let activeScrollContainer = null;
+
+  function findScrollableAncestor(el) {
+    let cur = el;
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      if (cur.nodeType === 1) {
+        const st = window.getComputedStyle(cur);
+        const ovY = st.overflowY;
+        if ((ovY === 'auto' || ovY === 'scroll') && cur.scrollHeight > cur.clientHeight) {
+          return cur;
+        }
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    touchStartY = e.touches[0].clientY;
+    activeScrollContainer = findScrollableAncestor(e.target);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    if (e.target && e.target.closest && e.target.closest('select, input[type="range"]')) return;
+    const currentY = e.touches[0].clientY;
+    const deltaY = currentY - touchStartY;
+    if (deltaY <= 0) return;
+
+    const scroller = activeScrollContainer || findScrollableAncestor(e.target);
+    if (!scroller || scroller.scrollTop <= 0) {
+      if (e.cancelable) e.preventDefault();
+    }
+  }, { passive: false });
+})();
 
 
 // ==================== صفحة سجل التدقيق والمتابعة (v24) ====================
