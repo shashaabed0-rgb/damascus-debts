@@ -281,8 +281,8 @@ function closeModal(id, keepHistory = false) {
 
 // ==================== الهوية وقفل الجهاز (اختياري) ====================
 function applyBrandingUI() {
-  const name = settings.shopName || 'دفتر الديون';
-  document.title = `دفتر الديون - ${name}`;
+  const name = settings.shopName || 'دفتر الديون السحابي';
+  document.title = name === 'دفتر الديون السحابي' ? 'دفتر الديون السحابي' : `${name} - دفتر الديون السحابي`;
   document.getElementById('headerShopName').textContent = name;
   document.getElementById('lockShopName').textContent = name;
   document.getElementById('drawerShopName').textContent = name;
@@ -292,7 +292,7 @@ function applyBrandingUI() {
     document.getElementById('drawerUserMeta').textContent = `${uName} (${getRoleLabel(currentProfile.role)})`;
   }
 
-  document.getElementById('headerShopSub').textContent = 'دفتر الديون';
+  document.getElementById('headerShopSub').textContent = 'دفتر الديون السحابي';
 
   const hLogo = document.getElementById('headerLogo');
   const dLogo = document.getElementById('drawerLogo');
@@ -383,7 +383,7 @@ async function setupOrDisableBio() {
     const cred = await navigator.credentials.create({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
-        rp: { name: settings.shopName || 'دفتر الديون' },
+        rp: { name: settings.shopName || 'دفتر الديون السحابي' },
         user: {
           id: crypto.getRandomValues(new Uint8Array(16)),
           name: currentProfile?.email || 'owner',
@@ -1024,28 +1024,26 @@ function processAndRender() {
   document.getElementById('onMeFilesCount').textContent = formatArabicFileCount(onMeCount);
 
   if (showDualSummary) {
-    document.getElementById('activeCurrName').textContent = dual ? 'العملتين' : `${singleCurr.name} + أرصدة مفتوحة`;
     document.getElementById('totalForMeVal').classList.add('hidden');
     document.getElementById('totalForMeDual').classList.remove('hidden');
-    document.getElementById('totalForMeUsd').innerHTML = `<span class="num-ltr">${formatNum(forMeUsd)}</span><span class="sum-unit">$</span>`;
-    document.getElementById('totalForMeSyp').innerHTML = `<span class="num-ltr">${formatNum(forMeSyp)}</span><span class="sum-unit">ل.س</span>`;
+    document.getElementById('totalForMeUsd').innerHTML = `<span class="sum-num-txt">${formatNum(forMeUsd)}</span><span class="sum-curr-tag">$</span>`;
+    document.getElementById('totalForMeSyp').innerHTML = `<span class="sum-num-txt">${formatNum(forMeSyp)}</span><span class="sum-curr-tag">ل.س</span>`;
 
     document.getElementById('totalOnMeVal').classList.add('hidden');
     document.getElementById('totalOnMeDual').classList.remove('hidden');
-    document.getElementById('totalOnMeUsd').innerHTML = `<span class="num-ltr">${formatNum(onMeUsd)}</span><span class="sum-unit">$</span>`;
-    document.getElementById('totalOnMeSyp').innerHTML = `<span class="num-ltr">${formatNum(onMeSyp)}</span><span class="sum-unit">ل.س</span>`;
+    document.getElementById('totalOnMeUsd').innerHTML = `<span class="sum-num-txt">${formatNum(onMeUsd)}</span><span class="sum-curr-tag">$</span>`;
+    document.getElementById('totalOnMeSyp').innerHTML = `<span class="sum-num-txt">${formatNum(onMeSyp)}</span><span class="sum-curr-tag">ل.س</span>`;
   } else {
-    document.getElementById('activeCurrName').textContent = singleCurr.name;
     const forMeSingle = settings.currency === 'SYP' ? forMeSyp : forMeUsd;
     const onMeSingle = settings.currency === 'SYP' ? onMeSyp : onMeUsd;
 
     document.getElementById('totalForMeVal').classList.remove('hidden');
     document.getElementById('totalForMeDual').classList.add('hidden');
-    document.getElementById('totalForMeVal').innerHTML = `<span class="num-ltr">${formatNum(forMeSingle)}</span><span class="sum-unit">${singleCurr.symbol}</span>`;
+    document.getElementById('totalForMeVal').innerHTML = `<span class="sum-num-txt">${formatNum(forMeSingle)}</span><span class="sum-curr-tag">${singleCurr.symbol}</span>`;
 
     document.getElementById('totalOnMeVal').classList.remove('hidden');
     document.getElementById('totalOnMeDual').classList.add('hidden');
-    document.getElementById('totalOnMeVal').innerHTML = `<span class="num-ltr">${formatNum(onMeSingle)}</span><span class="sum-unit">${singleCurr.symbol}</span>`;
+    document.getElementById('totalOnMeVal').innerHTML = `<span class="sum-num-txt">${formatNum(onMeSingle)}</span><span class="sum-curr-tag">${singleCurr.symbol}</span>`;
   }
   const dlEl = document.getElementById('customersDatalist');
   if (dlEl) dlEl.innerHTML = '';
@@ -2217,6 +2215,20 @@ function toggleMaskedInput(inputId, btn) {
   if (btn) btn.textContent = revealed ? 'إخفاء' : 'إظهار';
 }
 
+function togglePassFieldEye(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  if (btn) {
+    btn.classList.toggle('is-visible', show);
+    btn.setAttribute('aria-label', show ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور');
+    btn.innerHTML = show
+      ? '<svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+      : '<svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  }
+}
+
 function removeShopPhoneRow(btn) {
   const listEl = document.getElementById('shopPhonesList');
   const row = btn.closest('.phone-row');
@@ -2396,7 +2408,7 @@ async function saveSettings() {
   // إذا كان المستخدم مديراً، نحفظ إعدادات المحل سحابياً في Supabase
   if (isAdmin()) {
     const collectedPhones = collectShopPhonesInputs();
-    settings.shopName = document.getElementById('setShopName').value.trim() || 'مركز الدمشقي للصيانة';
+    settings.shopName = document.getElementById('setShopName').value.trim() || 'دفتر الديون السحابي';
     settings.shopAddress = document.getElementById('setShopAddress').value.trim();
     settings.shopPhones = collectedPhones;
     settings.shopPhone = collectedPhones.join(' - ');
@@ -2880,7 +2892,7 @@ setInterval(() => {
 // ==================== نافذة حول التطبيق والمطور ====================
 function openAboutModal() {
   const appName = (APP_META && APP_META.appName) || 'دفتر الديون السحابي';
-  const ver = (APP_META && APP_META.version) || 'v1.0';
+  const ver = (APP_META && APP_META.version) || 'v1.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const shopPhones = getShopPhonesList();
@@ -2911,7 +2923,7 @@ function openAboutModal() {
 }
 
 function syncLoginDevCardUI() {
-  const ver = (APP_META && APP_META.version) || 'v1.0';
+  const ver = (APP_META && APP_META.version) || 'v1.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const devName = (APP_META && APP_META.developerName) || 'أبو العز';
   const phone = ((APP_META && APP_META.developerPhone) || '').trim();
@@ -2943,7 +2955,7 @@ function syncLoginDevCardUI() {
 }
 
 function syncAppVersionBadges() {
-  const ver = (APP_META && APP_META.version) || 'v1.0';
+  const ver = (APP_META && APP_META.version) || 'v1.1';
   const org = (APP_META && APP_META.developerOrg) || 'مركز الدمشقي للصيانة';
   const dBadge = document.getElementById('drawerVersionBadge');
   if (dBadge) dBadge.textContent = ver;

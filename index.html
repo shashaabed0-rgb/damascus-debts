@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#2a4570" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="دفتر الديون" />
-  <title>دفتر الديون - مركز الدمشقي للصيانة</title>
+  <meta name="apple-mobile-web-app-title" content="دفتر الديون السحابي" />
+  <title>دفتر الديون السحابي</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" href="icon-192.png" />
   <link rel="apple-touch-icon" href="icon-192.png" />
@@ -1664,150 +1664,187 @@
       border-color: rgba(96, 165, 250, 0.4);
       color: #93c5fd;
     }
-    /* ===== بطاقة ملخص الواجهة الرئيسية: لي / عليّ + عدد الملفات بدون جمع ===== */
+    /* ===== بطاقة ملخص الواجهة الرئيسية: مضغوطة ومرتبة بألوان زمردي وكهرماني ===== */
     .summary-card.sum-split-card {
       display: block !important;
-      padding: 11px !important;
+      padding: 6px !important;
+      margin-bottom: 10px !important;
+      border-radius: 13px !important;
       background: var(--card) !important;
       border: 1px solid var(--border) !important;
       color: var(--text) !important;
-      box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06) !important;
-    }
-    .sum-split-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 9px;
-      padding: 0 2px;
-    }
-    .sum-split-title {
-      font-size: 12.2px;
-      font-weight: 800;
-      color: var(--muted);
-    }
-    .sum-split-curr-tag {
-      font-size: 11px;
-      font-weight: 800;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: rgba(42, 69, 112, 0.1);
-      color: var(--primary);
-    }
-    [data-theme="dark"] .sum-split-curr-tag {
-      background: rgba(147, 197, 253, 0.16);
-      color: #93c5fd;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05) !important;
     }
     .sum-split-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 9px;
+      gap: 6px;
     }
     .sum-box {
-      border-radius: 12px;
-      padding: 10px 10px 9px;
+      border-radius: 10px;
+      padding: 7px 9px 6px;
       display: flex;
       flex-direction: column;
-      gap: 7px;
+      gap: 5px;
       min-width: 0;
       box-sizing: border-box;
     }
     .sum-box.for-me {
-      background: #eff6ff;
-      border: 1.5px solid #bfdbfe;
+      background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf9 100%);
+      border: 1px solid #a7f3d0;
+      border-right: 3.5px solid #059669;
     }
     .sum-box.on-me {
-      background: #fef2f2;
-      border: 1.5px solid #fecaca;
+      background: linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%);
+      border: 1px solid #fed7aa;
+      border-right: 3.5px solid #ea580c;
     }
     [data-theme="dark"] .sum-box.for-me {
-      background: rgba(37, 99, 235, 0.14);
-      border-color: rgba(96, 165, 250, 0.36);
+      background: rgba(16, 185, 129, 0.13);
+      border-color: rgba(52, 211, 153, 0.28);
+      border-right-color: #10b981;
     }
     [data-theme="dark"] .sum-box.on-me {
-      background: rgba(220, 38, 38, 0.14);
-      border-color: rgba(248, 113, 113, 0.36);
+      background: rgba(249, 115, 22, 0.13);
+      border-color: rgba(251, 146, 60, 0.28);
+      border-right-color: #f97316;
     }
     .sum-box-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 5px;
-      flex-wrap: wrap;
+      gap: 4px;
     }
     .sum-box-lbl {
-      font-size: 13.5px;
+      font-size: 12.2px;
       font-weight: 900;
+      line-height: 1.2;
     }
-    .sum-box.for-me .sum-box-lbl { color: #1d4ed8; }
-    .sum-box.on-me .sum-box-lbl { color: #b91c1c; }
-    [data-theme="dark"] .sum-box.for-me .sum-box-lbl { color: #93c5fd; }
-    [data-theme="dark"] .sum-box.on-me .sum-box-lbl { color: #fca5a5; }
+    .sum-box.for-me .sum-box-lbl { color: #047857; }
+    .sum-box.on-me .sum-box-lbl { color: #c2410c; }
+    [data-theme="dark"] .sum-box.for-me .sum-box-lbl { color: #6ee7b7; }
+    [data-theme="dark"] .sum-box.on-me .sum-box-lbl { color: #fdba74; }
     .sum-files-pill {
-      font-size: 11px;
+      font-size: 10.2px;
       font-weight: 800;
-      padding: 2px 7px;
+      padding: 1.5px 6px;
       border-radius: 999px;
       white-space: nowrap;
+      line-height: 1.35;
     }
     .sum-box.for-me .sum-files-pill {
-      background: #dbeafe;
-      color: #1e40af;
+      background: #d1fae5;
+      color: #065f46;
     }
     .sum-box.on-me .sum-files-pill {
-      background: #fee2e2;
-      color: #991b1b;
+      background: #ffedd5;
+      color: #9a3412;
     }
     [data-theme="dark"] .sum-box.for-me .sum-files-pill {
-      background: rgba(59, 130, 246, 0.25);
-      color: #bfdbfe;
+      background: rgba(16, 185, 129, 0.24);
+      color: #a7f3d0;
     }
     [data-theme="dark"] .sum-box.on-me .sum-files-pill {
-      background: rgba(239, 68, 68, 0.25);
-      color: #fecaca;
+      background: rgba(249, 115, 22, 0.24);
+      color: #fed7aa;
     }
     .sum-box-val {
-      font-size: 18px;
-      font-weight: 900;
-      color: var(--text);
-      direction: rtl;
-      display: inline-flex;
+      display: flex;
       align-items: baseline;
+      justify-content: space-between;
       gap: 4px;
-      flex-wrap: wrap;
+      font-size: 15.5px;
+      font-weight: 900;
       line-height: 1.25;
+      font-variant-numeric: tabular-nums;
+      padding-top: 2px;
     }
     .sum-box-val.hidden { display: none !important; }
     .sum-box-dual {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 3px;
     }
     .sum-box-dual.hidden { display: none !important; }
     .sum-box-dual-row {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
-      gap: 6px;
-      font-size: 14.5px;
+      gap: 5px;
+      font-size: 13.2px;
       font-weight: 900;
-      color: var(--text);
       line-height: 1.3;
+      font-variant-numeric: tabular-nums;
     }
-    .sum-box-dual-row .mini-curr {
-      font-size: 11px;
-      font-weight: 800;
-      color: var(--muted);
-      flex-shrink: 0;
+    .sum-box-dual-row + .sum-box-dual-row {
+      padding-top: 3px;
+      border-top: 1px dashed rgba(100, 116, 139, 0.22);
     }
-    .sum-box-dual-row .mini-amt {
-      direction: rtl;
-      display: inline-flex;
-      align-items: baseline;
-      gap: 3px;
+    .sum-box.for-me .sum-num-txt { color: #064e3b; }
+    .sum-box.on-me .sum-num-txt { color: #7c2d12; }
+    [data-theme="dark"] .sum-box.for-me .sum-num-txt { color: #ecfdf5; }
+    [data-theme="dark"] .sum-box.on-me .sum-num-txt { color: #fff7ed; }
+    .sum-num-txt {
+      direction: ltr;
+      unicode-bidi: isolate;
+      text-align: right;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .sum-curr-tag {
+      font-size: 10.5px;
+      font-weight: 800;
+      min-width: 24px;
+      text-align: left;
+      flex-shrink: 0;
+      opacity: 0.9;
+    }
+    .sum-box.for-me .sum-curr-tag { color: #059669; }
+    .sum-box.on-me .sum-curr-tag { color: #ea580c; }
+    [data-theme="dark"] .sum-box.for-me .sum-curr-tag { color: #6ee7b7; }
+    [data-theme="dark"] .sum-box.on-me .sum-curr-tag { color: #fdba74; }
+
+    /* ===== زر إظهار وإخفاء كلمة المرور ===== */
+    .pass-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .pass-input-wrap .input.pass-with-eye {
+      width: 100%;
+      padding-right: 42px;
+      padding-left: 12px;
+      text-align: left;
+    }
+    .pass-eye-btn {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: color .14s ease, background .14s ease;
+    }
+    .pass-eye-btn:hover {
+      background: rgba(100, 116, 139, 0.12);
+      color: var(--primary);
+    }
+    .pass-eye-btn.is-visible {
+      color: var(--primary);
+    }
+    [data-theme="dark"] .pass-eye-btn.is-visible {
+      color: #93c5fd;
     }
     #toast {
       z-index: 99999 !important;
@@ -1870,7 +1907,10 @@
         </div>
         <div class="field">
           <label>كلمة المرور</label>
-          <input type="password" id="loginPassword" class="input" dir="ltr" placeholder="••••••••" required autocomplete="current-password" />
+          <div class="pass-input-wrap">
+            <input type="password" id="loginPassword" class="input pass-with-eye" dir="ltr" placeholder="••••••••" required autocomplete="current-password" />
+            <button type="button" class="pass-eye-btn" title="إظهار / إخفاء كلمة المرور" aria-label="إظهار كلمة المرور" onclick="togglePassFieldEye('loginPassword', this)"><svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </div>
         </div>
         <button type="submit" id="loginBtn" class="btn btn-primary">تسجيل الدخول (النسخة السحابية)</button>
         <div style="text-align:center;">
@@ -1894,11 +1934,17 @@
         </div>
         <div class="field">
           <label>كلمة المرور (6 أحرف أو أرقام على الأقل)</label>
-          <input type="password" id="regPassword" class="input" dir="ltr" minlength="6" placeholder="••••••••" required autocomplete="new-password" />
+          <div class="pass-input-wrap">
+            <input type="password" id="regPassword" class="input pass-with-eye" dir="ltr" minlength="6" placeholder="••••••••" required autocomplete="new-password" />
+            <button type="button" class="pass-eye-btn" title="إظهار / إخفاء كلمة المرور" aria-label="إظهار كلمة المرور" onclick="togglePassFieldEye('regPassword', this)"><svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </div>
         </div>
         <div class="field">
           <label>تأكيد كلمة المرور</label>
-          <input type="password" id="regPassword2" class="input" dir="ltr" minlength="6" placeholder="••••••••" required autocomplete="new-password" />
+          <div class="pass-input-wrap">
+            <input type="password" id="regPassword2" class="input pass-with-eye" dir="ltr" minlength="6" placeholder="••••••••" required autocomplete="new-password" />
+            <button type="button" class="pass-eye-btn" title="إظهار / إخفاء كلمة المرور" aria-label="إظهار كلمة المرور" onclick="togglePassFieldEye('regPassword2', this)"><svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </div>
         </div>
         <label class="reg-policy-box">
           <input type="checkbox" id="regPolicyAgree" required />
@@ -1918,7 +1964,7 @@
       <div class="login-dev-card">
         <div class="login-dev-head">
           <span class="login-dev-title">معلومات المطور والدعم الفني</span>
-          <span class="login-dev-ver" id="loginVersionBadge">v1.0</span>
+          <span class="login-dev-ver" id="loginVersionBadge">v1.1</span>
         </div>
         <div class="about-info-box" style="margin-top:0;">
           <div class="about-info-row">
@@ -1961,7 +2007,7 @@
       <div id="lockDefaultBadge" class="lock-badge">
         <svg class="ic" style="width:28px;height:28px" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       </div>
-      <h2 id="lockShopName">مركز الدمشقي للصيانة</h2>
+      <h2 id="lockShopName">دفتر الديون السحابي</h2>
       <p>أدخل الرمز السري أو استخدم البصمة للمتابعة</p>
       <button id="unlockBioBtn" class="btn btn-bio hidden" onclick="unlockWithBiometrics()">الدخول بالبصمة</button>
       <input type="password" id="pinInput" class="pin-input" inputmode="numeric" maxlength="6" placeholder="••••" />
@@ -2008,7 +2054,7 @@
         <div class="side-brand">
           <img id="drawerLogo" class="brand-logo hidden" alt="شعار" />
           <div style="min-width:0;">
-            <div class="side-shop-name" id="drawerShopName">مركز الدمشقي للصيانة</div>
+            <div class="side-shop-name" id="drawerShopName">دفتر الديون السحابي</div>
             <div class="side-user-meta" id="drawerUserMeta">المستخدم</div>
           </div>
         </div>
@@ -2055,7 +2101,7 @@
         <button type="button" class="side-menu-item" onclick="closeSideMenu(true); openAboutModal();">
           <span class="side-item-ic"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
           <span class="side-item-txt">حول التطبيق</span>
-          <span class="side-ver-badge" id="drawerVersionBadge">v1.0</span>
+          <span class="side-ver-badge" id="drawerVersionBadge">v1.1</span>
           <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </nav>
@@ -2088,8 +2134,8 @@
           </button>
           <img id="headerLogo" class="brand-logo hidden" alt="شعار" />
           <div style="min-width:0;">
-            <div class="brand-title" id="headerShopName">مركز الدمشقي للصيانة</div>
-            <div class="brand-sub" id="headerShopSub">دفتر الديون</div>
+            <div class="brand-title" id="headerShopName">دفتر الديون السحابي</div>
+            <div class="brand-sub" id="headerShopSub">دفتر الديون السحابي</div>
           </div>
         </div>
         <div class="header-btns">
@@ -2105,26 +2151,16 @@
 
     <main class="container">
       <div class="summary-card sum-split-card">
-        <div class="sum-split-header">
-          <span class="sum-split-title" id="totalDebtLbl">ملخص الأرصدة (لي / عليّ)</span>
-          <span class="sum-split-curr-tag" id="activeCurrName">العملتين</span>
-        </div>
         <div class="sum-split-grid">
           <div class="sum-box for-me">
             <div class="sum-box-top">
               <span class="sum-box-lbl">لي</span>
               <span class="sum-files-pill" id="forMeFilesCount">0 ملفات</span>
             </div>
-            <div class="sum-box-val" id="totalForMeVal">0 $</div>
+            <div class="sum-box-val" id="totalForMeVal"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
             <div class="sum-box-dual hidden" id="totalForMeDual">
-              <div class="sum-box-dual-row">
-                <span class="mini-curr">دولار</span>
-                <span class="mini-amt" id="totalForMeUsd">0 $</span>
-              </div>
-              <div class="sum-box-dual-row">
-                <span class="mini-curr">ليرة</span>
-                <span class="mini-amt" id="totalForMeSyp">0 ل.س</span>
-              </div>
+              <div class="sum-box-dual-row" id="totalForMeUsd"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
+              <div class="sum-box-dual-row" id="totalForMeSyp"><span class="sum-num-txt">0</span><span class="sum-curr-tag">ل.س</span></div>
             </div>
           </div>
 
@@ -2133,16 +2169,10 @@
               <span class="sum-box-lbl">عليّ</span>
               <span class="sum-files-pill" id="onMeFilesCount">0 ملفات</span>
             </div>
-            <div class="sum-box-val" id="totalOnMeVal">0 $</div>
+            <div class="sum-box-val" id="totalOnMeVal"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
             <div class="sum-box-dual hidden" id="totalOnMeDual">
-              <div class="sum-box-dual-row">
-                <span class="mini-curr">دولار</span>
-                <span class="mini-amt" id="totalOnMeUsd">0 $</span>
-              </div>
-              <div class="sum-box-dual-row">
-                <span class="mini-curr">ليرة</span>
-                <span class="mini-amt" id="totalOnMeSyp">0 ل.س</span>
-              </div>
+              <div class="sum-box-dual-row" id="totalOnMeUsd"><span class="sum-num-txt">0</span><span class="sum-curr-tag">$</span></div>
+              <div class="sum-box-dual-row" id="totalOnMeSyp"><span class="sum-num-txt">0</span><span class="sum-curr-tag">ل.س</span></div>
             </div>
           </div>
         </div>
@@ -2489,7 +2519,7 @@
 
           <div class="field">
             <label>اسم المحل</label>
-            <input type="text" id="setShopName" class="input" autocomplete="off" data-lpignore="true" data-form-type="other" name="shop_title_cfg" placeholder="مركز الدمشقي للصيانة" />
+            <input type="text" id="setShopName" class="input" autocomplete="off" data-lpignore="true" data-form-type="other" name="shop_title_cfg" placeholder="مثال: محل النور للصيانة" />
           </div>
           <div class="field">
             <label>العنوان</label>
@@ -2799,7 +2829,7 @@
           </span>
           <div>
             <div class="settings-drawer-title">حول التطبيق والمطور</div>
-            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v1.0</div>
+            <div class="settings-drawer-sub" id="settingsAboutSub">مركز الدمشقي للصيانة • الإصدار v1.1</div>
           </div>
         </span>
         <svg class="ic ic-sm side-item-arrow" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -3072,7 +3102,7 @@
       <div class="about-hero">
         <img src="icon-192.png" class="about-app-icon" alt="شعار التطبيق" />
         <div class="about-app-name" id="aboutAppName">دفتر الديون السحابي</div>
-        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v1.0</span>
+        <span class="about-ver-pill" id="aboutVersionPill">الإصدار v1.1</span>
         <p class="about-desc">نظام عملي ومتكامل لإدارة ديون ودفعات الزبائن بالعملتين، يعمل بدون إنترنت وبمزامنة سحابية فورية مع كشوفات PDF وواتساب.</p>
       </div>
 

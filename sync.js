@@ -34,7 +34,7 @@ function createIsolatedAuthClient() {
 // ==================== بيانات التطبيق والمطور (تظهر في نافذة «حول التطبيق») ====================
 const APP_META = {
   appName: 'دفتر الديون السحابي',
-  version: 'v1.0',
+  version: 'v1.1',
   developerOrg: 'مركز الدمشقي للصيانة',
   developerName: 'أبو العز',
   developerPhone: '0994373742'
@@ -133,7 +133,7 @@ const DEFAULT_WA_CONFIG = {
 };
 
 let settings = {
-  shopName: 'مركز الدمشقي للصيانة',
+  shopName: 'دفتر الديون السحابي',
   shopAddress: '',
   shopPhone: '',
   shopPhones: [],
@@ -269,7 +269,7 @@ function getShopPhonesList() {
 
 function applyWorkshopSettingsToState(ws) {
   const s = (ws && ws.settings && typeof ws.settings === 'object') ? ws.settings : {};
-  settings.shopName = (ws && ws.name) || s.shopName || 'مركز الدمشقي للصيانة';
+  settings.shopName = (ws && ws.name) || s.shopName || 'دفتر الديون السحابي';
   settings.shopAddress = s.shopAddress || '';
   if (Array.isArray(s.shopPhones) && s.shopPhones.length > 0) {
     settings.shopPhones = s.shopPhones.map(p => String(p || '').trim()).filter(Boolean);

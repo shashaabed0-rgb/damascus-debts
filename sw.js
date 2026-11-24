@@ -1,4 +1,4 @@
-const APP_CACHE = 'damascus-debts-app-v29';
+const APP_CACHE = 'damascus-debts-app-v30';
 const CDN_CACHE = 'damascus-debts-cdn-v3';
 
 const APP_SHELL = [
